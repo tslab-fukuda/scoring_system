@@ -3,10 +3,78 @@
 {% block title %}ログイン{% endblock %}
 
 {% block content %}
-<h2>ログイン</h2>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">ログイン</button>
-</form>
+<style>
+  .login-container {
+    width: 360px;
+    margin: 40px auto;
+    padding: 40px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: "Segoe UI", sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+
+  .login-container h2 {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  label {
+    font-size: 14px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  input[type="text"],
+  input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  button {
+    width: 100%;
+    padding: 12px;
+    background-color: #1a73e8;
+    color: white;
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #1669c1;
+  }
+
+  .signup-link {
+    text-align: center;
+    margin-top: 20px;
+  }
+</style>
+
+<div class="login-container">
+  <h2>ログイン</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_username">メールアドレス</label>
+      <input type="text" name="username" required id="id_username">
+    </div>
+    <div class="form-group">
+      <label for="id_password">パスワード</label>
+      <input type="password" name="password" required id="id_password">
+    </div>
+    <button type="submit">ログイン</button>
+  </form>
+  <div class="signup-link">
+    まだアカウントを持っていませんか？ <a href="{% url 'signup' %}">サインアップはこちら</a>
+  </div>
+</div>
 {% endblock %}

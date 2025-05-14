@@ -13,12 +13,23 @@ class SubmissionForm(forms.ModelForm):
 
 # サインアップフォーム
 class SignUpForm(forms.ModelForm):
-    password = forms.CharField(widget=forms.PasswordInput)
-    confirm_password = forms.CharField(widget=forms.PasswordInput)
+    username = forms.CharField(label="メールアドレス(日大アカウント)", max_length=150)
+    password = forms.CharField(label="パスワード", widget=forms.PasswordInput)
+    confirm_password = forms.CharField(label="パスワード（確認）", widget=forms.PasswordInput)
+    full_name = forms.CharField(label="名前", max_length=100)
+    student_id = forms.CharField(label="学籍番号", max_length=4)
+    experiment_day = forms.ChoiceField(
+        label="実験曜日",
+        choices=[('火', '火'), ('木', '木')]
+    )
+    experiment_group = forms.ChoiceField(
+        label="実験班",
+        choices=[(f"{i:02}", f"{i:02}") for i in range(1, 21)]
+    )
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password')
+        fields = ("username", "password")
 
     def clean_email(self):
         email = self.cleaned_data.get('email')

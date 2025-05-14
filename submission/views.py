@@ -9,6 +9,7 @@ from .forms import SubmissionForm, SignUpForm  # ← SignUpForm をインポー�
 from django.contrib.auth import login
 from django.shortcuts import redirect
 from django.contrib import messages
+from .models import UserProfile
 
 @login_required
 def submit_assignment(request):
@@ -30,10 +31,15 @@ def signup_view(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            user = User.objects.create_user(
-                username=form.cleaned_data['username'],
-                email=form.cleaned_data['email'],
-                password=form.cleaned_data['password']
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data["password"])
+            user.save()
+            profile = UserProfile.objects.create(
+                user=user,
+                full_name=form.cleaned_data['full_name'],
+                student_id=form.cleaned_data['student_id'],
+                experiment_day=form.cleaned_data['experiment_day'],
+                experiment_group=form.cleaned_data['experiment_group'],
             )
             login(request, user)
             messages.success(request, 'ユーザー登録が完了しました')

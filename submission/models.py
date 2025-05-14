@@ -11,3 +11,15 @@ class Submission(models.Model):
 
     def __str__(self):
         return f"{self.student.username} - {self.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}"
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    full_name = models.CharField(max_length=100)
+    student_id = models.CharField(max_length=4)
+    experiment_day = models.CharField(max_length=2, choices=[
+        ('火', '火'), ('木', '木')
+    ])
+    experiment_group = models.CharField(max_length=2)
+
+    def __str__(self):
+        return f"{self.full_name} ({self.user.username})"
