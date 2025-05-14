@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-=4xauwinrc@xeu6i^njyx@mc*i0ciulrn*059(cox4!sr4dqy7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['192.168.100.200', 'localhost', '127.0.0.1']
 
 # 05_06　追加
 MEDIA_URL = '/media/'
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'submission',  
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -59,7 +60,7 @@ ROOT_URLCONF = 'scoring_system.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'submission', 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
