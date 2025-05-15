@@ -1,16 +1,21 @@
 from django.shortcuts import render
 
 # Create your views here.
-from .forms import SubmissionForm
-from django.contrib.auth.decorators import login_required
+import json
 from django.http import HttpResponse
-from django.contrib.auth.models import User
-from .forms import SubmissionForm, SignUpForm  # ← SignUpForm をインポート
+from django.contrib import messages
+from django.http import JsonResponse
 from django.contrib.auth import login
 from django.shortcuts import redirect
-from django.contrib import messages
-from .models import UserProfile
+from django.contrib.auth.models import User
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import login_required
+
+from .models import UserProfile
+from .forms import SubmissionForm, SignUpForm
+from submission.decorators import role_required
+
 
 @login_required
 def submit_assignment(request):
@@ -50,7 +55,7 @@ def signup_view(request):
         form = SignUpForm()
     return render(request, 'registration/signup.html', {'form': form})
 
-@user_passes_test(lambda u: u.is_authenticated and u.userprofile.role == 'admin')
+@role_required('admin')
 def user_list_view(request):
     # teacher 以上のみアクセス可
     if not request.user.is_staff:
@@ -78,4 +83,47 @@ def user_list_view(request):
         except UserProfile.DoesNotExist:
             continue
 
-    return render(request, 'submission/user_list.html', {'users': user_data})
+    context = {
+            'users': user_data,
+            'users_json': json.dumps(user_data, ensure_ascii=False)
+        }
+
+    return render(request, 'submission/user_list.html', context)
+
+@csrf_exempt
+@role_required('admin')
+def update_user_role(request, user_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            new_roles = data.get('roles')
+
+            user = User.objects.get(id=user_id)
+            profile = user.userprofile
+
+            # ロール設定の例（複数ロールを許可する場合）
+            profile.role = ','.join(new_roles)
+            user.is_superuser = 'admin' in new_roles
+            user.is_staff = 'teacher' in new_roles or 'admin' in new_roles
+
+            profile.save()
+            user.save()
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@csrf_exempt
+@role_required('admin')
+def update_group_view(request, user_id):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        try:
+            user = User.objects.get(id=user_id)
+            profile = user.userprofile
+            profile.experiment_day = data['experiment_day']
+            profile.experiment_group = data['experiment_group']
+            profile.save()
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

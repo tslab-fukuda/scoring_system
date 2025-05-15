@@ -3,27 +3,138 @@
 {% block title %}ユーザ一覧{% endblock %}
 
 {% block content %}
-<h2>ユーザ一覧</h2>
-<table border="1" cellspacing="0" cellpadding="8">
-  <thead>
-    <tr>
-      <th>名前</th>
-      <th>メールアドレス</th>
-      <th>ロール</th>
-      <th>グループ</th>
-      <th>最終アクセス</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for user in users %}
-      <tr>
-        <td>{{ user.name }}</td>
-        <td>{{ user.email }}</td>
-        <td>{{ user.role }}</td>
-        <td>{{ user.group }}</td>
-        <td>{{ user.last_login }}</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+
+<div id="user-table">
+    <h2>ユーザ一覧</h2>
+    <table border="1" cellspacing="0" cellpadding="8">
+        <thead>
+            <tr>
+                <th>名前</th>
+                <th>メールアドレス</th>
+                <th>ロール</th>
+                <th>グループ</th>
+                <th>最終アクセス</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr v-for="user in users" :key="user.id">
+                <td v-text="user.name"></td>
+                <td v-text="user.email"></td>
+
+                <!-- ロール編集（タグ形式） -->
+                <td>
+                    <span v-if="!user.editingRole">
+                        <span v-text="user.role"></span>
+                        <button @click="enableEdit(user, 'role')">✏️</button>
+                    </span>
+                    <span v-else>
+                        <select :id="'roles-' + user.id" multiple style="width: 200px;">
+                            <option value="student">student</option>
+                            <option value="teacher">teacher</option>
+                            <option value="admin">admin</option>
+                        </select>
+                        <button @click="saveRole(user)">💾</button>
+                        <button @click="cancelEdit(user, 'role')">✕</button>
+                    </span>
+                </td>
+
+                <!-- グループ編集（タグ形式） -->
+                <td>
+                    <span v-if="!user.editingGroup">
+                        <span v-text="user.group"></span>
+                        <button @click="enableEdit(user, 'group')">✏️</button>
+                    </span>
+                    <span v-else>
+                        <select :id="'groups-' + user.id" style="width: 200px;">
+                            <option v-for="option in groupOptions" :value="option" v-text="option"></option>
+                        </select>
+                        <button @click="saveGroup(user)">💾</button>
+                        <button @click="cancelEdit(user, 'group')">✕</button>
+                    </span>
+                </td>
+
+                <td v-text="user.last_login"></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    new Vue({
+        el: '#user-table',
+        data: {
+            users: {{ users_json| safe }}.map(user => ({
+                ...user,
+                editingRole: false,
+                editingGroup: false
+            })),
+        groupOptions: [].concat(...['火', '木'].map(day => (
+            Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
+        )))
+    },
+        methods: {
+        enableEdit(user, field) {
+            if (field === 'role') {
+                user.editingRole = true;
+                this.$nextTick(() => {
+                    $(`#roles-${user.id}`).select2().val(user.role.split(',')).trigger('change');
+                });
+            }
+            if (field === 'group') {
+                user.editingGroup = true;
+                this.$nextTick(() => {
+                    $(`#groups-${user.id}`).select2().val(user.group).trigger('change');
+                });
+            }
+        },
+        saveRole(user) {
+            const roles = $(`#roles-${user.id}`).val();
+            fetch(`/users/update_role/${user.id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ roles })
+            }).then(res => {
+                if (res.ok) {
+                    user.role = roles.join(',');
+                    user.editingRole = false;
+                }
+            });
+        },
+        saveGroup(user) {
+            const group = $(`#groups-${user.id}`).val();
+            const [day, grp] = group.split('-');
+            fetch(`/users/update_group/${user.id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ experiment_day: day, experiment_group: grp })
+            }).then(res => {
+                if (res.ok) {
+                    user.group = group;
+                    user.editingGroup = false;
+                }
+            });
+        },
+        cancelEdit(user, field) {
+            if (field === 'role') {
+                user.editingRole = false;
+                $(`#roles-${user.id}`).select2('destroy');  // ←Select2の破棄
+            }
+            if (field === 'group') {
+                user.editingGroup = false;
+                $(`#groups-${user.id}`).select2('destroy');  // ←Select2の破棄
+            }
+        }
+    }
+  });
+</script>
 {% endblock %}
