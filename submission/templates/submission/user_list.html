@@ -56,8 +56,10 @@
                         <button @click="cancelEdit(user, 'group')">✕</button>
                     </span>
                 </td>
-
                 <td v-text="user.last_login"></td>
+                <td>
+                    <button @click="deleteUser(user)" style="color: red;">🗑️</button>
+                </td>
             </tr>
         </tbody>
     </table>
@@ -133,6 +135,28 @@
                 user.editingGroup = false;
                 $(`#groups-${user.id}`).select2('destroy');  // ←Select2の破棄
             }
+        },
+        deleteUser(user) {
+            if (!confirm(`${user.name} を本当に削除しますか？`)) return;
+
+            fetch(`/users/delete/${user.id}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        this.users = this.users.filter(u => u.id !== user.id);
+                    } else {
+                        alert('削除に失敗しました: ' + data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('通信エラーが発生しました');
+                });
         }
     }
   });
