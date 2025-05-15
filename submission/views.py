@@ -10,6 +10,7 @@ from django.contrib.auth import login
 from django.shortcuts import redirect
 from django.contrib import messages
 from .models import UserProfile
+from django.contrib.auth.decorators import user_passes_test
 
 @login_required
 def submit_assignment(request):
@@ -40,6 +41,7 @@ def signup_view(request):
                 student_id=form.cleaned_data['student_id'],
                 experiment_day=form.cleaned_data['experiment_day'],
                 experiment_group=form.cleaned_data['experiment_group'],
+                role='student',  # ← 明示的に初期ロールを設定
             )
             login(request, user)
             messages.success(request, 'ユーザー登録が完了しました')
@@ -47,3 +49,33 @@ def signup_view(request):
     else:
         form = SignUpForm()
     return render(request, 'registration/signup.html', {'form': form})
+
+@user_passes_test(lambda u: u.is_authenticated and u.userprofile.role == 'admin')
+def user_list_view(request):
+    # teacher 以上のみアクセス可
+    if not request.user.is_staff:
+        return render(request, 'submission/permission_denied.html')
+
+    user_data = []
+    for user in User.objects.all():
+        try:
+            profile = user.userprofile
+            role = (
+                'admin' if user.is_superuser else
+                'teacher' if user.is_staff else
+                'student'
+            )
+            group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
+            last_login = user.last_login.strftime("%Y-%m-%d %H:%M") if user.last_login else "未ログイン"
+            user_data.append({
+                'id': user.id,
+                'name': profile.full_name,
+                'email': user.email,
+                'role': role,
+                'group': group,
+                'last_login': last_login
+            })
+        except UserProfile.DoesNotExist:
+            continue
+
+    return render(request, 'submission/user_list.html', {'users': user_data})

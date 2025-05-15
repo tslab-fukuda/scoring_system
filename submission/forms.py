@@ -4,6 +4,8 @@ from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from .models import Submission
+from django.contrib.auth.forms import UserChangeForm
+from .models import UserProfile
 
 # 提出フォーム
 class SubmissionForm(forms.ModelForm):
@@ -45,3 +47,10 @@ class SignUpForm(forms.ModelForm):
 
         if password and confirm and password != confirm:
             raise ValidationError("パスワードが一致しません。")
+
+class UserEditForm(forms.ModelForm):
+    role = forms.ChoiceField(choices=UserProfile.ROLE_CHOICES, label="ロール")
+    
+    class Meta:
+        model = UserProfile
+        fields = ['full_name', 'student_id', 'experiment_day', 'experiment_group', 'role']

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}ユーザ一覧{% endblock %}
+
+{% block content %}
+<h2>ユーザ一覧</h2>
+<table border="1" cellspacing="0" cellpadding="8">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>メールアドレス</th>
+      <th>ロール</th>
+      <th>グループ</th>
+      <th>最終アクセス</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+      <tr>
+        <td>{{ user.name }}</td>
+        <td>{{ user.email }}</td>
+        <td>{{ user.role }}</td>
+        <td>{{ user.group }}</td>
+        <td>{{ user.last_login }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
