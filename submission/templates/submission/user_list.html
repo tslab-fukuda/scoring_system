@@ -8,8 +8,146 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
 
+
+
+<!-- モーダル用スタイル -->
+<style>
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background: white;
+        padding: 2em;
+        max-width: 400px;
+        margin: 10% auto;
+        border-radius: 8px;
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(60, 64, 67, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal {
+        background: #fff;
+        border-radius: 8px;
+        padding: 24px 32px;
+        width: 400px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal h2 {
+        margin-bottom: 16px;
+        font-size: 20px;
+        font-weight: 500;
+    }
+
+    .form-group {
+        margin-bottom: 14px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 16px;
+    }
+
+    .cancel-btn,
+    .create-btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    .cancel-btn {
+        background-color: #e0e0e0;
+        margin-right: 8px;
+    }
+
+    .create-btn {
+        background-color: #1a73e8;
+        color: white;
+    }
+</style>
+
 <div id="user-table">
     <h2>ユーザ一覧</h2>
+    <!-- モーダルのトリガーボタン -->
+    <button @click="showModal = true" style="margin-bottom: 16px;">＋ 新規ユーザー登録</button>
+
+    <!-- モーダル本体 -->
+    <div v-if="showModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+     background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 30px; border-radius: 10px; width: 400px;">
+            <h3 style="margin-bottom: 20px;">新規ユーザ登録</h3>
+            <form @submit.prevent="createUser">
+                <label>名前</label>
+                <input type="text" v-model="newUser.full_name" required><br><br>
+
+                <label>メールアドレス</label>
+                <input type="email" v-model="newUser.email" required><br><br>
+
+                <label>パスワード</label>
+                <input type="password" v-model="newUser.password" required><br><br>
+
+                <label>パスワード（確認）</label>
+                <input type="password" v-model="newUser.password2" required><br><br>
+
+                <label>学籍番号</label>
+                <input type="text" v-model="newUser.student_id" maxlength="4" required><br><br>
+
+                <label>実験曜日</label>
+                <select v-model="newUser.experiment_day">
+                    <option value="火">火</option>
+                    <option value="木">木</option>
+                </select><br><br>
+
+                <label>実験班</label>
+                <select v-model="newUser.experiment_group">
+                    {% verbatim %}
+                    <option v-for="n in 20" :key="n" :value="String(n).padStart(2, '0')">
+                        {{ String(n).padStart(2, '0') }}
+                    </option>
+                    {% endverbatim %}
+                </select><br><br>
+
+                <button type="submit" style="margin-right: 10px;">登録</button>
+                <button type="button" @click="showModal = false">キャンセル</button>
+            </form>
+        </div>
+    </div>
+    <!-- ユーザ一覧本体 -->
     <table border="1" cellspacing="0" cellpadding="8">
         <thead>
             <tr>
@@ -74,10 +212,20 @@
                 editingRole: false,
                 editingGroup: false
             })),
-        groupOptions: [].concat(...['火', '木'].map(day => (
+        groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
-        )))
-    },
+        )),
+        showModal: false,  // ← モーダル表示のために追加
+        newUser: {         // ← 新規ユーザー登録のために追加
+        full_name: '',
+        email: '',
+        password: '',
+        password2: '',
+        student_id: '',
+        experiment_day: '火',
+        experiment_group: '01'
+    }
+        },
         methods: {
         enableEdit(user, field) {
             if (field === 'role') {
@@ -156,6 +304,40 @@
                 .catch(err => {
                     console.error(err);
                     alert('通信エラーが発生しました');
+                });
+        },
+        createUser() {
+            if (this.newUser.password !== this.newUser.password2) {
+                alert("パスワードが一致しません");
+                return;
+            }
+
+            fetch('/users/create/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({
+                    full_name: this.newUser.full_name,
+                    email: this.newUser.email,
+                    password: this.newUser.password,
+                    student_id: this.newUser.student_id,
+                    experiment_day: this.newUser.experiment_day,
+                    experiment_group: this.newUser.experiment_group,
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert("ユーザーを作成しました");
+                        location.reload(); // ページ再読み込みで一覧更新
+                    } else {
+                        alert("作成失敗: " + data.message);
+                    }
+                })
+                .catch(err => {
+                    console.error("通信エラー", err);
                 });
         }
     }

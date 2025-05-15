@@ -138,3 +138,31 @@ def delete_user_view(request, user_id):
             return JsonResponse({'status': 'success'})
         except User.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
+
+@csrf_exempt
+@role_required('admin')
+def create_user_view(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+
+            # バリデーション: username（email）が既に存在していないか
+            if User.objects.filter(username=data['email']).exists():
+                return JsonResponse({'status': 'error', 'message': 'このメールアドレスは既に登録されています。'}, status=400)
+
+            user = User.objects.create_user(
+                username=data['email'],
+                email=data['email'],
+                password=data['password']
+            )
+            profile = UserProfile.objects.create(
+                user=user,
+                full_name=data['full_name'],
+                student_id=data['student_id'],
+                experiment_day=data['experiment_day'],
+                experiment_group=data['experiment_group'],
+                role='student'
+            )
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
