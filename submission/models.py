@@ -29,3 +29,8 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.user.username})"
+    
+class Schedule(models.Model):
+    date = models.DateField()
+    topic = models.CharField(max_length=100)
+    teacher = models.CharField(max_length=100, blank=True)

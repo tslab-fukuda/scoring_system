@@ -8,13 +8,15 @@ from django.http import JsonResponse
 from django.contrib.auth import login
 from django.shortcuts import redirect
 from django.contrib.auth.models import User
+from django.core.serializers import serialize
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.decorators import login_required
 
-from .models import UserProfile
+from .models import UserProfile, Submission, Schedule
 from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
+
 
 
 @login_required
