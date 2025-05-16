@@ -18,11 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from submission.views_login import redirect_after_login
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('submission/', include('submission.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('users/', include('submission.urls')),
+    path('accounts/redirect-after-login/', redirect_after_login, name='redirect_after_login'),
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

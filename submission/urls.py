@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from . import views_admin
+from .views_login import redirect_after_login
 
 urlpatterns = [
     path('submit/', views.submit_assignment, name='submit_assignment'),
@@ -10,5 +12,6 @@ urlpatterns = [
     path('update_group/<int:user_id>/', views.update_group_view, name='update_group'),
     path('delete/<int:user_id>/', views.delete_user_view, name='delete_user'),
     path('create/', views.create_user_view, name='create_user'),
+    path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
 ]
 
