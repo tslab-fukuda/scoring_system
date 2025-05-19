@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import views_admin
 from .views_login import redirect_after_login
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path('submit/', views.submit_assignment, name='submit_assignment'),
@@ -17,5 +18,6 @@ urlpatterns = [
     path('add_schedule_api/', views_admin.add_schedule_api, name='add_schedule_api'),
     path('update_schedule_api/<int:schedule_id>/', views_admin.update_schedule_api, name='update_schedule_api'),
     path('delete_schedule_api/<int:schedule_id>/', views_admin.delete_schedule_api, name='delete_schedule_api'),
+    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
 ]
 

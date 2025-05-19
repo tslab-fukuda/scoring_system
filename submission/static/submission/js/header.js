@@ -1,16 +1,12 @@
 new Vue({
     el: '#vue-header-app',
     data: {
-        showMenu: false,
-        userName: USER_NAME,  // 下記参照
-        role: USER_ROLE       // 下記参照
+      showMenu: false,
+      role: window.USER_ROLE || 'student',
+      userName: window.USER_NAME || 'USER'
     },
     methods: {
-        toggleMenu() {
-            this.showMenu = !this.showMenu;
-        },
-        closeMenu() {
-            this.showMenu = false;
-        }
+      toggleMenu() { this.showMenu = !this.showMenu; },
+      closeMenu() { this.showMenu = false; }
     }
-});
+  });
