@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from . import views_admin
+from . import views_student
+from . import views_teacher
 from .views_login import redirect_after_login
 from django.contrib.auth import views as auth_views
 
@@ -19,5 +21,8 @@ urlpatterns = [
     path('update_schedule_api/<int:schedule_id>/', views_admin.update_schedule_api, name='update_schedule_api'),
     path('delete_schedule_api/<int:schedule_id>/', views_admin.delete_schedule_api, name='delete_schedule_api'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    
+    path('student_dashboard/', views_student.student_dashboard, name='student_dashboard'),
+    path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),
 ]
 

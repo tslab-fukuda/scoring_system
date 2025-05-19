@@ -1,0 +1,31 @@
+{% verbatim %}
+<div>
+    <h4>あなたの提出状況</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>課題名</th>
+                <th>提出日</th>
+                <th>ステータス</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody v-if="!statusList || statusList.length === 0">
+            <tr>
+                <td colspan="4" class="text-center text-muted">提出物はまだありません</td>
+            </tr>
+        </tbody>
+        <tbody v-else>
+            <tr v-for="item in statusList" :key="item.id">
+                <td>{{ item.title }}</td>
+                <td>{{ item.submitted_at }}</td>
+                <td>{{ item.status }}</td>
+                <td>
+                    <a :href="item.file_url" class="btn btn-sm btn-outline-primary" target="_blank"
+                        v-if="item.file_url">確認</a>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endverbatim %}

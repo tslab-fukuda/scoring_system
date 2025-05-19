@@ -52,7 +52,7 @@ def signup_view(request):
             )
             login(request, user)
             messages.success(request, 'ユーザー登録が完了しました')
-            return redirect('submit_assignment')
+            return redirect('student_dashboard')
     else:
         form = SignUpForm()
     return render(request, 'registration/signup.html', {'form': form})

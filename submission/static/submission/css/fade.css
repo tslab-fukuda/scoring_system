@@ -97,21 +97,21 @@
 }
 
 .past-card {
-    background-color: #d6d6d6 !important;  
+    background: #e2e2e2 !important;  /* もっと明るい灰色に */
     color: #222 !important;
-    opacity: 0.7;
+    opacity: 1 !important;           /* 完全な不透明に */
+    border-left: 5px solid #fc6785;
 }
 
 .future-card {
-    background-color: #95ff98 !important;
+    background: #fff !important;     /* 完全な白 */
     color: #222 !important;
-    opacity: 1;
+    opacity: 1 !important;
+    border-left: 5px solid #2ecc71;
 }
 
-/* Bootstrap .cardへの上書きも含める場合 */
-.card.past-card {
-    border-left: 5px solid #fc6785;
-}
-.card.future-card {
-    border-left: 5px solid #2ecc71;
+/* Bootstrap .card の影響を消す */
+.card.past-card, .card.future-card {
+    box-shadow: none;
+    border: 1px solid #ddd;
 }
