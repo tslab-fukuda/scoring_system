@@ -1,0 +1,71 @@
+
+.ts-footer {
+    background: #3a3d40;
+    color: #fff;
+    width: 100%;
+    padding: 1.1rem 0 0.9rem 0;
+    font-size: 1.02rem;
+    letter-spacing: 0.01em;
+    position: relative;
+    margin-top: 40px;
+}
+
+.footer-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.footer-link {
+    color: #fff;
+    text-decoration: underline;
+    margin-right: 1.5em;
+    font-size: 0.98em;
+}
+
+.footer-link:hover {
+    color: #a1cbff;
+    text-decoration: underline;
+}
+
+.footer-login {
+    margin: 0.2em 0 0.4em 0;
+    font-size: 0.99em;
+}
+
+.footer-user {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0 0.3em;
+}
+
+.footer-logout {
+    color: #a1cbff;
+    text-decoration: underline;
+    margin-left: 0.5em;
+}
+
+.footer-logout:hover {
+    color: #ff8ba7;
+    text-decoration: underline;
+}
+
+.footer-home {
+    display: block;
+    color: #a1cbff;
+    text-decoration: underline;
+    margin: 0.2em auto 0 auto;
+    font-size: 0.98em;
+    width: fit-content;
+}
+
+.footer-home:hover {
+    color: #ff8ba7;
+    text-decoration: underline;
+}
+
+/* レスポンシブ（スマホ） */
+@media (max-width: 600px) {
+    .footer-content { font-size: 0.93em; }
+    .footer-home { font-size: 0.93em; }
+}
