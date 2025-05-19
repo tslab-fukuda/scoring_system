@@ -1,0 +1,9 @@
+<footer class="ts-footer">
+    <div class="footer-content">
+        <div class="footer-login">
+            あなたは <span class="footer-user">{{ request.user.username }} {{ request.user.get_full_name }}</span> としてログインしています 
+            (<a href="{% url 'logout' %}" class="footer-logout">ログアウト</a>)
+        </div>
+        <a href="{% url 'admin_dashboard' %}" class="footer-home">Home</a>
+    </div>
+</footer>
