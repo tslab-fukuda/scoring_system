@@ -1,0 +1,43 @@
+<!-- templates/submission/header.html -->
+<nav class="navbar navbar-light bg-light mb-4 shadow-sm">
+    <div class="container-fluid">
+        <button class="burger-menu" type="button" @click="toggleMenu">
+            <span :class="{ open: showMenu }"></span>
+            <span :class="{ open: showMenu }"></span>
+            <span :class="{ open: showMenu }"></span>
+        </button>
+        <span class="navbar-brand mx-auto fw-bold">情報工学実験Ⅱ present by TSlab</span>
+    </div>
+    <!-- ハンバーガーメニュー -->
+    <transition name="fade">
+        <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
+            <aside class="menu-panel glass" @click.stop>
+              <ul class="menu-list">
+                <li>
+                  <a href="{% url 'admin_dashboard' %}" class="menu-link">
+                    <span class="menu-ico">🏠</span> ダッシュボード
+                  </a>
+                </li>
+                <template v-if="role === 'admin'">
+                  <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
+                  <li><span class="menu-link disabled"><span class="menu-ico">📝</span> 成績入力（未実装）</span></li>
+                  <li><span class="menu-link disabled"><span class="menu-ico">📂</span> 学生情報一括登録（未実装）</span></li>
+                </template>
+                <template v-else>
+                  <!-- 他ロールのメニューここ -->
+                </template>
+                <li class="divider"></li>
+                <li class="user-label">
+                  <span class="menu-ico">🙍</span>
+                  <span>{{ userName }}</span>
+                </li>
+                <li>
+                  <a href="{% url 'logout' %}" class="menu-link logout-link">
+                    <span class="menu-ico">🚪</span> ログアウト
+                  </a>
+                </li>
+              </ul>
+            </aside>
+          </div>
+    </transition>
+</nav>

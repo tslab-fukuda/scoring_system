@@ -1,10 +1,26 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Scoring System{% endblock %}</title>
+    <!-- ... -->
 </head>
+
 <body>
+    <div id="vue-header-app">
+        {% include 'submission/header.html' %}
+    </div>
     {% block content %}{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script>
+        // Djangoのユーザー情報をグローバルJS変数にしてheader.jsで参照
+        var USER_NAME = "{{ request.user.get_full_name|default:request.user.username }}";
+        var USER_ROLE = "{% if request.user.is_superuser %}admin{% elif request.user.is_staff %}teacher{% else %}student{% endif %}";
+    </script>
+    <script src="{% static 'submission/js/header.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
+    <!-- Bootstrap JS必要ならここ -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>
