@@ -1,121 +1,117 @@
-/* フェードアニメーション */
+/* ---- フェードアニメーション ---- */
 .fade-enter-active, .fade-leave-active {
     transition: opacity 0.5s, transform 0.5s;
 }
-.fade-enter, .fade-leave-to { opacity: 0; transform: translateY(20px); }
-.fade-leave, .fade-enter-to { opacity: 1; transform: translateY(0); }
+.fade-enter, .fade-leave-to {
+    opacity: 0;
+    transform: translateY(20px);
+}
+.fade-leave, .fade-enter-to {
+    opacity: 1;
+    transform: translateY(0);
+}
 
-/* ────────── 共通ヘッダー ────────── */
-.ts-header {
-    width: 100%;
-    background: #f8f9fa;
-    box-shadow: 0 2px 6px 0 rgba(120,90,180,0.06);
+/* ---- 共通: 過去カード等 他ページ用 ---- */
+.ts-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(60, 64, 67, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 54px;
-    padding: 0 1.5rem;
-    position: relative;
-    z-index: 1100;
+    z-index: 2000;
 }
-.ts-burger-menu {
-    position: absolute;
-    left: 1.3rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    width: 30px;
-    height: 25px;
+.ts-modal.material-modal {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(60,60,80,0.25), 0 1.5px 5px rgba(70,0,50,0.03);
+    width: 95vw;
+    max-width: 410px;
+    padding: 32px 28px 22px 28px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: 0;
-    z-index: 2002;
+    gap: 16px;
+    animation: modal-pop-in 0.23s cubic-bezier(.36,1.8,.64,1);
 }
-.burger-menu span {
-    width: 30px;
-    height: 3px;
-    background: #7c73ab;
-    border-radius: 3px;
-    transition: all 0.3s;
-    display: block; position: relative;
-    margin: 2px 0;
+@keyframes modal-pop-in {
+    0% { opacity: 0; transform: scale(0.95);}
+    100% { opacity: 1; transform: scale(1);}
 }
-.burger-menu span.open:nth-child(1) { transform: rotate(45deg) translateY(10px); }
-.burger-menu span.open:nth-child(2) { opacity: 0; }
-.burger-menu span.open:nth-child(3) { transform: rotate(-45deg) translateY(-10px); }
-.ts-header-title {
-    font-size: 1.38rem;
-    font-weight: bold;
-    letter-spacing: 1.5px;
-    color: #37294e;
+.modal-title {
+    font-size: 1.25em;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: #31234a;
+    letter-spacing: .03em;
+}
+.ts-form-group {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+}
+.ts-form-group label {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 5px;
+}
+.ts-form-group input, .ts-form-group select {
+    padding: 8px 10px;
+    border: 1px solid #dadce0;
+    border-radius: 5px;
+    font-size: 15px;
+    background: #fff;
+    transition: border-color .17s;
+}
+.ts-form-group input:focus, .ts-form-group select:focus {
+    border-color: #b9b2ea;
+    outline: none;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+    gap: 10px;
+}
+.ts-create-btn, .ts-cancel-btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.ts-create-btn {
+    background-color: #5242b6;
+    color: #fff;
+    box-shadow: 0 1.5px 4px #a993ff44;
+    transition: background .14s;
+}
+.ts-create-btn:hover { background: #634bda; }
+.ts-cancel-btn {
+    background: #f3f1f7;
+    color: #6a6393;
+}
+.ts-cancel-btn:hover {
+    background: #e1def1;
+    color: #3e3065;
 }
 
-/* ────────── ハンバーガーメニュー全体のオーバーレイ ────────── */
-.menu-overlay {
-    position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(40,40,70,0.20);
-    z-index: 2000;
-    backdrop-filter: blur(2px);
-    transition: background 0.3s;
-    display: flex;
-}
-.menu-panel.glass {
-    background: rgba(255,255,255,0.92);
-    backdrop-filter: blur(8px) saturate(150%);
-    border-radius: 18px 18px 18px 0;
-    width: 290px;
-    height: 100vh;
-    box-shadow: 8px 0 24px 0 rgba(40,20,80,0.16);
-    position: relative;
-    padding: 2.4rem 1.7rem 2rem 1.7rem;
-    display: flex; flex-direction: column;
-    animation: slide-in 0.22s;
-    margin-left: 0;
-}
-@keyframes slide-in {
-    0% { transform: translateX(-70px); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
-}
-.menu-list { list-style: none; padding: 0; margin: 0; }
-.menu-link {
-    display: flex; align-items: center;
-    font-size: 1.04rem;
-    padding: 0.75rem 0.9rem;
-    border-radius: 12px;
-    color: #333;
-    text-decoration: none;
-    margin-bottom: 0.1em;
-    transition: background 0.18s, color 0.18s;
-    font-weight: 500;
-}
-.menu-link:hover:not(.disabled) { background: #ede5ff; color: #5b3cc4; text-decoration: none; }
-.menu-ico {
-    display: inline-block;
-    width: 1.6em;
-    font-size: 1.3em;
-    margin-right: 0.7em;
-    text-align: center;
+.past-card {
+    background-color: #d6d6d6 !important;  
+    color: #222 !important;
     opacity: 0.7;
 }
-.menu-link.disabled { pointer-events: none; color: #bbb; background: #f6f6f6; }
-.divider { border-top: 1px solid #eee; margin: 1.1em 0; }
-.user-label {
-    display: flex; align-items: center;
-    font-size: 0.97em;
-    color: #866bce;
-    padding: 0.5em 0.7em;
-    font-weight: 600;
-}
-.logout-link { color: #be2340 !important; font-weight: bold; }
-.logout-link:hover { background: #ffe5eb !important; color: #a11a3a !important; }
 
-/* スマホ対応 */
-@media (max-width: 600px) {
-    .ts-header { min-height: 42px; padding: 0 0.2rem; font-size: 0.95rem; }
-    .ts-header-title { font-size: 1rem; }
-    .ts-burger-menu { left: 0.5rem; }
+.future-card {
+    background-color: #95ff98 !important;
+    color: #222 !important;
+    opacity: 1;
+}
+
+/* Bootstrap .cardへの上書きも含める場合 */
+.card.past-card {
+    border-left: 5px solid #fc6785;
+}
+.card.future-card {
+    border-left: 5px solid #2ecc71;
 }

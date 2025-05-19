@@ -3,12 +3,17 @@
 
 {% block title %}ユーザ一覧{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'submission/css/user_table.css' %}">
+{% endblock %}
+
 {% block content %}
 <div id="user-table" class="p-4">
     <h2>ユーザ一覧</h2>
     <button class="btn btn-primary mb-3" @click="showModal = true">＋ 新規ユーザー登録</button>
 
     <!-- 新規ユーザー登録モーダル -->
+    {% verbatim %}
     <div v-if="showModal" class="ts-modal-overlay">
         <div class="ts-modal">
             <h3>新規ユーザ登録</h3>
@@ -42,13 +47,11 @@
                 </div>
                 <div class="ts-form-group">
                     <label>実験班</label>
-                    {% verbatim %}
                     <select v-model="newUser.experiment_group">
-                        <option v-for="n in 20" :key="n" :value="String(n).padStart(2, '0')">
-                            {{ String(n).padStart(2, '0') }}
+                        <option v-for="n in 20" :key="n" :value="('0' + n).slice(-2)">
+                            {{ ('0' + n).slice(-2) }}
                         </option>
                     </select>
-                    {% endverbatim %}
                 </div>
                 <div class="ts-modal-actions mt-3">
                     <button type="submit" class="ts-create-btn">登録</button>
@@ -57,6 +60,7 @@
             </form>
         </div>
     </div>
+    {% endverbatim %}
 
     <!-- ユーザ一覧テーブル -->
     <div class="table-responsive">
@@ -120,13 +124,10 @@
     var USERS_DATA = {{ users_json|safe }};
     var CSRF_TOKEN = '{{ csrf_token }}';
 </script>
-  <!-- 1. Vue本体を先に -->
-  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-  <!-- 2. jQuery -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- 3. Select2のCSSとJS -->
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
-  <!-- 4. 自作JS -->
-  <script src="{% static 'submission/js/user_table.js' %}"></script>
+<!-- Vue, jQuery, Select2, 自作JSの順 -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+<script src="{% static 'submission/js/user_table.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,102 @@
+.ts-user-table-wrapper {
+    max-width: 1050px;
+    margin: 38px auto 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(60,60,90,0.09);
+    padding: 28px 32px 38px 32px;
+}
+.ts-table-title {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #37294e;
+}
+.ts-create-btn {
+    background: #3f51b5;
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    padding: 7px 18px;
+    margin-bottom: 24px;
+    margin-right: 10px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.ts-create-btn:hover { background: #283593; }
+.ts-table-container { width: 100%; overflow-x: auto; }
+.ts-table {
+    width: 100%;
+    background: #fff;
+    border-collapse: separate;
+    border-spacing: 0;
+    box-shadow: 0 2px 12px rgba(90, 80, 120, 0.05);
+    font-size: 1rem;
+}
+
+.ts-table th, .ts-table td {
+    padding: 0.7em 1.2em;
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.ts-table th {
+    background: #f7f6fb;
+    font-weight: bold;
+    color: #3c2669;
+}
+
+.ts-edit-btn, .ts-delete-btn, .ts-save-btn, .ts-cancel-edit-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    margin-left: 4px;
+    margin-right: 2px;
+    padding: 3px 7px;
+    color: #7d62ac;
+    border-radius: 5px;
+    transition: background .18s;
+    vertical-align: middle;
+}
+.ts-edit-btn:hover, .ts-save-btn:hover, .ts-cancel-edit-btn:hover {
+    background: #ede5ff;
+    color: #523d97;
+}
+.ts-delete-btn { color: #b43a41; }
+.ts-delete-btn:hover { background: #feeaea; color: #93182b; }
+.ts-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(70, 60, 90, 0.18);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 3000;
+}
+.ts-modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 28px 36px;
+    box-shadow: 0 6px 30px rgba(0,0,0,0.17);
+    min-width: 340px;
+    max-width: 97vw;
+}
+.ts-form-group { margin-bottom: 15px; }
+.ts-form-group label { font-size: 15px; font-weight: 500; margin-bottom: 4px; display: block; }
+.ts-form-group input,
+.ts-form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 15px;
+    background: #fff;
+}
+.ts-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.ts-cancel-btn {
+    background: #e0e0e0; color: #222;
+    border: none; border-radius: 4px;
+    padding: 8px 16px; font-size: 15px; cursor: pointer;
+    margin-left: 8px;
+}

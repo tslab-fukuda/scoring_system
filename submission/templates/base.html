@@ -5,6 +5,8 @@
     <title>{% block title %}{% endblock %}</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
+    <link rel="stylesheet" href="{% static 'submission/css/header.css' %}">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <div id="vue-header-app">
