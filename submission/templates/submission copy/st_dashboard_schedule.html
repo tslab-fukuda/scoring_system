@@ -5,7 +5,7 @@
         <div v-for="item in filteredScheduleList" :key="item.id" class="card"
             :class="isPast(item.date) ? 'past-card' : 'future-card'" @click="goToSubmit(item)" style="cursor:pointer;">
             <span class="badge bg-primary">{{ item.day_of_week }}</span>
-            <div class="fw-bold mb-1" v-text="formatMonthDay(item.date)"></div>
+            <span class="ms-2">{{ item.date }}</span>
         </div>
         <div v-if="filteredScheduleList.length === 0" class="text-muted">
             実験スケジュールがありません

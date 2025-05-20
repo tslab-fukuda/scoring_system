@@ -25,7 +25,7 @@ def student_dashboard(request):
         if day_of_week == student_day:
             schedule_list.append({
                 'id': s['id'],
-                'date': dt.strftime('%m-%d'),
+                'date': dt.strftime('%Y-%m-%d'),
                 'day_of_week': day_of_week,
             })
 

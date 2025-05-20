@@ -1,0 +1,21 @@
+<h4>提出ファイル一覧</h4>
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>学生名</th>
+      <th>ファイル名</th>
+      <th>日付</th>
+      <th>確認</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr v-for="file in submissions" :key="file.filename + file.student_name + file.date">
+      <td>{{ file.student_name }}</td>
+      <td>{{ file.filename }}</td>
+      <td>{{ file.date }}</td>
+      <td>
+        <a :href="file.url" target="_blank" class="btn btn-sm btn-outline-primary">開く</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
