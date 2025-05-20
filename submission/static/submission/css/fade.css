@@ -96,19 +96,44 @@
     color: #3e3065;
 }
 
-.past-card {
-    background: #e2e2e2 !important;  /* もっと明るい灰色に */
-    color: #222 !important;
-    opacity: 1 !important;           /* 完全な不透明に */
-    border-left: 5px solid #fc6785;
-}
 
-.future-card {
-    background: #fff !important;     /* 完全な白 */
-    color: #222 !important;
-    opacity: 1 !important;
+.ts-schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+    gap: 22px 32px;
+    margin-top: 12px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px 22px;
+    box-shadow: 0 2px 12px #8882;
     border-left: 5px solid #2ecc71;
-}
+    font-size: 1.15em;
+    transition: box-shadow .18s, background .15s;
+    display: flex; align-items: center;
+    min-height: 56px;
+    margin-bottom: 0;
+  }
+  .card:hover {
+    box-shadow: 0 4px 20px #7863fd33;
+    background: #f3f2fb;
+  }
+  .card.past-card {
+    background: #e3e3e3 !important;
+    color: #555 !important;
+    border-left: 5px solid #fc6785;
+  }
+  .card.future-card {
+    background: #fff !important;
+    color: #222 !important;
+    border-left: 5px solid #2ecc71;
+  }
+  .badge.bg-primary {
+    font-size: 1.0em;
+    padding: 0.34em 1.1em;
+    border-radius: 0.8em;
+  }
 
 /* Bootstrap .card の影響を消す */
 .card.past-card, .card.future-card {

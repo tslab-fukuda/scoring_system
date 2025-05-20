@@ -1,23 +1,14 @@
 {% verbatim %}
-<div>
-    <h4 class="mb-3">あなたの実験スケジュール</h4>
-    <div class="row">
-        <div class="col-md-6 col-lg-4 mb-4" v-for="item in scheduleList" :key="item.id">
-            <div v-for="item in filteredScheduleList" :key="item.id" class="card h-100 shadow mb-3"
-                :class="isPast(item.date) ? 'past-card' : 'future-card'" style="cursor:pointer;"
-                @click="goToSubmit(item)">
-                <div class="card-body d-flex flex-column justify-content-between">
-                    <div>
-                        <div class="card-body d-flex align-items-center">
-                            <span class="badge bg-primary me-2">{{ item.day_of_week }}</span>
-                            <span class="fw-bold">{{ item.date }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+<div class="schedule-section">
+    <h4>あなたの実験スケジュール</h4>
+    <div class="ts-schedule-grid">
+        <div v-for="item in filteredScheduleList" :key="item.id" class="card"
+            :class="isPast(item.date) ? 'past-card' : 'future-card'" @click="goToSubmit(item)" style="cursor:pointer;">
+            <span class="badge bg-primary">{{ item.day_of_week }}</span>
+            <span class="ms-2">{{ item.date }}</span>
         </div>
-        <div v-if="!scheduleList || scheduleList.length === 0" class="col-12 text-center text-muted mt-4">
-            スケジュールはまだ登録されていません
+        <div v-if="filteredScheduleList.length === 0" class="text-muted">
+            実験スケジュールがありません
         </div>
     </div>
 </div>
