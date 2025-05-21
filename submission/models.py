@@ -8,6 +8,9 @@ class Submission(models.Model):
     file = models.FileField(upload_to='submissions/')            # 提出されたPDFファイル
     submitted_at = models.DateTimeField(auto_now_add=True)       # 提出日時
     graded = models.BooleanField(default=False)                  # 採点済みフラグ
+    date = models.DateField(null=True, blank=True)               
+    experiment_group = models.CharField(max_length=2, blank=True)  
+    #student_id = models.CharField(max_length=10, blank=True)     
 
     def __str__(self):
         return f"{self.student.username} - {self.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}"

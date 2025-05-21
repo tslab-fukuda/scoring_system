@@ -3,12 +3,16 @@ from . import views
 from . import views_admin
 from . import views_student
 from . import views_teacher
+from . import views_submission
 from .views_login import redirect_after_login
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
-    path('submit/', views.submit_assignment, name='submit_assignment'),
-    path('success/', views.submission_success, name='submission_success'),
+    path('submit/', views_submission.submit_assignment, name='submit_assignment'),
+    path('confirm/<int:submission_id>/', views_submission.confirm_submission, name='submission_confirm'),
+    path('complete/<int:submission_id>/', views_submission.complete_submission, name='submission_complete'),
+    
+    #path('success/', views_submission.submission_success, name='submission_success'),
     path('signup/', views.signup_view, name='signup'),
     path('list/', views.user_list_view, name='user_list'),
     path('update_role/<int:user_id>/', views.update_user_role, name='update_role'),

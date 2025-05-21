@@ -16,24 +16,8 @@ from django.contrib.auth.decorators import login_required
 from .models import UserProfile, Submission, Schedule
 from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
-
-
-
-@login_required
-def submit_assignment(request):
-    if request.method == 'POST':
-        form = SubmissionForm(request.POST, request.FILES)
-        if form.is_valid():
-            submission = form.save(commit=False)
-            submission.student = request.user
-            submission.save()
-            return redirect('submission_success')
-    else:
-        form = SubmissionForm()
-    return render(request, 'submission/submit.html', {'form': form})
-
-def submission_success(request):
-    return HttpResponse("提出が完了しました。")
+from django.http import HttpResponse
+from django.shortcuts import render, redirect
 
 def signup_view(request):
     if request.method == 'POST':
