@@ -1,16 +1,18 @@
 new Vue({
     el: "#student-dashboard",
     data: {
-      tab: 'status',
-      statusList: STATUS_LIST,
-      scheduleList: SCHEDULE_LIST,
-      experimentDay: EXPERIMENT_DAY, // 例: '火' or '木'
+        tab: 'status',
+        statusList: STATUS_LIST,
+        scheduleList: SCHEDULE_LIST,
+        experimentDay: EXPERIMENT_DAY,
+        showScoreModal: false,
+        scoreDetail: null,
     },
     computed: {
-      filteredScheduleList() {
-        // experimentDayが指定されていればその曜日のみ抽出
-        return this.scheduleList.filter(item => item.day_of_week === this.experimentDay);
-      }
+        filteredScheduleList() {
+            // experimentDayが指定されていればその曜日のみ抽出
+            return this.scheduleList.filter(item => item.day_of_week === this.experimentDay);
+        }
     },
     methods: {
         isPast(dateStr) {
@@ -31,8 +33,25 @@ new Vue({
             const d = date.getDate();
             return `${m}/${d}`;
         },
-      goToSubmit(item) {
-        window.location.href = `/submission/submit/?date=${item.date}`;
-      }
+        goToSubmit(item) {
+            window.location.href = `/submission/submit/?date=${item.date}`;
+        },
+        showScoreDetail(item) {
+            this.scoreDetail = item.score_detail || "詳細情報なし";
+            this.showScoreModal = true;
+        },
+        deleteSubmission(item) {
+            if (!confirm("本当に削除しますか？")) return;
+            fetch(`/submission/delete_submission/${item.id}/`, {
+                method: "POST",
+                headers: { "X-CSRFToken": CSRF_TOKEN }
+            }).then(res => res.json()).then(data => {
+                if (data.status === "success") {
+                    this.statusList = this.statusList.filter(s => s.id !== item.id);
+                } else {
+                    alert(data.message || "削除失敗");
+                }
+            }).catch(() => alert("通信エラー"));
+        },
     }
-  });
+});

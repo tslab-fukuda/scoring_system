@@ -10,6 +10,9 @@ class Submission(models.Model):
     graded = models.BooleanField(default=False)                  # 採点済みフラグ
     date = models.DateField(null=True, blank=True)               
     experiment_group = models.CharField(max_length=2, blank=True)  
+    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name='得点')  # 添削結果
+    graded_file = models.FileField(upload_to='graded_submissions/', null=True, blank=True, verbose_name='添削ファイル')  # 添削PDF等
+
     #student_id = models.CharField(max_length=10, blank=True)     
 
     def __str__(self):
@@ -37,3 +40,12 @@ class Schedule(models.Model):
     date = models.DateField()
     topic = models.CharField(max_length=100)
     teacher = models.CharField(max_length=100, blank=True)
+
+class GradingChecklist(models.Model):
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name='checklist')
+    item = models.CharField(max_length=100, verbose_name='チェック項目名')
+    checked = models.BooleanField(default=False, verbose_name='チェック済み')
+    # 必要に応じて採点者、日時、コメントなど
+
+def __str__(self):
+    return f"{self.submission.student.username}: {self.item} - {'済' if self.checked else '未'}"
