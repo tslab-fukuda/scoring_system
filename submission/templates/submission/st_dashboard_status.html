@@ -45,7 +45,7 @@
                 </td>
                 <!-- 編集 -->
                 <td>
-                  <button class="btn btn-danger btn-sm" @click="deleteSubmission(item)"
+                  <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
                           v-if="item.status !== '添削済'">削除</button>
                 </td>
             </tr>

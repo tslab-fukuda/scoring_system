@@ -43,6 +43,7 @@
     var EXPERIMENT_DAY = "{{ request.user.userprofile.experiment_day }}";
     var EXPERIMENT_GROUP = "{{ request.user.userprofile.experiment_group }}";
     var STUDENT_ID = "{{ request.user.userprofile.student_id }}";
+    var CSRF_TOKEN = "{{ csrf_token }}";
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/student_dashboard.js' %}"></script>

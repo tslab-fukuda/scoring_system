@@ -3,9 +3,12 @@ from submission.models import UserProfile, Submission, Schedule
 from django.views.decorators.csrf import csrf_exempt
 import json
 from submission.decorators import role_required
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.http import JsonResponse 
 import datetime
 from django.middleware.csrf import get_token
+import os
 
 
 @role_required('student')
@@ -47,7 +50,7 @@ def student_dashboard(request):
         'status_list': status_list,
         'schedule_list': schedule_list,
         "experiment_day": request.user.userprofile.experiment_day,
-        #"csrf_token": get_token(request),
+        "csrf_token": get_token(request),
     }
     return render(request, 'submission/student_dashboard.html', context)
 
@@ -56,3 +59,19 @@ def get_japanese_weekday(dt):
     wd = dt.weekday()
     # 0=月, 1=火, 2=水, 3=木, 4=金, 5=土, 6=日
     return ['月', '火', '水', '木', '金', '土', '日'][wd]
+
+@login_required
+@require_POST
+def delete_submission(request):
+    submission_id = request.POST.get("submission_id")
+    try:
+        sub = Submission.objects.get(id=submission_id, student=request.user)
+        # ファイルがある場合は物理削除
+        if sub.file and os.path.isfile(sub.file.path):
+            os.remove(sub.file.path)
+        sub.delete()
+        return JsonResponse({"status": "success"})
+    except Submission.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "提出物が見つかりません"}, status=404)
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)

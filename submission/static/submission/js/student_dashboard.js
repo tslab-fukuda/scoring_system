@@ -40,18 +40,25 @@ new Vue({
             this.scoreDetail = item.score_detail || "詳細情報なし";
             this.showScoreModal = true;
         },
-        deleteSubmission(item) {
+        deleteSubmission(submissionId) {
             if (!confirm("本当に削除しますか？")) return;
-            fetch(`/submission/delete_submission/${item.id}/`, {
+            fetch('/users/delete_submission/', {
                 method: "POST",
-                headers: { "X-CSRFToken": CSRF_TOKEN }
-            }).then(res => res.json()).then(data => {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": CSRF_TOKEN,
+                },
+                body: `submission_id=${submissionId}`
+            })
+            .then(res => res.json())
+            .then(data => {
                 if (data.status === "success") {
-                    this.statusList = this.statusList.filter(s => s.id !== item.id);
+                    // 画面からも消す（statusListから削除など）
+                    this.statusList = this.statusList.filter(s => s.id !== submissionId);
                 } else {
-                    alert(data.message || "削除失敗");
+                    alert(data.message || "削除に失敗しました");
                 }
-            }).catch(() => alert("通信エラー"));
-        },
+            });
+        }
     }
 });
