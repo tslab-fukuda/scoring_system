@@ -10,14 +10,25 @@
     <div class="col-md-7">
       <div class="alert alert-success">
         <h4 class="alert-heading">提出が完了しました！</h4>
-        <p>ファイル: <b>{{ submission.file.name|cut:'submissions/' }}</b></p>
-        <p>提出日時: <b>{{ submission.submitted_at }}</b></p>
-        <p>学生番号: <b>{{ submission.student.userprofile.student_id }}</b></p>
+        <p>ファイル: <b>{{ filename }}</b></p>
+        <p>提出日時: <b>{{ submitted_at|date:"Y-m-d H:i" }}</b></p>
+        <p>学生番号: <b>{{ student_id }}</b></p>
         <hr>
         <a href="{% url 'student_dashboard' %}" class="btn btn-success">ダッシュボードへ戻る</a>
-        <a href="{% url 'submit_assignment' %}" class="btn btn-outline-secondary ms-2">さらに提出</a>
+        <a href="{% url 'submit_assignment' %}?date={{ date }}" class="btn btn-secondary">さらに提出</a>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+  // Djangoから渡されたデータをJS変数に
+  var STATUS_LIST = {{ status_list|safe }};
+  var SCHEDULE_LIST = {{ schedule_list|safe }};
+  var EXPERIMENT_DAY = "{{ request.user.userprofile.experiment_day }}";
+  var EXPERIMENT_GROUP = "{{ request.user.userprofile.experiment_group }}";
+  var STUDENT_ID = "{{ request.user.userprofile.student_id }}";
+</script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/submit.js' %}"></script>
 {% endblock %}

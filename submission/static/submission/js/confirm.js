@@ -1,43 +1,46 @@
-document.addEventListener('DOMContentLoaded', function() {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-  
-    const url = window.PDF_URL;
-    let pdfDoc = null, pageNum = 1;
-    let totalPages = 0;
-    let viewedPages = new Set();
-  
-    function renderPage(num) {
-      pdfDoc.getPage(num).then(function(page) {
-        const viewport = page.getViewport({ scale: 1.15 });
-        const canvas = document.createElement('canvas');
-        canvas.className = "mb-3";
-        const ctx = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        document.getElementById('pdf-container').appendChild(canvas);
-  
-        page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function() {
-          viewedPages.add(num);
-          // 最後のページを表示したら確定ボタンを表示
-          if (viewedPages.size === totalPages) {
-            document.getElementById('confirmBtn').style.display = '';
-          }
-        });
-      });
-    }
-  
-    if (url) {
-      pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
-        pdfDoc = pdfDoc_;
-        totalPages = pdfDoc.numPages;
-        for (let i = 1; i <= totalPages; i++) {
-          renderPage(i);
+document.addEventListener('DOMContentLoaded', function () {
+    new Vue({
+      el: "#confirm-app",
+      data: {
+        scrolledToBottom: false,
+        pdfUrl: window.PDF_URL,
+      },
+      mounted() {
+        if (this.pdfUrl) {
+          this.loadPdf();
+          this.setupScrollHandler();
         }
-        if (totalPages === 1) {
-          document.getElementById('confirmBtn').style.display = '';
+      },
+      methods: {
+        loadPdf() {
+          const container = this.$refs.pdfPages;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          pdfjsLib.getDocument(this.pdfUrl).promise.then(pdfDoc => {
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+              pdfDoc.getPage(pageNum).then(page => {
+                const viewport = page.getViewport({ scale: 1.1 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                container.appendChild(canvas);
+                page.render({
+                  canvasContext: canvas.getContext('2d'),
+                  viewport: viewport
+                });
+              });
+            }
+          });
+        },
+        setupScrollHandler() {
+          // .pdf-viewerが一番外側のスクロール対象
+          const viewer = document.querySelector('.pdf-viewer');
+          if (!viewer) return;
+          viewer.addEventListener('scroll', () => {
+            if (viewer.scrollTop + viewer.clientHeight >= viewer.scrollHeight - 20) {
+              this.scrolledToBottom = true;
+            }
+          });
         }
-      });
-    }
+      }
+    });
   });
-  

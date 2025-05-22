@@ -9,8 +9,8 @@ from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path('submit/', views_submission.submit_assignment, name='submit_assignment'),
-    path('confirm/<int:submission_id>/', views_submission.confirm_submission, name='submission_confirm'),
-    path('complete/<int:submission_id>/', views_submission.complete_submission, name='submission_complete'),
+    # path('confirm/<int:submission_id>/', views_submission.confirm_submission, name='submission_confirm'),
+    path('complete/', views_submission.complete_submission, name='submission_complete'),
     
     #path('success/', views_submission.submission_success, name='submission_success'),
     path('signup/', views.signup_view, name='signup'),
