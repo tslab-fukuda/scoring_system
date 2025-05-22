@@ -19,7 +19,7 @@
     <script>
         // Djangoのユーザー情報をグローバルJS変数にしてheader.jsで参照
         var USER_NAME = "{{ request.user.get_full_name|default:request.user.username }}";
-        var USER_ROLE = "{% if request.user.is_superuser %}admin{% elif request.user.is_staff %}teacher{% else %}student{% endif %}";
+        var USER_ROLE = "{{ request.user.userprofile.role }}";
     </script>
     <script src="{% static 'submission/js/header.js' %}"></script>
 </body>

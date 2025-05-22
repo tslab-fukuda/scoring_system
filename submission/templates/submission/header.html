@@ -1,53 +1,53 @@
 <nav class="ts-header">
-    <button class="burger-menu ts-burger-menu" type="button" @click="toggleMenu">
-        <span :class="{ open: showMenu }"></span>
-        <span :class="{ open: showMenu }"></span>
-        <span :class="{ open: showMenu }"></span>
-    </button>
-    <span class="ts-header-title">情報工学実験Ⅱ管理システム presented by TSlab</span>
-    <transition name="fade">
-        <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
-            <aside class="menu-panel glass" @click.stop>
-                <ul class="menu-list">
-                    <li>
-                        {% if role == "admin" %}
-                          <a href="{% url 'admin_dashboard' %}" class="menu-link">
-                            <span class="menu-ico">🏠</span> ダッシュボード
-                          </a>
-                        {% elif role == "teacher" %}
-                          <a href="{% url 'teacher_dashboard' %}" class="menu-link">
-                            <span class="menu-ico">🏠</span> ダッシュボード
-                          </a>
-                        {% elif role == "student" %}
-                          <a href="{% url 'student_dashboard' %}" class="menu-link">
-                            <span class="menu-ico">🏠</span> ダッシュボード
-                          </a>
-                        {% endif %}
-                      </li>
-                    <template v-if="role === 'admin'">
-                        <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
-                        <li><span class="menu-link disabled"><span class="menu-ico">📝</span> 成績入力（未実装）</span></li>
-                        <li><span class="menu-link disabled"><span class="menu-ico">📂</span> 学生情報一括登録（未実装）</span></li>
-                    </template>
-                    <template v-else>
-                        <li><span class="menu-link disabled"><span class="menu-ico">🙍</span>（メニュー例）</span></li>
-                    </template>
-                    <li class="divider"></li>
-                    <li class="user-label">
-                        <span class="menu-ico">🙍</span>
-                        <span>{{ userName }}</span>
-                    </li>
-                    <li>
-                        <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="menu-link logout-link"
-                                style="background:none; border:none; color:#be2340; font-weight:bold; padding:0;">
-                                <span class="menu-ico">🚪</span> ログアウト
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </aside>
-        </div>
-    </transition>
+  <button class="burger-menu ts-burger-menu" type="button" @click="toggleMenu">
+    <span :class="{ open: showMenu }"></span>
+    <span :class="{ open: showMenu }"></span>
+    <span :class="{ open: showMenu }"></span>
+  </button>
+  <span class="ts-header-title">情報工学実験Ⅱ管理システム presented by TSlab</span>
+  <transition name="fade">
+    <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
+      <aside class="menu-panel glass" @click.stop>
+        <ul class="menu-list">
+          <template v-if="role === 'admin'">
+            <a href="{% url 'admin_dashboard' %}" class="menu-link">
+              <span class="menu-ico">🏠</span> ダッシュボード
+            </a>
+          </template>
+          <template v-if="role === 'teacher'">
+            <a href="{% url 'teacher_dashboard' %}" class="menu-link">
+              <span class="menu-ico">🏠</span> ダッシュボード
+            </a>
+          </template>
+          <template v-if="role === 'student'">
+            <a href="{% url 'student_dashboard' %}" class="menu-link">
+              <span class="menu-ico">🏠</span> ダッシュボード
+            </a>
+          </template>
+          <template v-if="role === 'admin'">
+            <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
+            <li><span class="menu-link disabled"><span class="menu-ico">📝</span> 成績入力（未実装）</span></li>
+            <li><span class="menu-link disabled"><span class="menu-ico">📂</span> 学生情報一括登録（未実装）</span></li>
+          </template>
+          <template v-else>
+            <li><span class="menu-link disabled"><span class="menu-ico">🙍</span>（メニュー例）</span></li>
+          </template>
+          <li class="divider"></li>
+          <li class="user-label">
+            <span class="menu-ico">🙍</span>
+            <span>{{ userName }}</span>
+          </li>
+          <li>
+            <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">
+              {% csrf_token %}
+              <button type="submit" class="menu-link logout-link"
+                style="background:none; border:none; color:#be2340; font-weight:bold; padding:0;">
+                <span class="menu-ico">🚪</span> ログアウト
+              </button>
+            </form>
+          </li>
+        </ul>
+      </aside>
+    </div>
+  </transition>
 </nav>
