@@ -4,6 +4,8 @@
     <table class="table table-bordered">
         <thead>
             <tr>
+                <th>レポート種類</th>
+                <th>実験番号</th>
                 <th>提出ファイル名</th>
                 <th>提出日</th>
                 <th>ステータス</th>
@@ -19,34 +21,39 @@
         </tbody>
         <tbody v-else>
             <tr v-for="item in statusList" :key="item.id">
+                <!-- レポート種別 -->
+                <td>{{ item.report_type === 'main' ? '本レポート' : '予習レポート' }}</td>
+                <!-- 実験番号 -->
+                <td>{{ item.experiment_number }}</td>
                 <!-- 提出ファイル名 -->
                 <td>
-                  <a :href="item.file_url" target="_blank" v-if="item.file_url">{{ item.file_name }}</a>
-                  <span v-else>-</span>
+                    <a :href="item.file_url" target="_blank" v-if="item.file_url">{{ item.file_name }}</a>
+                    <span v-else>-</span>
                 </td>
                 <!-- 提出日 -->
                 <td>{{ item.submitted_at }}</td>
                 <!-- ステータス -->
                 <td>
-                  <span v-if="item.status === '添削済'">添削済</span>
-                  <span v-else>未</span>
+                    <span v-if="item.status === '添削済'">添削済</span>
+                    <span v-else>未</span>
                 </td>
                 <!-- 添削結果 -->
                 <td>
-                  <button v-if="item.graded_score" class="btn btn-link p-0" @click="showScoreDetail(item)">
-                    {{ item.graded_score }} 点
-                  </button>
-                  <span v-else>-</span>
+                    <button v-if="item.graded_score" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                        {{ item.graded_score }} 点
+                    </button>
+                    <span v-else>-</span>
                 </td>
                 <!-- 添削ファイル -->
                 <td>
-                  <a :href="item.graded_file_url" target="_blank" v-if="item.graded_file_url">{{ item.graded_file_name }}</a>
-                  <span v-else>-</span>
+                    <a :href="item.graded_file_url" target="_blank" v-if="item.graded_file_url">{{ item.graded_file_name
+                        }}</a>
+                    <span v-else>-</span>
                 </td>
                 <!-- 編集 -->
                 <td>
-                  <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
-                          v-if="item.status !== '添削済'">削除</button>
+                    <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
+                        v-if="item.status !== '添削済'">削除</button>
                 </td>
             </tr>
         </tbody>
@@ -56,7 +63,8 @@
     <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">得点詳細</h5>
+                <div class="modal-header">
+                    <h5 class="modal-title">得点詳細</h5>
                     <button type="button" class="btn-close" @click="showScoreModal=false"></button>
                 </div>
                 <div class="modal-body">

@@ -11,7 +11,7 @@ from .models import UserProfile
 class SubmissionForm(forms.ModelForm):
     class Meta:
         model = Submission
-        fields = ['file']
+        fields = ['report_type', 'experiment_number', 'file'] 
 
 # サインアップフォーム
 class SignUpForm(forms.ModelForm):

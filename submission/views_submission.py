@@ -17,6 +17,7 @@ def submit_assignment(request):
             submission.student = request.user
             submission.date = request.POST.get('date')
             submission.experiment_group = request.user.userprofile.experiment_group
+            # report_type, experiment_numberはformで自動セット
             submission.save()
             # 成功時はJsonResponseで"redirect"フラグ
             return JsonResponse({'status': 'success', 'redirect_url': '/submission/complete/?file=' + submission.file.name + '&date=' + submission.date})

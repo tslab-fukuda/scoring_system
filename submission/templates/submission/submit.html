@@ -14,6 +14,30 @@
         <form @submit.prevent class="mb-3">
           {% csrf_token %}
           <div class="mb-3">
+            <label for="id_report_type">レポート種別</label>
+            <select v-model="reportType" id="report_type" name="report_type" class="form-control" required>
+              <option value="">選択してください</option>
+              <option value="main">本レポート</option>
+              <option value="prep">予習レポート</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="id_experiment_number">実験番号</label>
+            <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required>
+              <option value="">選択してください</option>
+              <option value="I-01,02">I-01,02</option>
+              <option value="I-03,04">I-03,04</option>
+              <option value="I-05,06">I-05,06</option>
+              <option value="I-07,08">I-07,08</option>
+              <option value="I-09,10">I-09,10</option>
+              <option value="II-01,02">II-01,02</option>
+              <option value="II-03,04">II-03,04</option>
+              <option value="II-05,06">II-05,06</option>
+              <option value="II-07,08">II-07,08</option>
+              <option value="II-09,10">II-09,10</option>
+            </select>
+          </div>
+          <div class="mb-3">
             <label for="file" class="form-label">PDFファイル選択</label>
             <input id="file" name="file" type="file" accept="application/pdf" class="form-control"
                    @change="onFileChange">

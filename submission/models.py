@@ -12,7 +12,24 @@ class Submission(models.Model):
     experiment_group = models.CharField(max_length=2, blank=True)  
     score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name='得点')  # 添削結果
     graded_file = models.FileField(upload_to='graded_submissions/', null=True, blank=True, verbose_name='添削ファイル')  # 添削PDF等
-
+    REPORT_TYPE_CHOICES = [
+        ('main', '本レポート'),
+        ('prep', '予習レポート'),
+    ]
+    EXPERIMENT_NUMBER_CHOICES = [
+        ('I-01,02', 'I-01,02'),
+        ('I-03,04', 'I-03,04'),
+        ('I-05,06', 'I-05,06'),
+        ('I-07,08', 'I-07,08'),
+        ('I-09,10', 'I-09,10'),
+        ('II-01,02', 'II-01,02'),
+        ('II-03,04', 'II-03,04'),
+        ('II-05,06', 'II-05,06'),
+        ('II-07,08', 'II-07,08'),
+        ('II-09,10', 'II-09,10'),
+    ]
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPE_CHOICES, default='main', verbose_name="レポート種別")
+    experiment_number = models.CharField(max_length=10, choices=EXPERIMENT_NUMBER_CHOICES, verbose_name="実験番号")
     #student_id = models.CharField(max_length=10, blank=True)     
 
     def __str__(self):

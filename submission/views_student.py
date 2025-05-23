@@ -19,14 +19,16 @@ def student_dashboard(request):
     status_list = []
     for sub in submissions:
         status_list.append({
-            "id": sub.id,
+            "id": sub.id, #レポートID
+            "report_type": sub.report_type,  # 予or本
+            "experiment_number": sub.experiment_number,  # 実験番号
             "file_name": sub.file.name.split('/')[-1] if sub.file else "",
             "file_url": sub.file.url if sub.file else "",
-            "submitted_at": sub.submitted_at.strftime('%Y-%m-%d %H:%M'),
+            "submitted_at": sub.submitted_at.strftime('%Y-%m-%d %H:%M'), #提出日
             "status": "添削済" if sub.graded else "未",
-            "graded_score": sub.score if sub.score is not None else "" ,
-            "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "",
-            "graded_file_url": sub.graded_file.url if sub.graded_file else "",
+            "graded_score": sub.score if sub.score is not None else "" , #採点結果
+            "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "", #添削ファイル名
+            "graded_file_url": sub.graded_file.url if sub.graded_file else "", #添削ファイルURL
         })
 
     # 実際は必要な他のデータも空でOK
