@@ -1,0 +1,34 @@
+{% verbatim %}
+<table class="table table-bordered align-middle">
+    <thead>
+        <tr>
+            <th style="max-width:120px;">曜日</th>
+            <th style="max-width:90px;">班番号</th>
+            <th style="max-width:110px;">実験番号</th>
+            <th style="max-width:140px;">学生名</th>
+            <th style="max-width:180px;">ファイル名</th>
+            <th style="max-width:90px;">採点結果</th>
+        </tr>
+    </thead>
+    <tbody v-if="!items || items.length === 0">
+        <tr>
+            <td colspan="6" class="text-center text-muted">データがありません</td>
+        </tr>
+    </tbody>
+    <tbody v-else>
+        <tr v-for="row in items" :key="row.id" @click="$emit('row-click', row.id)" class="clickable-row">
+            <td>{{ row.experiment_day }}</td>
+            <td>{{ row.experiment_group }}</td>
+            <td>{{ row.experiment_number }}</td>
+            <td>{{ row.full_name }}</td>
+            <td class="filename-td">
+                <a :href="'/submission/grading_form/' + row.id + '/'" @click.stop>
+                    {{ row.file ? row.file.split('/').pop().slice(0, 20) + (row.file.split('/').pop().length > 20 ?
+                    '...' : '') : '' }}
+                </a>
+            </td>
+            <td>{{ row.score == null ? '' : row.score }}</td>
+        </tr>
+    </tbody>
+</table>
+{% endverbatim %}

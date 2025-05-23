@@ -4,6 +4,7 @@ from . import views_admin
 from . import views_student
 from . import views_teacher
 from . import views_submission
+from . import views_grading
 from .views_login import redirect_after_login
 from django.contrib.auth import views as auth_views
 
@@ -28,6 +29,10 @@ urlpatterns = [
     
     path('student_dashboard/', views_student.student_dashboard, name='student_dashboard'),
     path('delete_submission/', views_student.delete_submission, name='delete_submission'),
+    
     path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),
+    path('get_ungraded_submissions/', views_teacher.get_ungraded_submissions, name='get_ungraded_submissions'),
+    path('get_graded_submissions/', views_teacher.get_graded_submissions, name='get_graded_submissions'),
+    path('grading_form/<int:submission_id>/', views_grading.grading_form, name='grading_form')
 ]
 

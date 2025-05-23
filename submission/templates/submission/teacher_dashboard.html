@@ -1,8 +1,79 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}TAダッシュボード{% endblock %}
+{% block title %}教師ダッシュボード{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/teacher_dashboard.css' %}">
+{% endblock %}
 
 {% block content %}
-<h2>TAダッシュボード</h2>
-<p>ここは teacher ユーザー用のダッシュボードです。</p>
+
+<div id="teacher-dashboard" class="container mt-4">
+    <h2 class="mb-4">教師ダッシュボード</h2>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
+                @click.prevent="tab = 'grading'; fetchList();">未添削リスト</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'graded' }" href="#"
+                @click.prevent="tab = 'graded'; fetchList();">添削済みリスト</a>
+        </li>
+    </ul>
+
+    <div class="row mb-2">
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_day">
+                <option value="">曜日</option>
+                <option value="火">火</option>
+                <option value="木">木</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            {% verbatim %}
+            <select class="form-select" v-model="filter.experiment_group">
+                <option value="">班番号</option>
+                <option v-for="n in 20" :value="n < 10 ? '0'+n : n">{{ n < 10 ? '0' +n : n }}</option>
+            </select>
+            {% endverbatim %}
+        </div>
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_number">
+                <option value="">実験番号</option>
+                <option value="I-01,02">I-01,02</option>
+                <option value="I-03,04">I-03,04</option>
+                <option value="I-05,06">I-05,06</option>
+                <option value="I-07,08">I-07,08</option>
+                <option value="I-09,10">I-09,10</option>
+                <option value="II-01,02">II-01,02</option>
+                <option value="II-03,04">II-03,04</option>
+                <option value="II-05,06">II-05,06</option>
+                <option value="II-07,08">II-07,08</option>
+                <option value="II-09,10">II-09,10</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-primary" @click="fetchList()">検索</button>
+        </div>
+    </div>
+
+    <transition name="fade" mode="out-in">
+        <div v-if="tab === 'grading'" key="grading">
+            {% include "submission/grading_list.html" %}
+        </div>
+        <div v-else-if="tab === 'graded'" key="graded">
+            {% include "submission/graded_list.html" %}
+        </div>
+    </transition>
+    <transition name="fade" mode="out-in">
+        <component :is="currentTabComponent" :items="items" @row-click="goToGrading"></component>
+    </transition>    
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/teacher_dashboard.js' %}"></script>
+
 {% endblock %}
