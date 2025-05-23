@@ -13,7 +13,9 @@
     <div id="vue-header-app">
         {% include 'submission/header.html' %}
     </div>
-    {% block content %}{% endblock %}
+    <div id="content-wrap">
+        {% block content %}{% endblock %}
+    </div>
     <div id="footer-area">{% include 'submission/footer.html' %}</div>
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script>

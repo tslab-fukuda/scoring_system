@@ -6,12 +6,11 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    /* ↓ フッター高さ分だけ下に余白を作る（例: 65px） */
-    padding-bottom: 65px;
+
 }
 
 #content-wrap {
-    flex: 1;
+    flex: 1 0 auto;
 }
 
 /* --- ここから固定フッター --- */
@@ -22,11 +21,8 @@ body {
     padding: 20px 0 10px 0;
     font-size: 1rem;
     width: 100vw;
-    position: fixed;
-    left: 0;
-    bottom: 0;
-    z-index: 1000;
     box-shadow: 0 -2px 8px rgba(40,40,50,0.10);
+    margin-top: auto;
 }
 /* ↑ position: fixed, left: 0, bottom: 0, width: 100vw を追加 */
 
