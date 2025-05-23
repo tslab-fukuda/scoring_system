@@ -89,8 +89,6 @@ new Vue({
             this.redraw(idx);
         },
         saveGrading() {
-            // 1. 各drawCanvasの内容を画像化して送信
-            // 2. サーバで元PDFに上書き（PyPDF2＋Pillow等）
             let images = [];
             this.pdfPages.forEach((_, idx) => {
                 const canvas = this.$refs['drawCanvas' + idx][0];
@@ -98,9 +96,30 @@ new Vue({
             });
             fetch(window.location.pathname, {
                 method: "POST",
-                headers: { "X-CSRFToken": "{{ csrf_token }}", "Content-Type": "application/json" },
+                headers: {
+                    "X-CSRFToken": window.csrfToken,
+                    "Content-Type": "application/json"
+                },
                 body: JSON.stringify({ drawImages: images })
-            }).then(res => location.reload());
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === "ok" && res.new_file_url) {
+                    const iframe = document.getElementById("pdf-preview-iframe");
+                    if (iframe) {
+                        iframe.src = res.new_file_url;
+                        const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
+                        modal.show();
+                        document.getElementById("pdf-preview-close-btn").onclick = function () {
+                            window.location.href = "/submission/teacher_dashboard/";
+                        };
+                    } else {
+                        // もしiframeが見つからないならPDFだけ別タブで表示（安全策）
+                        window.open(res.new_file_url, "_blank");
+                        window.location.href = "/submission/teacher_dashboard/";
+                    }
+                }
+            });
         }
     },
     mounted() {

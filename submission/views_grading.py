@@ -1,16 +1,17 @@
-from django.shortcuts import render
-from submission.models import UserProfile, Submission, Schedule
-from django.views.decorators.csrf import csrf_exempt
-import json
-from submission.decorators import role_required
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse 
-import datetime
-from django.middleware.csrf import get_token
-import os
 from django.shortcuts import render, get_object_or_404
+from submission.models import UserProfile, Submission, Schedule
+from django.contrib.auth.decorators import login_required
+from submission.decorators import role_required
+from django.http import JsonResponse
+from django.conf import settings
+from django.utils import timezone
 
+import os
+import io
+import json
+import base64
+import fitz  # PyMuPDF
+from PIL import Image
 
 @login_required 
 @role_required('teacher')
@@ -19,29 +20,47 @@ def grading_form(request, submission_id):
     if request.method == 'POST':
         data = json.loads(request.body)
         images = data.get('drawImages')
-        # PDF上書き合成（全ページ分）
         pdf_path = submission.file.path
-        pdf_reader = PdfReader(pdf_path)
-        pdf_writer = PdfWriter()
-        for page_no, page in enumerate(pdf_reader.pages):
-            pil_bg = None
-            if images and images[page_no]:
-                img_str = images[page_no].split(',')[1]
-                pil_fg = Image.open(io.BytesIO(base64.b64decode(img_str))).convert("RGBA")
-                pil_bg = Image.new("RGBA", pil_fg.size, (255,255,255,0))
-                pil_bg.alpha_composite(pil_fg)
-            # PDFページ画像合成
-            # …詳細合成は省略。合成して一時PDFへ貼付
-            # pdf_writer.add_page(...)
-        # 保存名
-        now = timezone.localtime(timezone.now()).strftime('%Y%m%d')
+
+        # PyMuPDFでPDF編集
+        doc = fitz.open(pdf_path)
+        for page_no, img_data in enumerate(images):
+            page = doc[page_no]
+            # 元ページを画像でレンダリング
+            pix = page.get_pixmap(dpi=200)
+            pdf_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            # 手書きがある場合だけ合成
+            if img_data:
+                header, encoded = img_data.split(",", 1)
+                hand_img_bytes = base64.b64decode(encoded)
+                hand_image = Image.open(io.BytesIO(hand_img_bytes)).convert("RGBA")
+                # 手書き画像を元ページに合成
+                pdf_image = pdf_image.convert("RGBA")
+                pdf_image.alpha_composite(hand_image.resize(pdf_image.size))
+            # 新しい画像をPDFページに貼り直す
+            out_io = io.BytesIO()
+            pdf_image.convert("RGB").save(out_io, format="PNG")
+            out_io.seek(0)
+            page.clean_contents()  # 既存の内容を消す
+            page.insert_image(page.rect, stream=out_io.read())
+
+        # 保存名（例: sample_graded.pdf）
         base, ext = os.path.splitext(os.path.basename(pdf_path))
-        new_name = f"{base}_{now}_添削済み.pdf"
+        new_name = f"{base}_graded.pdf"
         new_path = os.path.join(settings.MEDIA_ROOT, 'submissions', new_name)
-        with open(new_path, "wb") as fout:
-            pdf_writer.write(fout)
+        doc.save(new_path)
+        doc.close()
+
+        # DB登録ファイル名/フラグ書換
         submission.file.name = f"submissions/{new_name}"
+        submission.graded = True
         submission.save()
-        return JsonResponse({'status': 'ok'})
+        
+        # 元のPDFファイルを削除
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+
+        return JsonResponse({'status': 'ok', 'new_file_url': submission.file.url})
+
     # GET時
     return render(request, 'submission/grading_form.html', {'submission': submission, 'pdf_url': submission.file.url})

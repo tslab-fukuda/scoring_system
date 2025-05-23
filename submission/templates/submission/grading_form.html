@@ -62,12 +62,34 @@
     </div>
 </div>
 
-</div>
+<!-- モーダルウィンドウ -->
+<div class="modal fade" id="pdfPreviewModal" tabindex="-1" aria-labelledby="pdfPreviewLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" style="max-width: 90vw;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="pdfPreviewLabel">添削済みPDFプレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body" style="height:80vh;">
+          <iframe id="pdf-preview-iframe" style="width:100%;height:100%;" frameborder="0"></iframe>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="pdf-preview-close-btn" data-bs-dismiss="modal">ダッシュボードに戻る</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <script>
     window.pdf_url = "{{ submission.file.url }}";
+    window.csrfToken = '{{ csrf_token }}';
 </script>
+
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js"></script>
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+</script>
 <script src="{% static 'submission/js/grading_form.js' %}"></script>
 {% endblock %}
