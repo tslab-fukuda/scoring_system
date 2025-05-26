@@ -66,3 +66,15 @@ class GradingChecklist(models.Model):
 
 def __str__(self):
     return f"{self.submission.student.username}: {self.item} - {'済' if self.checked else '未'}"
+
+class ScoringItem(models.Model):
+    CATEGORY_CHOICES = (
+        ('pre', '予習レポート'),
+        ('main', '本レポート'),
+    )
+    category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
+    label = models.CharField(max_length=32)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['category', 'order']

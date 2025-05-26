@@ -3,7 +3,8 @@ from submission.models import UserProfile, Submission, Schedule
 from django.views.decorators.csrf import csrf_exempt
 import json
 from submission.decorators import role_required
-from django.http import JsonResponse 
+from django.http import JsonResponse
+from submission.models import ScoringItem
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -86,3 +87,17 @@ def delete_schedule_api(request, schedule_id):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
+
+@role_required('admin')
+def scoring_items(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        ScoringItem.objects.all().delete()
+        for idx, item in enumerate(data.get('pre', [])):
+            ScoringItem.objects.create(category='pre', label=item, order=idx)
+        for idx, item in enumerate(data.get('main', [])):
+            ScoringItem.objects.create(category='main', label=item, order=idx)
+        return JsonResponse({'status': 'ok'})
+    pre = list(ScoringItem.objects.filter(category='pre').values_list('label', flat=True))
+    main = list(ScoringItem.objects.filter(category='main').values_list('label', flat=True))
+    return render(request, 'submission/scoring_items.html', {'pre': pre, 'main': main})

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}評価項目編集画面{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/scoring_items.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-4">評価項目編集画面</h2>
+<div id="scoring-items-app">
+  <div class="score-board">
+    <div class="score-column">
+      <h5>予習レポート</h5>
+      <div>
+        <div class="scoring-ticket" v-for="(item, i) in pre" :key="i">
+          <input v-model="pre[i]" />
+          <span class="delete-btn" @click="pre.splice(i,1)">×</span>
+        </div>
+        <button class="btn btn-outline-secondary add-btn" @click="pre.push('')">＋項目追加</button>
+      </div>
+    </div>
+    <div class="board-divider"></div>
+    <div class="score-column">
+      <h5>本レポート</h5>
+      <div>
+        <div class="scoring-ticket" v-for="(item, i) in main" :key="i">
+          <input v-model="main[i]" />
+          <span class="delete-btn" @click="main.splice(i,1)">×</span>
+        </div>
+        <button class="btn btn-outline-secondary add-btn" @click="main.push('')">＋項目追加</button>
+      </div>
+    </div>
+  </div>
+  <div class="mt-3">
+    <button class="btn btn-primary" @click="save">保存</button>
+  </div>
+</div>
+
+<script>
+  window.csrfToken = '{{ csrf_token }}';
+  window.initialPre = {{ pre | safe }};
+  window.initialMain = {{ main | safe }};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/scoring_items.js' %}"></script>
+{% endblock %}

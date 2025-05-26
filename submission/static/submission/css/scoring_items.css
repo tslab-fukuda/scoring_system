@@ -1,0 +1,48 @@
+.score-board {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+  }
+  .score-column {
+    flex: 1;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 2px solid #ccc;
+    padding: 16px;
+    min-width: 280px;
+  }
+  .board-divider {
+    width: 4px;
+    background: #1976d2;
+    border-radius: 2px;
+    margin: 0 18px;
+    min-height: 350px;
+    align-self: stretch;
+  }
+  .scoring-ticket {
+    background: #fff;
+    border-radius: 5px;
+    border: 1px solid #aaa;
+    margin: 10px 0;
+    padding: 8px 12px;
+    box-shadow: 0 2px 6px #0001;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .scoring-ticket input {
+    border: none;
+    background: transparent;
+    width: 80%;
+  }
+  .scoring-ticket input:focus {
+    outline: none;
+    border-bottom: 1px solid #1976d2;
+  }
+  .delete-btn {
+    color: #c00;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .add-btn { width: 100%; margin-top: 8px; }
+  
