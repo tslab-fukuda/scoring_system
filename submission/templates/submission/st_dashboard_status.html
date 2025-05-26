@@ -10,7 +10,6 @@
                 <th>提出日</th>
                 <th>ステータス</th>
                 <th>添削結果</th>
-                <th>添削ファイル</th>
                 <th>編集</th>
             </tr>
         </thead>
@@ -44,16 +43,10 @@
                     </button>
                     <span v-else>-</span>
                 </td>
-                <!-- 添削ファイル -->
-                <td>
-                    <a :href="item.graded_file_url" target="_blank" v-if="item.graded_file_url">{{ item.graded_file_name
-                        }}</a>
-                    <span v-else>-</span>
-                </td>
                 <!-- 編集 -->
                 <td>
                     <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
-                        v-if="item.status == '添削済'">削除</button>
+                        v-if="item.status !== '添削済'">削除</button>
                 </td>
             </tr>
         </tbody>
@@ -68,8 +61,25 @@
                     <button type="button" class="btn-close" @click="showScoreModal=false"></button>
                 </div>
                 <div class="modal-body">
-                    <div v-if="scoreDetail">{{ scoreDetail }}</div>
-                    <div v-else>詳細情報なし</div>
+                    <table v-if="Array.isArray(scoreDetail)" class="table table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>項目</th>
+                                <th>値</th>
+                                <th>係数</th>
+                                <th>小計</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in scoreDetail">
+                                <td>{{ item.label }}</td>
+                                <td>{{ item.value }}</td>
+                                <td>{{ item.weight }}</td>
+                                <td>{{ item.value * item.weight }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-else>{{ scoreDetail }}</div>
                 </div>
             </div>
         </div>

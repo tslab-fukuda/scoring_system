@@ -3,19 +3,20 @@ new Vue({
     data: {
         tool: 'pen',
         showScore: false,
-        scoreItems: [
-            { key: 'content', label: '内容不足', value: 0 },
-            { key: 'consideration', label: '考察不足', value: 0 },
-            { key: 'format', label: 'フォーマットミス', value: 0 }
-        ],
+        scoreItems: [],
         pdfPages: [],
+        loadedPages: {},
         drawing: false,
         lastX: 0,
         lastY: 0,
         currentPage: null,
-        drawData: [],  // 各ページの手書き座標を保存
-        drawData: [],    // ページごとの描画履歴 [ [stroke1, stroke2, ...], ... ]
+        drawData: [],
         undoStack: [],
+    },
+    computed: {
+        totalScore() {
+            return this.scoreItems.reduce((acc, item) => acc + (item.value * (item.weight || 1)), 0);
+        }
     },
     methods: {
         toggleScorePanel() {
@@ -33,7 +34,6 @@ new Vue({
             this.lastY = e.clientY - rect.top;
             if (!this.drawData[idx]) this.drawData[idx] = [];
             if (!this.undoStack[idx]) this.undoStack[idx] = [];
-            // 新しいストローク開始
             this.drawData[idx].push([{ x: this.lastX, y: this.lastY }]);
         },
         draw(idx, e) {
@@ -57,7 +57,6 @@ new Vue({
             if (!this.isPenActive()) return;
             this.drawing = false;
             this.currentPage = null;
-            // 描画終了ごとにundoStackをクリア（通常のundo/redo動作）
             this.undoStack[idx] = [];
         },
         redraw(idx) {
@@ -100,7 +99,10 @@ new Vue({
                     "X-CSRFToken": window.csrfToken,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ drawImages: images })
+                body: JSON.stringify({ 
+                    drawImages: images,
+                    scoreItems: this.scoreItems
+                 })
             })
             .then(res => res.json())
             .then(res => {
@@ -114,47 +116,83 @@ new Vue({
                             window.location.href = "/submission/teacher_dashboard/";
                         };
                     } else {
-                        // もしiframeが見つからないならPDFだけ別タブで表示（安全策）
                         window.open(res.new_file_url, "_blank");
                         window.location.href = "/submission/teacher_dashboard/";
                     }
                 }
             });
+        },
+        loadPage(pdf, i) {
+            if (this.loadedPages[i]) return;
+            pdf.getPage(i + 1).then(page => {
+                const viewport = page.getViewport({ scale: 1.4 });
+                const pdfCanvas = this.$refs['pdfCanvas' + i][0];
+                pdfCanvas.width = viewport.width;
+                pdfCanvas.height = viewport.height;
+                page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport });
+                const drawCanvas = this.$refs['drawCanvas' + i][0];
+                drawCanvas.width = viewport.width;
+                drawCanvas.height = viewport.height;
+                this.loadedPages[i] = true;
+            });
         }
     },
     mounted() {
-        // PDF.js 全ページスクロール
+        // 採点項目の動的反映
+        fetch("/submission/scoring_items_api/")
+          .then(res => res.json())
+          .then(items => {
+            if (window.reportType === "prep") {
+                this.scoreItems = (items.pre || []).map(lab => ({
+                    label: lab.label,
+                    weight: lab.weight,
+                    value: 0,
+                    key: lab.label
+                  }));
+            } else {
+                this.scoreItems = (items.main || []).map(lab => ({
+                    label: lab.label,
+                    weight: lab.weight,
+                    value: 0,
+                    key: lab.label
+                  }));
+            }
+            // console.table(this.scoreItems)
+          });
+        // PDF.js lazy load
         const url = window.pdf_url;
         pdfjsLib.getDocument(url).promise.then(pdf => {
             this.pdfPages = Array(pdf.numPages).fill(0);
+            // まず先頭3ページだけ
+            for (let i = 0; i < Math.min(3, pdf.numPages); i++) this.loadPage(pdf, i);
+            // IntersectionObserverで残りページ
             this.$nextTick(() => {
-                for (let i = 0; i < pdf.numPages; i++) {
-                    pdf.getPage(i + 1).then(page => {
-                        const viewport = page.getViewport({ scale: 1.4 });
-                        // PDF canvas
-                        const pdfCanvas = this.$refs['pdfCanvas' + i][0];
-                        pdfCanvas.width = viewport.width;
-                        pdfCanvas.height = viewport.height;
-                        page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport });
-                        // Draw canvas
-                        const drawCanvas = this.$refs['drawCanvas' + i][0];
-                        drawCanvas.width = viewport.width;
-                        drawCanvas.height = viewport.height;
+                const io = new IntersectionObserver(entries => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const idx = Number(entry.target.dataset.idx);
+                            if (!this.loadedPages[idx]) this.loadPage(pdf, idx);
+                        }
                     });
-                }
+                }, { root: document.querySelector("#pdf-area"), threshold: 0.1 });
+                this.pdfPages.forEach((_, idx) => {
+                    const el = this.$refs['pdfCanvas' + idx]?.[0];
+                    if (el) {
+                        el.dataset.idx = idx;
+                        io.observe(el);
+                    }
+                });
             });
         });
+
         // キーボードショートカット
         window.addEventListener('keydown', (e) => {
-            // アクティブページにのみundo/redo
             if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-            // Ctrl+Z
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
                 if (this.currentPage != null) this.undo(this.currentPage);
                 else if (this.pdfPages.length > 0) this.undo(0);
                 e.preventDefault();
             }
-            // Ctrl+Y
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
                 if (this.currentPage != null) this.redo(this.currentPage);
                 else if (this.pdfPages.length > 0) this.redo(0);

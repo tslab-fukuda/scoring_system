@@ -6,7 +6,7 @@ new Vue({
         scheduleList: SCHEDULE_LIST,
         experimentDay: EXPERIMENT_DAY,
         showScoreModal: false,
-        scoreDetail: null,
+        scoreDetails: [],
     },
     computed: {
         filteredScheduleList() {
@@ -37,7 +37,7 @@ new Vue({
             window.location.href = `/submission/submit/?date=${item.date}`;
         },
         showScoreDetail(item) {
-            this.scoreDetail = item.score_detail || "詳細情報なし";
+            this.scoreDetail = item.score_details || "詳細情報なし";
             this.showScoreModal = true;
         },
         deleteSubmission(submissionId) {

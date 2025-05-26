@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
+from submission.models import ScoringItem
 from django.http import JsonResponse
 from django.conf import settings
 from django.utils import timezone
@@ -54,6 +55,7 @@ def grading_form(request, submission_id):
         # DB登録ファイル名/フラグ書換
         submission.file.name = f"submissions/{new_name}"
         submission.graded = True
+        submission.score_details = data.get('scoreItems')
         submission.save()
         
         # 元のPDFファイルを削除
@@ -64,3 +66,13 @@ def grading_form(request, submission_id):
 
     # GET時
     return render(request, 'submission/grading_form.html', {'submission': submission, 'pdf_url': submission.file.url})
+
+@login_required
+def scoring_items_api(request):
+    pre = list(ScoringItem.objects.filter(category='pre').order_by('order').values('label', 'weight'))
+    main = list(ScoringItem.objects.filter(category='main').order_by('order').values('label', 'weight'))
+    for x in pre:
+        x['weight'] = int(x['weight'])
+    for x in main:
+        x['weight'] = int(x['weight'])
+    return JsonResponse({'pre': pre, 'main': main})

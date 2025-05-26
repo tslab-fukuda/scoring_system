@@ -32,7 +32,10 @@ def get_ungraded_submissions(request):
             'experiment_number': s.experiment_number,
             'full_name': up.full_name,
             'file': s.file.url if s.file else '',
-            'score': s.score,
+            'score': (
+                sum(item.get("value", 0) * item.get("weight", 1) for item in s.score_details)
+                if s.score_details else "0"
+            ),
         })
     return JsonResponse(result, safe=False)
 
@@ -56,6 +59,9 @@ def get_graded_submissions(request):
         'experiment_number': s.experiment_number,
         'full_name': s.student.userprofile.full_name,
         'file': s.file.url if s.file else '',
-        'score': s.score,
+        'score': (
+                sum(item.get("value", 0) * item.get("weight", 1) for item in s.score_details)
+                if s.score_details else "0"
+            ),
     } for s in qs.select_related('student__userprofile')]
     return JsonResponse(result, safe=False)

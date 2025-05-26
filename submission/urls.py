@@ -36,6 +36,7 @@ urlpatterns = [
     path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),
     path('get_ungraded_submissions/', views_teacher.get_ungraded_submissions, name='get_ungraded_submissions'),
     path('get_graded_submissions/', views_teacher.get_graded_submissions, name='get_graded_submissions'),
-    path('grading_form/<int:submission_id>/', views_grading.grading_form, name='grading_form')
+    path('grading_form/<int:submission_id>/', views_grading.grading_form, name='grading_form'),
+    path('scoring_items_api/', views_grading.scoring_items_api, name='scoring_items_api')
 ]
 

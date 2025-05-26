@@ -92,12 +92,30 @@ def delete_schedule_api(request, schedule_id):
 def scoring_items(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        ScoringItem.objects.all().delete()
+        ScoringItem.objects.filter(category='pre').delete()
+        ScoringItem.objects.filter(category='main').delete()
         for idx, item in enumerate(data.get('pre', [])):
-            ScoringItem.objects.create(category='pre', label=item, order=idx)
+            ScoringItem.objects.create(
+                category='pre',
+                label=item.get('label', ''),
+                weight=item.get('weight', 1),  # ← getでデフォルト値
+                order=idx
+            )
         for idx, item in enumerate(data.get('main', [])):
-            ScoringItem.objects.create(category='main', label=item, order=idx)
+            ScoringItem.objects.create(
+                category='main',
+                label=item.get('label', ''),
+                weight=item.get('weight', 1),  # ← getでデフォルト値
+                order=idx
+            )
         return JsonResponse({'status': 'ok'})
-    pre = list(ScoringItem.objects.filter(category='pre').values_list('label', flat=True))
-    main = list(ScoringItem.objects.filter(category='main').values_list('label', flat=True))
-    return render(request, 'submission/scoring_items.html', {'pre': pre, 'main': main})
+    pre = list(ScoringItem.objects.filter(category='pre').order_by('order').values('label','weight'))
+    main = list(ScoringItem.objects.filter(category='main').order_by('order').values('label','weight'))
+    for x in pre:
+        x['weight'] = int(x['weight'])
+    for x in main:
+        x['weight'] = int(x['weight'])
+    return render(request, 'submission/scoring_items.html', {
+        'pre': json.dumps(pre, ensure_ascii=False),
+        'main': json.dumps(main, ensure_ascii=False),
+    })

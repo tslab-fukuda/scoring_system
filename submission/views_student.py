@@ -26,12 +26,15 @@ def student_dashboard(request):
             "file_url": sub.file.url if sub.file else "",
             "submitted_at": sub.submitted_at.strftime('%Y-%m-%d %H:%M'), #提出日
             "status": "添削済" if sub.graded else "未",
-            "graded_score": sub.score if sub.score is not None else "" , #採点結果
-            "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "", #添削ファイル名
-            "graded_file_url": sub.graded_file.url if sub.graded_file else "", #添削ファイルURL
+            "graded_score": (
+                sum(item.get("value", 0) * item.get("weight", 1) for item in sub.score_details)
+                if sub.score_details else "error"
+            ), #採点結果
+            "score_details":sub.score_details if sub.score_details else ""
+            # "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "", #添削ファイル名
+            # "graded_file_url": sub.graded_file.url if sub.graded_file else "", #添削ファイルURL
         })
 
-    # 実際は必要な他のデータも空でOK
     user_profile = request.user.userprofile
     student_day = user_profile.experiment_day   # "火" or "木"
 

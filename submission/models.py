@@ -10,7 +10,7 @@ class Submission(models.Model):
     graded = models.BooleanField(default=False)                  # 採点済みフラグ
     date = models.DateField(null=True, blank=True)               
     experiment_group = models.CharField(max_length=2, blank=True)  
-    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name='得点')  # 添削結果
+    score_details = models.JSONField(null=True, blank=True)  # 添削結果
     graded_file = models.FileField(upload_to='graded_submissions/', null=True, blank=True, verbose_name='添削ファイル')  # 添削PDF等
     REPORT_TYPE_CHOICES = [
         ('main', '本レポート'),
@@ -75,6 +75,7 @@ class ScoringItem(models.Model):
     category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
     label = models.CharField(max_length=32)
     order = models.PositiveIntegerField(default=0)
+    weight = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)  # 係数（得点換算用、マイナス値も可）
 
     class Meta:
         ordering = ['category', 'order']

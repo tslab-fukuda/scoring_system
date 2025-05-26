@@ -17,22 +17,24 @@
     <div class="score-column">
       <h5>予習レポート</h5>
       <div>
-        <div class="scoring-ticket" v-for="(item, i) in pre" :key="i">
-          <input v-model="pre[i]" />
+        <div v-for="(item, i) in pre" :key="i" class="scoring-ticket">
+          <input v-model="item.label" placeholder="項目名">
+          <input type="number" v-model.number="item.weight" placeholder="係数" style="width:80px;margin-left:8px;">
           <span class="delete-btn" @click="pre.splice(i,1)">×</span>
         </div>
-        <button class="btn btn-outline-secondary add-btn" @click="pre.push('')">＋項目追加</button>
+        <button class="btn btn-outline-secondary add-btn" @click="pre.push({label:'',weight:1})">＋項目追加</button>
       </div>
     </div>
     <div class="board-divider"></div>
     <div class="score-column">
       <h5>本レポート</h5>
       <div>
-        <div class="scoring-ticket" v-for="(item, i) in main" :key="i">
-          <input v-model="main[i]" />
+        <div v-for="(item, i) in main" :key="i" class="scoring-ticket">
+          <input v-model="item.label" placeholder="項目名">
+          <input type="number" v-model.number="item.weight" placeholder="係数" style="width:80px;margin-left:8px;">
           <span class="delete-btn" @click="main.splice(i,1)">×</span>
         </div>
-        <button class="btn btn-outline-secondary add-btn" @click="main.push('')">＋項目追加</button>
+        <button class="btn btn-outline-secondary add-btn" @click="main.push({label:'',weight:1})">＋項目追加</button>
       </div>
     </div>
   </div>
