@@ -1,34 +1,74 @@
 {% verbatim %}
-<table class="table table-bordered align-middle">
-    <thead>
-        <tr>
-            <th style="max-width:120px;">曜日</th>
-            <th style="max-width:90px;">班番号</th>
-            <th style="max-width:110px;">実験番号</th>
-            <th style="max-width:140px;">学生名</th>
-            <th style="max-width:180px;">ファイル名</th>
-            <th style="max-width:90px;">採点結果</th>
-        </tr>
-    </thead>
-    <tbody v-if="!items || items.length === 0">
-        <tr>
-            <td colspan="6" class="text-center text-muted">データがありません</td>
-        </tr>
-    </tbody>
-    <tbody v-else>
-        <tr v-for="row in items" :key="row.id" @click="$emit('row-click', row.id)" class="clickable-row">
-            <td>{{ row.experiment_day }}</td>
-            <td>{{ row.experiment_group }}</td>
-            <td>{{ row.experiment_number }}</td>
-            <td>{{ row.full_name }}</td>
-            <td class="filename-td">
-                <a :href="'/submission/grading_form/' + row.id + '/'" @click.stop>
-                    {{ row.file ? row.file.split('/').pop().slice(0, 20) + (row.file.split('/').pop().length > 20 ?
-                    '...' : '') : '' }}
-                </a>
-            </td>
-            <td>{{ row.score == null ? '' : row.score }}</td>
-        </tr>
-    </tbody>
-</table>
+<div>
+    <table class="table table-bordered align-middle">
+        <thead>
+            <tr>
+                <th style="max-width:120px;">曜日</th>
+                <th style="max-width:90px;">班番号</th>
+                <th style="max-width:110px;">実験番号</th>
+                <th style="max-width:140px;">学生名</th>
+                <th style="max-width:180px;">ファイル名</th>
+                <th style="max-width:90px;">採点結果</th>
+            </tr>
+        </thead>
+        <tbody v-if="!items || items.length === 0">
+            <tr>
+                <td colspan="6" class="text-center text-muted">データがありません</td>
+            </tr>
+        </tbody>
+        <tbody v-else>
+            <tr v-for="item in items" :key="item.id" @click="$emit('row-click', item.id)" class="clickable-row">
+                <td>{{ item.experiment_day }}</td>
+                <td>{{ item.experiment_group }}</td>
+                <td>{{ item.experiment_number }}</td>
+                <td>{{ item.full_name }}</td>
+                <td class="filename-td">
+                    <a :href="'/submission/grading_form/' + item.id + '/'" @click.stop>
+                        {{ item.file ? item.file.split('/').pop().slice(0, 20) + (item.file.split('/').pop().length > 20 ?
+                        '...' : '') : '' }}
+                    </a>
+                </td>
+                <td>
+                    <!-- {{ item.score == null ? '' : item.score }} -->
+                    <button v-if="item.score" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                        {{ item.score }} 点
+                    </button>
+                    <span v-else>-</span>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <!-- 得点詳細のポップアップ -->
+    <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">得点詳細</h5>
+                    <button type="button" class="btn-close" @click="showScoreModal=false"></button>
+                </div>
+                <div class="modal-body">
+                    <table v-if="Array.isArray(scoreDetail)" class="table table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>項目</th>
+                                <th>値</th>
+                                <th>係数</th>
+                                <th>小計</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in scoreDetail">
+                                <td>{{ item.label }}</td>
+                                <td>{{ item.value }}</td>
+                                <td>{{ item.weight }}</td>
+                                <td>{{ item.value * item.weight }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-else>{{ scoreDetail }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endverbatim %}

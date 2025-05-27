@@ -6,7 +6,8 @@ Vue.component('grading-list', {
             return url.split('/').pop();
         }
     },
-    template: '#grading-list-template'
+    template: '#grading-list-template',
+    showScoreModal: false,
 });
 
 Vue.component('graded-list', {
@@ -17,7 +18,8 @@ Vue.component('graded-list', {
             return url.split('/').pop();
         }
     },
-    template: '#graded-list-template'
+    template: '#graded-list-template',
+    showScoreModal: false,
 });
 
 new Vue({
@@ -29,7 +31,8 @@ new Vue({
             experiment_group: '',
             experiment_number: ''
         },
-        items: []
+        items: [],
+        showScoreModal: false,
     },
     computed: {
         currentTabComponent() {
@@ -54,6 +57,10 @@ new Vue({
         goToGrading(id) {
             
             window.location.href = '/grading_form/' + id + '/';
-        }
+        },
+        showScoreDetail(item) {
+            this.scoreDetail = item.score_details || "詳細情報なし";
+            this.showScoreModal = true;
+        },
     }
 });

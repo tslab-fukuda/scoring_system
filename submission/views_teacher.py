@@ -23,19 +23,20 @@ def get_ungraded_submissions(request):
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
-    for s in qs.select_related('student', 'student__userprofile'):
-        up = s.student.userprofile
+    for items in qs.select_related('student', 'student__userprofile'):
+        up = items.student.userprofile
         result.append({
-            'id': s.id,
+            'id': items.id,
             'experiment_day': up.experiment_day,
             'experiment_group': up.experiment_group,
-            'experiment_number': s.experiment_number,
+            'experiment_number': items.experiment_number,
             'full_name': up.full_name,
-            'file': s.file.url if s.file else '',
+            'file': items.file.url if items.file else '',
             'score': (
-                sum(item.get("value", 0) * item.get("weight", 1) for item in s.score_details)
-                if s.score_details else "0"
+                sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
+                if items.score_details else "0"
             ),
+            "score_details": ""
         })
     return JsonResponse(result, safe=False)
 
@@ -52,16 +53,19 @@ def get_graded_submissions(request):
         qs = qs.filter(student__userprofile__experiment_group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
-    result = [{
-        'id': s.id,
-        'experiment_day': s.student.userprofile.experiment_day,
-        'experiment_group': s.student.userprofile.experiment_group,
-        'experiment_number': s.experiment_number,
-        'full_name': s.student.userprofile.full_name,
-        'file': s.file.url if s.file else '',
-        'score': (
-                sum(item.get("value", 0) * item.get("weight", 1) for item in s.score_details)
-                if s.score_details else "0"
-            ),
-    } for s in qs.select_related('student__userprofile')]
+    result = []
+    for items in qs.select_related('student__userprofile'):
+        result.append({
+            'id': items.id,
+            'experiment_day': items.student.userprofile.experiment_day,
+            'experiment_group': items.student.userprofile.experiment_group,
+            'experiment_number': items.experiment_number,
+            'full_name': items.student.userprofile.full_name,
+            'file': items.file.url if items.file else '',
+            'score': (
+                    sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
+                    if items.score_details else "0"
+                ),
+            "score_details":items.score_details if items.score_details else ""
+        })
     return JsonResponse(result, safe=False)
