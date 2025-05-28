@@ -11,6 +11,10 @@
     <h2 class="mb-4">管理者ダッシュボード</h2>
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'submissions' }" href="#"
+                @click.prevent="tab = 'submissions'">提出物確認</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'summary' }" href="#"
                 @click.prevent="tab = 'summary'">提出状況一覧</a>
         </li>
@@ -19,24 +23,20 @@
                 @click.prevent="tab = 'student'">学生別詳細</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab === 'submissions' }" href="#"
-                @click.prevent="tab = 'submissions'">提出物確認</a>
-        </li>
-        <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'schedule' }" href="#"
                 @click.prevent="tab = 'schedule'">授業予定表</a>
         </li>
     </ul>
 
     <transition name="fade" mode="out-in">
-        <div v-if="tab === 'summary'" key="summary">
+        <div v-if="tab === 'submissions'" key="submissions">
+            {% include 'submission/grading_list.html' %}
+        </div>
+        <div v-else-if="tab === 'summary'" key="summary">
             {% include 'submission/dashboard_summary.html' %}
         </div>
         <div v-else-if="tab === 'student'" key="student">
             {% include 'submission/dashboard_student.html' %}
-        </div>
-        <div v-else-if="tab === 'submissions'" key="submissions">
-            {% include 'submission/dashboard_submissions.html' %}
         </div>
         <div v-else-if="tab === 'schedule'" key="schedule">
             {% include 'submission/dashboard_schedule.html' %}
@@ -50,6 +50,5 @@
     var submissions = {{ submissions_json| safe }};
     var schedule = {{ schedule_json| safe }};
 </script>
-
-<script src="{% static 'submission/js/dashboard.js' %}"></script>
+<script src="{% static 'submission/js/admin_dashboard.js' %}"></script>
 {% endblock %}

@@ -2,12 +2,13 @@
 window.app = new Vue({
     el: '#admin-dashboard',
     data: {
-        tab: 'summary',
+        tab: 'submissions',
         selectedStudentId: null,
-        students: students, // Djangoで渡す
-        submissionSummary: submissionSummary, // Djangoで渡す
-        submissions: submissions, // Djangoで渡す
-        schedule: schedule, // Djangoで渡す（id, date, topic, teacher）
+        students: students,
+        submissionSummary: submissionSummary,
+        submissions: submissions,
+        schedule: schedule,
+        items: submissions,
         showAddModal: false,
         showEditModal: false,
         form: {
@@ -16,6 +17,9 @@ window.app = new Vue({
         }
     },
     computed: {
+        mainReportItems() {
+            return this.submissions.filter(s => s.report_type === "main");
+        },
         selectedStudent() {
             return this.students.find(s => s.id === this.selectedStudentId);
         },
@@ -30,6 +34,15 @@ window.app = new Vue({
                 const date = new Date(item.date);
                 return date.getDay() === 4;
             });
+        }
+    },
+    watch: {
+        tab(val) {
+            if (val === 'submissions') {
+                // 「main」のみをitemsに
+                this.items = this.submissions;
+            }
+            // 他タブ時は必要に応じて
         }
     },
     methods: {
@@ -129,6 +142,12 @@ window.app = new Vue({
                 .catch(err => {
                     alert('通信エラー: ' + err);
                 });
+        }
+    },
+    mounted() {
+        // ページ初期表示時（初回tabがsubmissionsの場合のため）
+        if (this.tab === 'submissions') {
+            this.items = this.submissions;
         }
     }
 });

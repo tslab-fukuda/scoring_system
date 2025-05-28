@@ -21,9 +21,27 @@ def admin_dashboard_with_data(request):
             'id', 'full_name', 'student_id', 'user__email', 'experiment_day', 'experiment_group'
         )
     )
-    submission_summary = []
-    submissions = []
 
+    # 本レポートのみ抽出
+    submissions_qs = Submission.objects.filter(report_type='main').select_related('student', 'student__userprofile')
+    submissions = []
+    for sub in submissions_qs:
+        up = getattr(sub.student, 'userprofile', None)
+        submissions.append({
+            'id': sub.id,
+            'experiment_day': up.experiment_day if up else "",
+            'experiment_group': up.experiment_group if up else "",
+            'experiment_number': sub.experiment_number,
+            'full_name': up.full_name if up else "",
+            'file': sub.file.url if sub.file else "",  # ここはteacherと同じkey
+            'score': (
+                sum(detail.get("value", 0) * detail.get("weight", 1) for detail in sub.score_details)
+                if sub.score_details else "0"
+            ),
+            "score_details": sub.score_details if sub.score_details else "",
+        })
+
+    submission_summary = []
     schedule_qs = Schedule.objects.values('id', 'date')
     schedule = [
         {'id': s['id'], 'date': s['date'].strftime('%Y-%m-%d')}

@@ -15,7 +15,7 @@ import fitz  # PyMuPDF
 from PIL import Image
 
 @login_required 
-@role_required('teacher')
+@role_required('teacher','admin')
 def grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
     if request.method == 'POST':
