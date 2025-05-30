@@ -79,3 +79,10 @@ class ScoringItem(models.Model):
 
     class Meta:
         ordering = ['category', 'order']
+        
+class ExperimentCompletion(models.Model):
+    student = models.ForeignKey(User, on_delete=models.CASCADE)
+    experiment_number = models.CharField(max_length=10)
+    completed = models.BooleanField(default=False)
+    class Meta:
+        unique_together = ('student', 'experiment_number')

@@ -22,6 +22,10 @@
             <a class="nav-link" :class="{ active: tab === 'graded' }" href="#"
                 @click.prevent="tab = 'graded'; fetchList();">添削済みリスト</a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'experiment_record' }" href="#"
+                @click.prevent="tab = 'experiment_record'; fetchStudents();">実験終了記録</a>
+        </li>
     </ul>
 
     <div class="row mb-2">
@@ -56,7 +60,7 @@
             </select>
         </div>
         <div class="col-auto">
-            <button class="btn btn-outline-primary" @click="fetchList()">検索</button>
+            <button class="btn btn-outline-primary" @click="tab === 'experiment_record' ? fetchStudents() : fetchList()">検索</button>
         </div>
     </div>
 
@@ -70,9 +74,53 @@
     </transition>
     <transition name="fade" mode="out-in">
         <component :is="currentTabComponent" :items="items" @row-click="goToGrading"></component>
-    </transition>    
+    </transition>
+    <transition name="fade" mode="out-in">
+        <div v-if="tab === 'experiment_record'">
+            <div class="student-ticket-list">
+                {% verbatim %}
+                <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
+                    <div class="student-photo"></div>
+                    <div class="fw-bold">{{ stu.full_name }}</div>
+                    <div>曜日: {{ stu.experiment_day }}</div>
+                    <div>班: {{ stu.experiment_group }}</div>
+                    <div>学籍番号: {{ stu.student_id }}</div>
+                </div>
+                {% endverbatim %}
+            </div>
+            <!-- モーダル: 実験一覧+終了判定 -->
+            <div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+                <div class="modal-dialog modal-dialog-centered">
+                    {% verbatim %}
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ selectedStudent.full_name }} の実験終了記録</h5>
+                            <button type="button" class="btn-close" @click="showStudentModal=false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table">
+                                <tr v-for="exp in experimentNumbers" :key="exp">
+                                    <td>{{ exp }}</td>
+                                    <td>
+                                        <button class="btn"
+                                            :class="isExperimentComplete(exp) ? 'btn-success' : 'btn-outline-secondary'"
+                                            @click="toggleExperimentComplete(selectedStudent.id, exp)">
+                                            {{ isExperimentComplete(exp) ? '終了' : '未了' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    {% endverbatim %}
+                </div>
+            </div>
+        </div>
+    </transition>
 </div>
-
+<script>
+    window.csrfToken = '{{ csrf_token }}';
+</script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/teacher_dashboard.js' %}"></script>
 
