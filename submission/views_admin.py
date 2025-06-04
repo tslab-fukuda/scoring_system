@@ -31,6 +31,7 @@ def admin_get_submissions_api(request):
         qs = qs.filter(student__userprofile__experiment_group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    qs = qs.filter(accepted=False)
     submissions = []
     for sub in qs:
         up = getattr(sub.student, 'userprofile', None)
@@ -63,8 +64,28 @@ def get_students_api(request):
     return JsonResponse({'students_json': students})
 
 def get_summary_api(request):
-    submission_summary = []
-    return JsonResponse({'submission_summary': submission_summary})
+    experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
+    students = UserProfile.objects.filter(role='student')
+    results = []
+    for item in students:
+        user = item.user
+        # 受付済みレポートのみ
+        accepted_reports = Submission.objects.filter(
+            student=user,
+            report_type='main',
+            accepted=True
+        ).values_list('experiment_number', flat=True)
+        accepted_set = set(accepted_reports)
+        missing_set = set(experiment_numbers) - accepted_set
+        results.append({
+            'name': item.full_name,
+            'student_id': item.student_id,
+            'submitted': len(accepted_set),
+            'missing': len(missing_set),
+            'accepted_numbers': list(accepted_set),
+            'missing_numbers': list(missing_set),
+        })
+    return JsonResponse({'submission_summary': results})
 
 def get_schedule_api(request):
     schedule_qs = Schedule.objects.values('id', 'date')
@@ -157,6 +178,7 @@ def scoring_items(request):
         'main': json.dumps(main, ensure_ascii=False),
     })
 
+@csrf_exempt
 @require_POST
 @role_required('admin')
 def accept_submission(request):

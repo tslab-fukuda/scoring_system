@@ -8,12 +8,42 @@
       <th>未提出</th>
     </tr>
   </thead>
+  {% verbatim %}
   <tbody>
     <tr v-for="student in submissionSummary" :key="student.student_id">
       <td>{{ student.name }}</td>
       <td>{{ student.student_id }}</td>
-      <td>{{ student.submitted }}</td>
+      <td>
+        <a href="#" @click.prevent="openModal(student)">{{ student.submitted }}</a>
+      </td>
       <td>{{ student.missing }}</td>
     </tr>
   </tbody>
+  {% endverbatim %}
 </table>
+{% verbatim %}
+<div v-if="showModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ modalStudent.name }} の提出状況</h5>
+        <button type="button" class="btn-close" @click="closeModal"></button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <b>提出済み:</b>
+          <ul>
+            <li v-for="n in modalStudent.accepted_numbers">{{ n }}</li>
+          </ul>
+        </div>
+        <div>
+          <b>未提出:</b>
+          <ul>
+            <li v-for="n in modalStudent.missing_numbers">{{ n }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endverbatim %}

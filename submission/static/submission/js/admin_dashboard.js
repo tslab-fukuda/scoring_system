@@ -19,7 +19,9 @@ window.app = new Vue({
         form: {
             id: null,
             date: '',
-        }
+        },
+        showModal: false,
+        modalStudent: {},
     },
     computed: {
         mainReportItems() {
@@ -210,6 +212,15 @@ window.app = new Vue({
             .then(res => {
                 if (res.status === "ok") this.fetchList();
             });
+        },
+        openModal(student) {
+            console.log("モーダル表示", student);
+            this.modalStudent = student;
+            this.showModal = true;
+        },
+        closeModal() {
+            this.showModal = false;
+            this.modalStudent = {};
         },
     },
     mounted() {
