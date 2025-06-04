@@ -5,28 +5,36 @@ import json
 from submission.decorators import role_required
 from django.http import JsonResponse
 from submission.models import ScoringItem
+from django.views.decorators.http import require_POST
+from collections import Counter
 
 @role_required('admin')
 def admin_dashboard(request):
-    return render(request, 'submission/admin_dashboard.html')
-
-@role_required('teacher')
-def teacher_dashboard(request):
-    return render(request, 'submission/teacher_dashboard.html')
+    is_admin = False
+    if hasattr(request.user, "userprofile") and request.user.userprofile.role == "admin":
+        is_admin = True
+    return render(request, 'submission/admin_dashboard.html', {
+        'is_admin': 'true' if is_admin else 'false',
+    })
 
 @role_required('admin')
-def admin_dashboard_with_data(request):
-    students = list(
-        UserProfile.objects.filter(role='student').values(
-            'id', 'full_name', 'student_id', 'user__email', 'experiment_day', 'experiment_group'
-        )
-    )
-
+def admin_get_submissions_api(request):
     # 本レポートのみ抽出
-    submissions_qs = Submission.objects.filter(report_type='main').select_related('student', 'student__userprofile')
+    day = request.GET.get('experiment_day')
+    group = request.GET.get('experiment_group')
+    exp_no = request.GET.get('experiment_number')
+    qs = Submission.objects.filter(report_type='main').select_related('student', 'student__userprofile')
+    count_map = Counter((sub.student_id, sub.experiment_number) for sub in qs)
+    if day:
+        qs = qs.filter(student__userprofile__experiment_day=day)
+    if group:
+        qs = qs.filter(student__userprofile__experiment_group=group)
+    if exp_no:
+        qs = qs.filter(experiment_number=exp_no)
     submissions = []
-    for sub in submissions_qs:
+    for sub in qs:
         up = getattr(sub.student, 'userprofile', None)
+        count = count_map[(sub.student_id, sub.experiment_number)]
         submissions.append({
             'id': sub.id,
             'experiment_day': up.experiment_day if up else "",
@@ -39,21 +47,32 @@ def admin_dashboard_with_data(request):
                 if sub.score_details else "0"
             ),
             "score_details": sub.score_details if sub.score_details else "",
+            'submission_count': count,
         })
+    is_admin = False
+    if hasattr(request.user, "userprofile") and request.user.userprofile.role == "admin":
+        is_admin = True
+    return JsonResponse({'submissions': submissions})
 
+def get_students_api(request):
+    students = list(
+        UserProfile.objects.filter(role='student').values(
+            'id', 'full_name', 'student_id', 'user__email', 'experiment_day', 'experiment_group'
+        )
+    )
+    return JsonResponse({'students_json': students})
+
+def get_summary_api(request):
     submission_summary = []
+    return JsonResponse({'submission_summary': submission_summary})
+
+def get_schedule_api(request):
     schedule_qs = Schedule.objects.values('id', 'date')
     schedule = [
         {'id': s['id'], 'date': s['date'].strftime('%Y-%m-%d')}
         for s in schedule_qs
     ]
-
-    return render(request, 'submission/admin_dashboard.html', {
-        'students_json': json.dumps(students, ensure_ascii=False),
-        'submission_summary_json': json.dumps(submission_summary, ensure_ascii=False),
-        'submissions_json': json.dumps(submissions, ensure_ascii=False),
-        'schedule_json': json.dumps(schedule, ensure_ascii=False),
-    })
+    return JsonResponse({'schedule_json': schedule})
 
 @csrf_exempt
 @role_required('admin')
@@ -137,3 +156,14 @@ def scoring_items(request):
         'pre': json.dumps(pre, ensure_ascii=False),
         'main': json.dumps(main, ensure_ascii=False),
     })
+
+@require_POST
+@role_required('admin')
+def accept_submission(request):
+    data = json.loads(request.body)
+    submission_id = data.get("submission_id")
+    from .models import Submission
+    sub = Submission.objects.get(id=submission_id)
+    sub.accepted = True
+    sub.save()
+    return JsonResponse({"status": "ok"})

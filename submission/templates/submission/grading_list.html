@@ -8,6 +8,12 @@
             <th style="max-width:140px;">学生名</th>
             <th style="max-width:180px;">ファイル名</th>
             <th style="max-width:90px;">採点結果</th>
+            {% endverbatim %}
+            {% if is_admin == 'true' %}
+            <th>提出回数</th>
+            <th style="max-width:70px;">受付</th>
+            {% endif %}
+            {% verbatim %}
         </tr>
     </thead>
     <tbody v-if="!items || items.length === 0">
@@ -28,7 +34,15 @@
                 </a>
             </td>
             <td>{{ row.score == null ? '' : row.score }}</td>
+            {% endverbatim %}
+            {% if is_admin == 'true' %}
+            {% verbatim %}
+            <td>{{ row.submission_count }}</td>
+            {% endverbatim %}
+            <td>
+                <button class="btn btn-sm btn-success" @click.stop="acceptReport(row)">受付</button>
+            </td>
+            {% endif %}
         </tr>
     </tbody>
 </table>
-{% endverbatim %}

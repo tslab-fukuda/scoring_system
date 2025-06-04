@@ -22,11 +22,16 @@ urlpatterns = [
     path('delete/<int:user_id>/', views.delete_user_view, name='delete_user'),
     path('create/', views.create_user_view, name='create_user'),
     
-    path('admin_dashboard/', views_admin.admin_dashboard_with_data, name='admin_dashboard'),
+    path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
+    path('admin_submissions_api/', views_admin.admin_get_submissions_api, name='admin_get_submissions_api'),
+    path('admin_students_api/', views_admin.get_students_api, name='get_students_api'),
+    path('admin_schedule_api/', views_admin.get_schedule_api, name='get_schedule_api'),
+    path('admin_summary_api/', views_admin.get_summary_api, name='get_summary_api'),
     path('add_schedule_api/', views_admin.add_schedule_api, name='add_schedule_api'),
     path('update_schedule_api/<int:schedule_id>/', views_admin.update_schedule_api, name='update_schedule_api'),
     path('delete_schedule_api/<int:schedule_id>/', views_admin.delete_schedule_api, name='delete_schedule_api'),
     path('scoring_items/', views_admin.scoring_items, name='scoring_items'),  # admin only
+    path('accept_submission/', views_admin.accept_submission, name='accept_submission'),
     
     # 学生系
     path('student_dashboard/', views_student.student_dashboard, name='student_dashboard'),

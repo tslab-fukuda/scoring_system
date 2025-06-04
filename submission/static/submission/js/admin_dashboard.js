@@ -9,8 +9,13 @@ window.app = new Vue({
         submissions: submissions,
         schedule: schedule,
         items: submissions,
+        submissionLoaded: false,
+        studentsLoaded: false,
+        scheduleLoaded: false,
+        summaryLoaded: false,
         showAddModal: false,
         showEditModal: false,
+        filter: { experiment_day: '', experiment_group: '', experiment_number: '' },
         form: {
             id: null,
             date: '',
@@ -34,18 +39,67 @@ window.app = new Vue({
                 const date = new Date(item.date);
                 return date.getDay() === 4;
             });
+        },
+        is_admin() {
+            return typeof window.isAdmin !== 'undefined' && window.isAdmin === true;
         }
     },
     watch: {
         tab(val) {
             if (val === 'submissions') {
                 // 「main」のみをitemsに
-                this.items = this.submissions;
+                this.fetchList();
+            }
+            if (val === 'summary' && !this.summaryLoaded) {
+                this.fetchSummary();
+            }
+            if (val === 'student' && !this.studentsLoaded) {
+                this.fetchStudens();
+            }
+            if (val === 'schedule' && !this.scheduleLoaded) {
+                this.fetchSchedule();
             }
             // 他タブ時は必要に応じて
         }
     },
     methods: {
+        fetchList() {
+            const params = [];
+            if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
+            if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
+            if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            let url = '/submission/admin_submissions_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    this.submissions = data.submissions; // ← ここで更新
+                    this.items = this.submissions; // 表示リストも更新
+                });
+        },
+        fetchStudens() {
+            fetch('/submission/admin_students_api/')
+                .then(r => r.json())
+                .then(data => {
+                    this.students = data.students;
+                    this.studentsLoaded = true;
+                });
+        },
+        fetchSummary() {
+            fetch('/submission/admin_summary_api/')
+                .then(r => r.json())
+                .then(data => {
+                    this.submissionSummary = data.submission_summary;
+                    this.summaryLoaded = true;
+                });
+        },
+        fetchSchedule() {
+            fetch('/submission/admin_schedule_api/')
+            .then(r => r.json())
+            .then(data => {
+                this.schedule = data.schedule_json;
+            });
+        },
         formatMonthDay(dateStr) {
             if (!dateStr) return '';
             const date = new Date(dateStr);
@@ -142,12 +196,27 @@ window.app = new Vue({
                 .catch(err => {
                     alert('通信エラー: ' + err);
                 });
-        }
+        },
+        acceptSubmission(item) {
+            fetch('/submission/accept_submission/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': window.csrfToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ submission_id: item.id })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === "ok") this.fetchList();
+            });
+        },
     },
     mounted() {
         // ページ初期表示時（初回tabがsubmissionsの場合のため）
         if (this.tab === 'submissions') {
-            this.items = this.submissions;
+            this.fetchList();
         }
-    }
+    },
+    
 });

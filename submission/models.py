@@ -30,6 +30,7 @@ class Submission(models.Model):
     ]
     report_type = models.CharField(max_length=10, choices=REPORT_TYPE_CHOICES, default='main', verbose_name="レポート種別")
     experiment_number = models.CharField(max_length=10, choices=EXPERIMENT_NUMBER_CHOICES, verbose_name="実験番号")
+    accepted = models.BooleanField(default=False) # 受け取り判定
     #student_id = models.CharField(max_length=10, blank=True)     
 
     def __str__(self):

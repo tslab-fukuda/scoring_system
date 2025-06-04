@@ -16,7 +16,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'summary' }" href="#"
-                @click.prevent="tab = 'summary'">提出状況一覧</a>
+                @click.prevent="tab = 'summary'; ">提出状況一覧</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'student' }" href="#"
@@ -24,9 +24,45 @@
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'schedule' }" href="#"
-                @click.prevent="tab = 'schedule'">授業予定表</a>
+                @click.prevent="tab = 'schedule';">授業予定表</a>
         </li>
     </ul>
+
+    <div class="row mb-2">
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_day">
+                <option value="">曜日</option>
+                <option value="火">火</option>
+                <option value="木">木</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            {% verbatim %}
+            <select class="form-select" v-model="filter.experiment_group">
+                <option value="">班番号</option>
+                <option v-for="n in 20" :value="n < 10 ? '0'+n : n">{{ n < 10 ? '0' +n : n }}</option>
+            </select>
+            {% endverbatim %}
+        </div>
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_number">
+                <option value="">実験番号</option>
+                <option value="I-01,02">I-01,02</option>
+                <option value="I-03,04">I-03,04</option>
+                <option value="I-05,06">I-05,06</option>
+                <option value="I-07,08">I-07,08</option>
+                <option value="I-09,10">I-09,10</option>
+                <option value="II-01,02">II-01,02</option>
+                <option value="II-03,04">II-03,04</option>
+                <option value="II-05,06">II-05,06</option>
+                <option value="II-07,08">II-07,08</option>
+                <option value="II-09,10">II-09,10</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-primary" @click="fetchList()">検索</button>
+        </div>
+    </div>
 
     <transition name="fade" mode="out-in">
         <div v-if="tab === 'submissions'" key="submissions">
@@ -45,10 +81,12 @@
 </div>
 
 <script>
-    var students = {{ students_json| safe }};
-    var submissionSummary = {{ submission_summary_json| safe }};
-    var submissions = {{ submissions_json| safe }};
-    var schedule = {{ schedule_json| safe }};
+    var students = [];
+    var submissionSummary = [];
+    var submissions = [];
+    var schedule = [];
+    var isAdmin = [{{ is_admin|safe }}];
 </script>
+
 <script src="{% static 'submission/js/admin_dashboard.js' %}"></script>
 {% endblock %}
