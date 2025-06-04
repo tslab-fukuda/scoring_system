@@ -22,6 +22,9 @@ window.app = new Vue({
         },
         showModal: false,
         modalStudent: {},
+        selectedStudent: null,
+        showStudentModal: false,
+        studentReports: [],
     },
     computed: {
         mainReportItems() {
@@ -83,7 +86,8 @@ window.app = new Vue({
             fetch('/submission/admin_students_api/')
                 .then(r => r.json())
                 .then(data => {
-                    this.students = data.students;
+                    console.log(data.students_json);
+                    this.students = data.students_json;
                     this.studentsLoaded = true;
                 });
         },
@@ -97,10 +101,10 @@ window.app = new Vue({
         },
         fetchSchedule() {
             fetch('/submission/admin_schedule_api/')
-            .then(r => r.json())
-            .then(data => {
-                this.schedule = data.schedule_json;
-            });
+                .then(r => r.json())
+                .then(data => {
+                    this.schedule = data.schedule_json;
+                });
         },
         formatMonthDay(dateStr) {
             if (!dateStr) return '';
@@ -208,10 +212,10 @@ window.app = new Vue({
                 },
                 body: JSON.stringify({ submission_id: item.id })
             })
-            .then(r => r.json())
-            .then(res => {
-                if (res.status === "ok") this.fetchList();
-            });
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === "ok") this.fetchList();
+                });
         },
         openModal(student) {
             console.log("モーダル表示", student);
@@ -222,6 +226,20 @@ window.app = new Vue({
             this.showModal = false;
             this.modalStudent = {};
         },
+        openStudentModal(student) {
+            this.selectedStudent = student;
+            fetch(`/submission/api_student_reports/?student_id=${student.id}`)
+                .then(res => res.json())
+                .then(data => {
+                    this.studentReports = data.reports;
+                    this.selectedStudent = data.full_name;
+                    this.showStudentModal = true;
+                });
+        },
+        closeStudentModal() {
+            this.showStudentModal = false;
+            this.studentReports = [];
+        },
     },
     mounted() {
         // ページ初期表示時（初回tabがsubmissionsの場合のため）
@@ -229,5 +247,5 @@ window.app = new Vue({
             this.fetchList();
         }
     },
-    
+
 });

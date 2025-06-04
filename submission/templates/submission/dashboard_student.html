@@ -1,17 +1,38 @@
 <h4>学生情報</h4>
+{% verbatim %}
 <select v-model="selectedStudentId" class="form-select w-50 mb-3">
   <option v-for="student in students" :value="student.id" :key="student.id">
     {{ student.name }}（{{ student.student_id }}）
   </option>
 </select>
-<div v-if="selectedStudent">
-  <p><strong>名前:</strong> {{ selectedStudent.name }}</p>
-  <p><strong>学籍番号:</strong> {{ selectedStudent.student_id }}</p>
-  <p><strong>メール:</strong> {{ selectedStudent.email }}</p>
-  <p><strong>提出履歴:</strong></p>
-  <ul>
-    <li v-for="file in selectedStudent.submissions" :key="file.filename + file.date">
-      {{ file.filename }} - {{ file.date }}
-    </li>
-  </ul>
+<div class="student-ticket-list">
+  <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
+    <div class="student-photo"></div>
+    <div class="fw-bold">{{ stu.full_name }}</div>
+    <div>学籍番号: {{ stu.student_id }}</div>
+    <div>曜日: {{ stu.experiment_day }}</div>
+    <div>班: {{ stu.experiment_group }}</div>
+  </div>
+</div>
+{% endverbatim %}
+<div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        {% verbatim %}
+        <h5 class="modal-title">{{ selectedStudent.full_name }} の提出済みレポート一覧</h5>
+        <button type="button" class="btn-close" @click="closeStudentModal"></button>
+      </div>
+      <div class="modal-body">
+        <ul>
+          <li v-for="report in studentReports">
+            <a :href="report.file" target="_blank">{{ report.experiment_number }}（{{ report.report_type }}）</a>
+            <span>提出日: {{ report.submitted_at }}</span>
+          </li>
+        </ul>
+        <div v-if="studentReports.length === 0">レポート提出なし</div>
+        {% endverbatim %}
+      </div>
+    </div>
+  </div>
 </div>

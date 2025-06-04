@@ -23,7 +23,7 @@ def admin_get_submissions_api(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(report_type='main').select_related('student', 'student__userprofile')
+    qs = Submission.objects.filter(report_type='main',graded=False).select_related('student', 'student__userprofile')
     count_map = Counter((sub.student_id, sub.experiment_number) for sub in qs)
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
@@ -50,9 +50,6 @@ def admin_get_submissions_api(request):
             "score_details": sub.score_details if sub.score_details else "",
             'submission_count': count,
         })
-    is_admin = False
-    if hasattr(request.user, "userprofile") and request.user.userprofile.role == "admin":
-        is_admin = True
     return JsonResponse({'submissions': submissions})
 
 def get_students_api(request):
@@ -189,3 +186,19 @@ def accept_submission(request):
     sub.accepted = True
     sub.save()
     return JsonResponse({"status": "ok"})
+
+@role_required('admin')
+def api_student_reports(request):
+    student_id = request.GET.get('student_id')
+    qs = Submission.objects.filter(student__userprofile__id=student_id).order_by('-submitted_at')
+    profile = UserProfile.objects.get(id=student_id)
+    full_name = profile.full_name
+    data = []
+    for items in qs:
+        data.append({
+            "file": items.file.url if items.file else "",
+            "experiment_number": items.experiment_number,
+            "report_type": '予' if items.report_type == 'prep' else '本' ,
+            "submitted_at": items.submitted_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    return JsonResponse({'reports': data,'full_name': full_name})

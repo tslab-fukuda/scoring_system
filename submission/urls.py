@@ -25,6 +25,7 @@ urlpatterns = [
     path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
     path('admin_submissions_api/', views_admin.admin_get_submissions_api, name='admin_get_submissions_api'),
     path('admin_students_api/', views_admin.get_students_api, name='get_students_api'),
+    path('api_student_reports/', views_admin.api_student_reports, name='api_student_reports'),
     path('admin_schedule_api/', views_admin.get_schedule_api, name='get_schedule_api'),
     path('admin_summary_api/', views_admin.get_summary_api, name='get_summary_api'),
     path('add_schedule_api/', views_admin.add_schedule_api, name='add_schedule_api'),
