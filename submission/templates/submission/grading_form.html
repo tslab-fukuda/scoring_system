@@ -90,6 +90,7 @@
     window.pdf_url = "{{ submission.file.url }}";
     window.csrfToken = '{{ csrf_token }}';
     window.reportType = "{{ submission.report_type }}";
+    window.userRole = "{{ request.user.userprofile.role }}";
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>

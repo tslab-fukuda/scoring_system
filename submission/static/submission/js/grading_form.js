@@ -113,11 +113,21 @@ new Vue({
                         const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
                         modal.show();
                         document.getElementById("pdf-preview-close-btn").onclick = function () {
-                            window.location.href = "/submission/teacher_dashboard/";
+                            let redirectUrl = "/submission/teacher_dashboard/";
+                            console.log(window.userRole);
+                            if (window.userRole === "admin") {
+                                redirectUrl = "/submission/admin_dashboard/";
+                            }
+                            window.location.href = redirectUrl;
                         };
                     } else {
+                        let redirectUrl = "/submission/teacher_dashboard/";
+                        console.log(window.userRole);
+                        if (window.userRole === "admin") {
+                            redirectUrl = "/submission/admin_dashboard/";
+                        }
                         window.open(res.new_file_url, "_blank");
-                        window.location.href = "/submission/teacher_dashboard/";
+                        window.location.href = redirectUrl;
                     }
                 }
             });

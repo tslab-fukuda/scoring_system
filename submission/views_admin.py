@@ -23,19 +23,35 @@ def admin_get_submissions_api(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(report_type='main',graded=False).select_related('student', 'student__userprofile')
+    qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
+
+    # (student_id, experiment_number)で未受付レポートをカウント
     count_map = Counter((sub.student_id, sub.experiment_number) for sub in qs)
+
+    # 3回提出されているものを自動で受付
+    for (student_id, experiment_number), cnt in count_map.items():
+        if cnt >= 3:
+            Submission.objects.filter(
+                report_type='main', graded=False, accepted=False,
+                student_id=student_id, experiment_number=experiment_number
+            ).update(accepted=True)
+    
+    qs = Submission.objects.filter(report_type='main', graded=False, accepted=False).select_related('student', 'student__userprofile')
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
         qs = qs.filter(student__userprofile__experiment_group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
-    qs = qs.filter(accepted=False)
+    
+    # 各実験ごとのstudent+experiment_numberで「本レポートの提出回数」を算出
+    all_main = Submission.objects.filter(report_type='main')
+    submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
+    
     submissions = []
     for sub in qs:
         up = getattr(sub.student, 'userprofile', None)
-        count = count_map[(sub.student_id, sub.experiment_number)]
+        submit_count = submit_count_map[(sub.student_id, sub.experiment_number)]  # 本レポート提出回数
         submissions.append({
             'id': sub.id,
             'experiment_day': up.experiment_day if up else "",
@@ -48,7 +64,7 @@ def admin_get_submissions_api(request):
                 if sub.score_details else "0"
             ),
             "score_details": sub.score_details if sub.score_details else "",
-            'submission_count': count,
+            'submission_count': submit_count,
         })
     return JsonResponse({'submissions': submissions})
 
