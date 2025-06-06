@@ -69,14 +69,30 @@ def api_user_profile(request):
     }
     result = {"profile": user_data}
     if profile.role == "student":
-        submissions = Submission.objects.filter(student=request.user).order_by("-submitted_at")
+        submissions = list(Submission.objects.filter(student=request.user).order_by("-submitted_at"))
         result["submissions"] = [
             {
                 "file": s.file.url if s.file else "",
                 "experiment_number": s.experiment_number,
                 "report_type": '予レポート' if s.report_type == 'prep' else '本レポート',
                 "submitted_at": s.submitted_at.strftime('%Y-%m-%d %H:%M'),
-            } for s in submissions
+            }
+            for s in submissions
+        ]
+
+        score_map = {num: 0 for num, _ in Submission.EXPERIMENT_NUMBER_CHOICES}
+        for s in submissions:
+            if not s.score_details:
+                continue
+            total = sum(
+                detail.get("value", 0) * detail.get("weight", 1)
+                for detail in s.score_details
+            )
+            score_map[s.experiment_number] += total
+
+        result["score_summary"] = [
+            {"experiment_number": num, "total_score": score_map[num]}
+            for num, _ in Submission.EXPERIMENT_NUMBER_CHOICES
         ]
     return JsonResponse(result)
 
