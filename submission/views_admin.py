@@ -200,6 +200,7 @@ def accept_submission(request):
     from .models import Submission
     sub = Submission.objects.get(id=submission_id)
     sub.accepted = True
+    sub.graded = True
     sub.save()
     return JsonResponse({"status": "ok"})
 

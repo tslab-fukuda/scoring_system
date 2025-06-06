@@ -18,6 +18,12 @@ def student_dashboard(request):
     # ここで必要な項目だけリスト化
     status_list = []
     for sub in submissions:
+        if sub.graded and sub.accepted:
+            status = "受取済"
+        elif sub.graded:
+            status = "添削済"
+        else:
+            status = "未添削"
         status_list.append({
             "id": sub.id, #レポートID
             "report_type": sub.report_type,  # 予or本
@@ -25,10 +31,10 @@ def student_dashboard(request):
             "file_name": sub.file.name.split('/')[-1] if sub.file else "",
             "file_url": sub.file.url if sub.file else "",
             "submitted_at": sub.submitted_at.strftime('%Y-%m-%d %H:%M'), #提出日
-            "status": "添削済" if sub.graded else "未",
+            "status": status,
             "graded_score": (
                 sum(item.get("value", 0) * item.get("weight", 1) for item in sub.score_details)
-                if sub.score_details else "error"
+                if sub.score_details else "0"
             ), #採点結果
             "score_details":sub.score_details if sub.score_details else ""
             # "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "", #添削ファイル名

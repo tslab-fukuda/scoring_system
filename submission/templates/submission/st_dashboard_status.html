@@ -34,6 +34,7 @@
                 <!-- ステータス -->
                 <td>
                     <span v-if="item.status === '添削済'">添削済</span>
+                    <span v-else-if="item.status === '受取済'">受取済</span>
                     <span v-else>未</span>
                 </td>
                 <!-- 添削結果 -->
@@ -46,7 +47,7 @@
                 <!-- 編集 -->
                 <td>
                     <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
-                        v-if="item.status !== '添削済'">削除</button>
+                        v-if="item.status !== '添削済' && item.status !== '受取済'">削除</button>
                 </td>
             </tr>
         </tbody>
