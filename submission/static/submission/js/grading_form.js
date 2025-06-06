@@ -25,8 +25,9 @@ new Vue({
         inc(item) { item.value++; },
         dec(item) { if (item.value > 0) item.value--; },
         isPenActive() { return this.tool === 'pen'; },
+        isDrawable() { return this.tool === 'pen' || this.tool === 'eraser'; },
         startDraw(idx, e) {
-            if (!this.isPenActive()) return;
+            if (!this.isDrawable()) return;
             this.drawing = true;
             this.currentPage = idx;
             const rect = e.target.getBoundingClientRect();
@@ -34,27 +35,34 @@ new Vue({
             this.lastY = e.clientY - rect.top;
             if (!this.drawData[idx]) this.drawData[idx] = [];
             if (!this.undoStack[idx]) this.undoStack[idx] = [];
-            this.drawData[idx].push([{ x: this.lastX, y: this.lastY }]);
+            this.drawData[idx].push({ tool: this.tool, points: [{ x: this.lastX, y: this.lastY }] });
         },
         draw(idx, e) {
-            if (!this.drawing || this.currentPage !== idx || !this.isPenActive()) return;
+            if (!this.drawing || this.currentPage !== idx || !this.isDrawable()) return;
             const canvas = this.$refs['drawCanvas' + idx][0];
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 2;
+            if (this.tool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = 10;
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = "red";
+                ctx.lineWidth = 2;
+            }
             ctx.lineCap = "round";
             ctx.beginPath();
             ctx.moveTo(this.lastX, this.lastY);
             ctx.lineTo(x, y);
             ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
             this.lastX = x; this.lastY = y;
-            this.drawData[idx][this.drawData[idx].length - 1].push({ x, y });
+            this.drawData[idx][this.drawData[idx].length - 1].points.push({ x, y });
         },
         stopDraw(idx) {
-            if (!this.isPenActive()) return;
+            if (!this.isDrawable()) return;
             this.drawing = false;
             this.currentPage = null;
             this.undoStack[idx] = [];
@@ -64,15 +72,24 @@ new Vue({
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             (this.drawData[idx] || []).forEach(stroke => {
-                ctx.beginPath();
-                for (let i = 0; i < stroke.length; i++) {
-                    if (i == 0) ctx.moveTo(stroke[i].x, stroke[i].y);
-                    else ctx.lineTo(stroke[i].x, stroke[i].y);
+                if (!stroke.points || stroke.points.length === 0) return;
+                if (stroke.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineWidth = 10;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = "red";
+                    ctx.lineWidth = 2;
                 }
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < stroke.points.length; i++) {
+                    const pt = stroke.points[i];
+                    if (i == 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
                 ctx.lineCap = "round";
                 ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
             });
         },
         undo(idx) {
