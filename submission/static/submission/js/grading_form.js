@@ -12,6 +12,8 @@ new Vue({
         currentPage: null,
         drawData: [],
         undoStack: [],
+        stamps: [],
+        selectedStamp: "",
     },
     computed: {
         totalScore() {
@@ -27,6 +29,16 @@ new Vue({
         isPenActive() { return this.tool === 'pen'; },
         isDrawable() { return this.tool === 'pen' || this.tool === 'eraser'; },
         startDraw(idx, e) {
+            if (this.tool === 'stamp') {
+                const rect = e.target.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                if (!this.drawData[idx]) this.drawData[idx] = [];
+                if (!this.undoStack[idx]) this.undoStack[idx] = [];
+                this.drawData[idx].push({ tool: 'stamp', text: this.selectedStamp, x, y });
+                this.redraw(idx);
+                return;
+            }
             if (!this.isDrawable()) return;
             this.drawing = true;
             this.currentPage = idx;
@@ -38,6 +50,7 @@ new Vue({
             this.drawData[idx].push({ tool: this.tool, points: [{ x: this.lastX, y: this.lastY }] });
         },
         draw(idx, e) {
+            if (this.tool === 'stamp') return;
             if (!this.drawing || this.currentPage !== idx || !this.isDrawable()) return;
             const canvas = this.$refs['drawCanvas' + idx][0];
             const ctx = canvas.getContext('2d');
@@ -62,6 +75,7 @@ new Vue({
             this.drawData[idx][this.drawData[idx].length - 1].points.push({ x, y });
         },
         stopDraw(idx) {
+            if (this.tool === 'stamp') return;
             if (!this.isDrawable()) return;
             this.drawing = false;
             this.currentPage = null;
@@ -72,6 +86,19 @@ new Vue({
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             (this.drawData[idx] || []).forEach(stroke => {
+                if (stroke.tool === 'stamp') {
+                    ctx.save();
+                    ctx.font = '16px sans-serif';
+                    const textWidth = ctx.measureText(stroke.text).width;
+                    const padding = 4;
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(stroke.x - padding, stroke.y - 16 - padding, textWidth + padding * 2, 16 + padding * 2);
+                    ctx.fillStyle = 'red';
+                    ctx.fillText(stroke.text, stroke.x, stroke.y);
+                    ctx.restore();
+                    return;
+                }
                 if (!stroke.points || stroke.points.length === 0) return;
                 if (stroke.tool === 'eraser') {
                     ctx.globalCompositeOperation = 'destination-out';
@@ -211,6 +238,14 @@ new Vue({
                 });
             });
         });
+
+        // スタンプ取得
+        fetch("/submission/stamps_api/")
+          .then(res => res.json())
+          .then(data => {
+            this.stamps = data.stamps || [];
+            if (this.stamps.length) this.selectedStamp = this.stamps[0].text;
+          });
 
         // キーボードショートカット
         window.addEventListener('keydown', (e) => {

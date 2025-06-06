@@ -80,6 +80,9 @@ class ScoringItem(models.Model):
 
     class Meta:
         ordering = ['category', 'order']
+
+class Stamp(models.Model):
+    text = models.CharField(max_length=32)
         
 class ExperimentCompletion(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE)
