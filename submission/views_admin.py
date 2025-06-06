@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from submission.models import ScoringItem
 from django.views.decorators.http import require_POST
 from collections import Counter
+from django.contrib.auth.models import User
 
 @role_required('admin')
 def admin_dashboard(request):
