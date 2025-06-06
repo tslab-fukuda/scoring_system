@@ -15,7 +15,9 @@
     <button class="btn btn-primary ms-2" @click="addStamp">追加</button>
   </div>
   <ul class="list-group" style="max-width:300px;">
+    {% verbatim %}
     <li class="list-group-item" v-for="s in stamps" :key="s.id">{{ s.text }}</li>
+    {% endverbatim %}
   </ul>
 </div>
 <script>
