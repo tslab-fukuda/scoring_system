@@ -18,7 +18,13 @@
     </thead>
     <tbody v-if="!items || items.length === 0">
         <tr>
+            {% endverbatim %}
+            {% if is_admin == 'true' %}
+            <td colspan="8" class="text-center text-muted">データがありません</td>
+            {% else %}
             <td colspan="6" class="text-center text-muted">データがありません</td>
+            {% endif %}
+            {% verbatim %}
         </tr>
     </tbody>
     <tbody v-else>
