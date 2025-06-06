@@ -78,7 +78,6 @@ new Vue({
             if (this.tool === 'stamp') return;
             if (!this.isDrawable()) return;
             this.drawing = false;
-            this.currentPage = null;
             this.undoStack[idx] = [];
         },
         redraw(idx) {
@@ -211,7 +210,11 @@ new Vue({
                     key: lab.label
                   }));
             }
-            // console.table(this.scoreItems)
+            const saved = window.initialScoreDetails || [];
+            this.scoreItems.forEach(item => {
+                const found = saved.find(s => s.label === item.label);
+                if (found) item.value = found.value || 0;
+            });
           });
         // PDF.js lazy load
         const url = window.pdf_url;
