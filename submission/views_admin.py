@@ -263,15 +263,14 @@ def update_user_role(request, user_id):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            new_roles = data.get('roles')
+            new_role = data.get('role')
 
             user = User.objects.get(id=user_id)
             profile = user.userprofile
 
-            # ロール設定の例（複数ロールを許可する場合）
-            profile.role = ','.join(new_roles)
-            user.is_superuser = 'admin' in new_roles
-            user.is_staff = 'teacher' in new_roles or 'admin' in new_roles
+            profile.role = new_role
+            user.is_superuser = new_role == 'admin'
+            user.is_staff = new_role in ['teacher', 'admin']
 
             profile.save()
             user.save()

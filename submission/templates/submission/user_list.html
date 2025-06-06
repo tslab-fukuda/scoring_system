@@ -88,7 +88,7 @@
                             <button class="ts-edit-btn" @click="enableEdit(user, 'role')">✏️</button>
                         </span>
                         <span v-else>
-                            <select :id="'roles-' + user.id" multiple style="width: 120px;">
+                            <select :id="'roles-' + user.id" style="width: 120px;">
                                 <option value="student">student</option>
                                 <option value="teacher">teacher</option>
                                 <option value="admin">admin</option>

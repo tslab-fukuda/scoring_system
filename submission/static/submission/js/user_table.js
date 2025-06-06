@@ -25,7 +25,7 @@ new Vue({
             if (field === 'role') {
                 user.editingRole = true;
                 this.$nextTick(() => {
-                    $(`#roles-${user.id}`).select2().val(user.role.split(',')).trigger('change');
+                    $(`#roles-${user.id}`).select2().val(user.role).trigger('change');
                 });
             }
             if (field === 'group') {
@@ -36,18 +36,19 @@ new Vue({
             }
         },
         saveRole(user) {
-            const roles = $(`#roles-${user.id}`).val();
+            const role = $(`#roles-${user.id}`).val();
+            user.editingRole = false;
+            $(`#roles-${user.id}`).select2('destroy');
             fetch(`/users/update_role/${user.id}/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': CSRF_TOKEN
                 },
-                body: JSON.stringify({ roles })
+                body: JSON.stringify({ role })
             }).then(res => {
                 if (res.ok) {
-                    user.role = roles.join(',');
-                    user.editingRole = false;
+                    user.role = role;
                 }
             });
         },
