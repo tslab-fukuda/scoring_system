@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from submission.models import UserProfile, Submission, Schedule
+from submission.models import UserProfile, Submission, Schedule, Stamp
 from django.views.decorators.csrf import csrf_exempt
 import json
 from submission.decorators import role_required
@@ -190,6 +190,18 @@ def scoring_items(request):
     return render(request, 'submission/scoring_items.html', {
         'pre': json.dumps(pre, ensure_ascii=False),
         'main': json.dumps(main, ensure_ascii=False),
+    })
+
+@role_required('admin')
+def stamps_view(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        text = data.get('text', '')
+        stamp = Stamp.objects.create(text=text)
+        return JsonResponse({'status': 'ok', 'stamp': {'id': stamp.id, 'text': stamp.text}})
+    stamps = list(Stamp.objects.all().values('id', 'text'))
+    return render(request, 'submission/stamps.html', {
+        'stamps': json.dumps(stamps, ensure_ascii=False)
     })
 
 @csrf_exempt

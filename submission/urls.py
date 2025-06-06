@@ -35,6 +35,7 @@ urlpatterns = [
     path('update_schedule_api/<int:schedule_id>/', views_admin.update_schedule_api, name='update_schedule_api'),
     path('delete_schedule_api/<int:schedule_id>/', views_admin.delete_schedule_api, name='delete_schedule_api'),
     path('scoring_items/', views_admin.scoring_items, name='scoring_items'),  # admin only
+    path('stamps/', views_admin.stamps_view, name='stamp_list'),
     path('accept_submission/', views_admin.accept_submission, name='accept_submission'),
     
     # 学生系
@@ -50,6 +51,7 @@ urlpatterns = [
     path('get_graded_submissions/', views_teacher.get_graded_submissions, name='get_graded_submissions'),
     path('grading_form/<int:submission_id>/', views_grading.grading_form, name='grading_form'),
     path('scoring_items_api/', views_grading.scoring_items_api, name='scoring_items_api'),
+    path('stamps_api/', views_grading.stamps_api, name='stamps_api'),
     path('mark_experiment_complete/', views_teacher.mark_experiment_complete, name='mark_experiment_complete'),
     path('teacher_students_api/', views_teacher.teacher_students_api, name='teacher_students_api'),
 ]

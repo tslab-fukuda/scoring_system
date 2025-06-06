@@ -3,6 +3,7 @@ from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
 from submission.models import ScoringItem
+from submission.models import Stamp
 from django.http import JsonResponse
 from django.conf import settings
 from django.utils import timezone
@@ -76,3 +77,8 @@ def scoring_items_api(request):
     for x in main:
         x['weight'] = int(x['weight'])
     return JsonResponse({'pre': pre, 'main': main})
+
+@login_required
+def stamps_api(request):
+    stamps = list(Stamp.objects.all().values('id','text'))
+    return JsonResponse({'stamps': stamps})

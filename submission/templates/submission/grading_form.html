@@ -24,6 +24,9 @@
                     @click="tool='eraser'">消しゴム</button>
                 <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
                     @click="tool='stamp'">スタンプ</button>
+                <select v-if="tool==='stamp'" v-model="selectedStamp" class="form-select d-inline-block ms-2" style="width:auto;">
+                    <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
+                </select>
             </div>
             <div id="pdf-area" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
                 <div id="pdf-pages">
