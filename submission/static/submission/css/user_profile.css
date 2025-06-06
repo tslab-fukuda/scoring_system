@@ -1,0 +1,143 @@
+.profile-container {
+    max-width: 540px;
+    width: 90vw;
+    min-width: 270px;
+    margin: 2.5em auto;
+    padding: 2em 1.5em 2em 1.5em;
+    border-radius: 18px;
+    background: linear-gradient(120deg, #f6f6ff 60%, #e3e9ff 100%);
+    box-shadow: 0 6px 28px 0 rgba(60, 90, 160, 0.17);
+    font-family: 'Segoe UI', 'Yu Gothic', 'Meiryo', sans-serif;
+    transition: width 0.2s;
+  }
+  
+  @media (max-width: 720px) {
+    .profile-container {
+      max-width: 98vw;
+      padding: 1.1em 0.2em 1.4em 0.2em;
+    }
+  }
+  
+  .profile-container h2 {
+    font-weight: 700;
+    font-size: 1.45rem;
+    margin-bottom: 1.5em;
+    letter-spacing: 0.5px;
+    color: #392d72;
+    text-align: center;
+  }
+  
+  .profile-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.7em;
+  }
+  
+  .profile-info p {
+    font-size: 1.08em;
+    margin-bottom: 0.5em;
+    color: #35305c;
+    font-weight: 500;
+    padding: 3px 0 3px 8px;
+    border-left: 3px solid #8278e6;
+    min-width: 230px;
+    text-align: left;
+  }
+  
+  .profile-info strong {
+    display: inline-block;
+    min-width: 5.6em;
+    text-align: right;
+    margin-right: 0.5em;
+    letter-spacing: 0.1em;
+  }
+  .profile-password-change {
+    margin-top: 2.1em;
+    background: linear-gradient(120deg, #f8faff 75%, #ede7fa 100%);
+    border-radius: 14px;
+    padding: 1.3em 1.3em 1em 1.3em;
+    box-shadow: 0 2px 12px 0 rgba(90,100,160,0.10);
+    border: 1px solid #ebe8fa;
+    text-align: center;
+    transition: box-shadow 0.18s;
+  }
+  
+  .profile-password-change .btn-outline-primary {
+    font-weight: 500;
+    font-size: 1.08em;
+    border-radius: 7px;
+    padding: 7px 26px;
+    border-width: 2px;
+    background: #f8f9fe;
+    transition: background 0.18s, color 0.17s, box-shadow 0.18s;
+    box-shadow: 0 1px 5px 0 rgba(100,90,180,0.07);
+  }
+  .profile-password-change .btn-outline-primary:hover {
+    background: #e7e0fd;
+    color: #3828ad;
+    box-shadow: 0 2px 10px 0 rgba(60,40,140,0.10);
+  }
+  
+  .profile-password-change input {
+    max-width: 230px;
+    margin: 0 auto 10px auto;
+    border-radius: 7px;
+    border: 1.5px solid #babeea;
+    background: #fcfcff;
+    font-size: 1.03em;
+    text-align: center;
+    padding: 7px 0.7em;
+    box-shadow: 0 1px 7px 0 rgba(120,120,180,0.08);
+    transition: border 0.17s, box-shadow 0.17s;
+  }
+  .profile-password-change input:focus {
+    border: 1.5px solid #8874fa;
+    outline: none;
+    box-shadow: 0 2px 15px 0 rgba(130,110,200,0.10);
+  }
+  
+  .profile-password-change .btn-primary {
+    padding: 8px 26px;
+    border-radius: 7px;
+    font-weight: 600;
+    background: linear-gradient(120deg,#7e6efd 80%, #baa2fd 100%);
+    border: none;
+    margin-top: 7px;
+    box-shadow: 0 1px 5px 0 rgba(120,100,190,0.08);
+    letter-spacing: 0.1em;
+    transition: background 0.18s, box-shadow 0.18s;
+  }
+  .profile-password-change .btn-primary:hover {
+    background: #6657c7;
+    box-shadow: 0 2px 12px 0 rgba(80,80,140,0.12);
+  }
+  
+  .profile-password-change .mt-2 {
+    margin-top: 13px;
+    color: #c06c8a;
+    font-size: 0.97em;
+    letter-spacing: 0.2px;
+    font-weight: 500;
+  }
+  .profile-submissions {
+    margin-top: 2em;
+  }
+  .profile-submissions ul {
+    padding-left: 1.2em;
+    overflow-x: auto;
+    white-space: nowrap;
+    display: block;
+    max-width: 100%;
+  }
+  .profile-submissions li {
+    margin-bottom: 0.28em;
+    font-size: 1.01em;
+    word-break: break-all;
+  }
+  .fade-enter-active, .fade-leave-active {
+    transition: opacity 0.2s;
+  }
+  .fade-enter, .fade-leave-to {
+    opacity: 0;
+  }

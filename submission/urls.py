@@ -8,12 +8,14 @@ from . import views_grading
 from .views_login import redirect_after_login
 from django.contrib.auth import views as auth_views
 
-urlpatterns = [
-    path('submit/', views_submission.submit_assignment, name='submit_assignment'),
-    path('complete/', views_submission.complete_submission, name='submission_complete'),
-    
+urlpatterns = [    
     path('signup/', views.signup_view, name='signup'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    
+    # 全員共通
+    path('api_user_profile/', views.api_user_profile, name='api_user_profile'),
+    path('api_change_password/', views.api_change_password, name='api_change_password'),
+    path('user_profile/', views.user_profile_view, name='user_profile'),
     
     # admin系
     path('list/', views.user_list_view, name='user_list'),
@@ -37,6 +39,9 @@ urlpatterns = [
     # 学生系
     path('student_dashboard/', views_student.student_dashboard, name='student_dashboard'),
     path('delete_submission/', views_student.delete_submission, name='delete_submission'),
+    path('submit/', views_submission.submit_assignment, name='submit_assignment'),
+    path('complete/', views_submission.complete_submission, name='submission_complete'),
+
     
     # TA系
     path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),

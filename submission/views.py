@@ -152,3 +152,47 @@ def create_user_view(request):
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@login_required
+def api_user_profile(request):
+    profile = request.user.userprofile
+    user_data = {
+        "full_name": profile.full_name,
+        "student_id": profile.student_id,
+        "email": request.user.email,
+        "experiment_day": profile.experiment_day,
+        "experiment_group": profile.experiment_group,
+        "role": profile.role,
+    }
+    result = {"profile": user_data}
+    if profile.role == "student":
+        submissions = Submission.objects.filter(student=request.user).order_by("-submitted_at")
+        result["submissions"] = [
+            {
+                "file": s.file.url if s.file else "",
+                "experiment_number": s.experiment_number,
+                "report_type": '予レポート' if s.report_type == 'prep' else '本レポート',
+                "submitted_at": s.submitted_at.strftime('%Y-%m-%d %H:%M'),
+            } for s in submissions
+        ]
+    return JsonResponse(result)
+
+@login_required
+@csrf_exempt
+def api_change_password(request):
+    if request.method == "POST":
+        import json
+        data = json.loads(request.body)
+        password = data.get("password")
+        if password and len(password) >= 6:
+            user = request.user
+            user.set_password(password)
+            user.save()
+            return JsonResponse({"status": "ok"})
+        else:
+            return JsonResponse({"status": "ng", "message": "パスワードは6文字以上です"})
+    return JsonResponse({"status": "ng", "message": "POSTのみ"})
+
+@login_required
+def user_profile_view(request):
+    return render(request, 'submission/user_profile.html')

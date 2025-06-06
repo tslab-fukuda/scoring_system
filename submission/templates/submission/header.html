@@ -35,8 +35,9 @@
           </template>
           <li class="divider"></li>
           <li class="user-label">
-            <span class="menu-ico">🙍</span>
-            <span>{{ userName }}</span>
+            <a href="/submission/user_profile/" class="menu-link">
+              <span class="menu-ico">🙍</span> プロフィール
+            </a>
           </li>
           <li>
             <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">
