@@ -9,21 +9,9 @@
     <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
       <aside class="menu-panel glass" @click.stop>
         <ul class="menu-list">
-          <template v-if="role === 'admin'">
-            <a href="{% url 'admin_dashboard' %}" class="menu-link">
-              <span class="menu-ico">🏠</span> ダッシュボード
-            </a>
-          </template>
-          <template v-if="role === 'teacher'">
-            <a href="{% url 'teacher_dashboard' %}" class="menu-link">
-              <span class="menu-ico">🏠</span> ダッシュボード
-            </a>
-          </template>
-          <template v-if="role === 'student'">
-            <a href="{% url 'student_dashboard' %}" class="menu-link">
-              <span class="menu-ico">🏠</span> ダッシュボード
-            </a>
-          </template>
+          <a href="{% url 'index_redirect' %}" class="menu-link">
+            <span class="menu-ico">🏠</span> ダッシュボード
+          </a>
           <template v-if="role === 'admin'">
             <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
             <li><span class="menu-link disabled"><span class="menu-ico">📝</span> 成績入力（未実装）</span></li>

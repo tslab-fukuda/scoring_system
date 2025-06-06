@@ -11,6 +11,7 @@ from django.contrib.auth import views as auth_views
 urlpatterns = [    
     path('signup/', views.signup_view, name='signup'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('', views.index_redirect, name='index_redirect'),
     
     # 全員共通
     path('api_user_profile/', views.api_user_profile, name='api_user_profile'),
@@ -18,11 +19,11 @@ urlpatterns = [
     path('user_profile/', views.user_profile_view, name='user_profile'),
     
     # admin系
-    path('list/', views.user_list_view, name='user_list'),
-    path('update_role/<int:user_id>/', views.update_user_role, name='update_role'),
-    path('update_group/<int:user_id>/', views.update_group_view, name='update_group'),
-    path('delete/<int:user_id>/', views.delete_user_view, name='delete_user'),
-    path('create/', views.create_user_view, name='create_user'),
+    path('list/', views_admin.user_list_view, name='user_list'),
+    path('update_role/<int:user_id>/', views_admin.update_user_role, name='update_role'),
+    path('update_group/<int:user_id>/', views_admin.update_group_view, name='update_group'),
+    path('delete/<int:user_id>/', views_admin.delete_user_view, name='delete_user'),
+    path('create/', views_admin.create_user_view, name='create_user'),
     
     path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
     path('admin_submissions_api/', views_admin.admin_get_submissions_api, name='admin_get_submissions_api'),

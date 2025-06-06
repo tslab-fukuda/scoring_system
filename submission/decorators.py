@@ -1,4 +1,6 @@
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
 
 def role_required(*allowed_roles):
     def decorator(view_func):

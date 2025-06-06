@@ -10,7 +10,7 @@ import datetime
 from django.middleware.csrf import get_token
 import os
 
-
+@csrf_exempt
 @role_required('student')
 def student_dashboard(request):
     # ユーザ自身の提出物一覧を抽出
