@@ -59,7 +59,7 @@ new Vue({
             const y = e.clientY - rect.top;
             if (this.tool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
-                ctx.lineWidth = 10;
+                ctx.lineWidth = 30;
             } else {
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.strokeStyle = "red";
