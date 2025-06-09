@@ -23,7 +23,10 @@ def signup_view(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
+            username = form.cleaned_data["username"]
             user = form.save(commit=False)
+            user.username = username
+            user.email = username
             user.set_password(form.cleaned_data["password"])
             user.save()
             profile = UserProfile.objects.create(
@@ -33,6 +36,7 @@ def signup_view(request):
                 experiment_day=form.cleaned_data['experiment_day'],
                 experiment_group=form.cleaned_data['experiment_group'],
                 role='student',  # ← 明示的に初期ロールを設定
+                email=username,
             )
             login(request, user)
             messages.success(request, 'ユーザー登録が完了しました')
@@ -62,7 +66,7 @@ def api_user_profile(request):
     user_data = {
         "full_name": profile.full_name,
         "student_id": profile.student_id,
-        "email": request.user.email,
+        "email": profile.email,
         "experiment_day": profile.experiment_day,
         "experiment_group": profile.experiment_group,
         "role": profile.role,

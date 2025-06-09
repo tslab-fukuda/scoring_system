@@ -336,6 +336,7 @@ def create_user_view(request):
             profile = UserProfile.objects.create(
                 user=user,
                 full_name=data['full_name'],
+                email=data['email'],
                 student_id=data['student_id'],
                 experiment_day=data['experiment_day'],
                 experiment_group=data['experiment_group'],

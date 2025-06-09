@@ -33,12 +33,12 @@ class SignUpForm(forms.ModelForm):
         model = User
         fields = ("username", "password")
 
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
         allowed_domain = 'g.nihon-u.ac.jp'  # ← 必要に応じて変更
-        if not email.endswith(f'@{allowed_domain}'):
+        if not username.endswith(f'@{allowed_domain}'):
             raise ValidationError(f'{allowed_domain} ドメインのメールアドレスのみ使用できます。')
-        return email
+        return username
 
     def clean(self):
         cleaned_data = super().clean()
