@@ -27,24 +27,12 @@ def grading_form(request, submission_id):
         # PyMuPDFでPDF編集
         doc = fitz.open(pdf_path)
         for page_no, img_data in enumerate(images):
+            if not img_data:
+                continue
             page = doc[page_no]
-            # 元ページを画像でレンダリング
-            pix = page.get_pixmap(dpi=200)
-            pdf_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            # 手書きがある場合だけ合成
-            if img_data:
-                header, encoded = img_data.split(",", 1)
-                hand_img_bytes = base64.b64decode(encoded)
-                hand_image = Image.open(io.BytesIO(hand_img_bytes)).convert("RGBA")
-                # 手書き画像を元ページに合成
-                pdf_image = pdf_image.convert("RGBA")
-                pdf_image.alpha_composite(hand_image.resize(pdf_image.size))
-            # 新しい画像をPDFページに貼り直す
-            out_io = io.BytesIO()
-            pdf_image.convert("RGB").save(out_io, format="PNG")
-            out_io.seek(0)
-            page.clean_contents()  # 既存の内容を消す
-            page.insert_image(page.rect, stream=out_io.read())
+            header, encoded = img_data.split(",", 1)
+            hand_img_bytes = base64.b64decode(encoded)
+            page.insert_image(page.rect, stream=hand_img_bytes, overlay=True)
 
         # 保存名（例: sample_graded.pdf）
         base, ext = os.path.splitext(os.path.basename(pdf_path))
