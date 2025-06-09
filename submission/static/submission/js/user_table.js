@@ -10,6 +10,9 @@ new Vue({
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
         )),
         showModal: false,
+        filters: { role: '', group: '' },
+        sortField: '',
+        sortAsc: true,
         newUser: {
             full_name: '',
             email: '',
@@ -20,7 +23,30 @@ new Vue({
             experiment_group: '01'
         }
     },
+    computed: {
+        processedUsers() {
+            let list = this.users.slice();
+            if (this.filters.role) list = list.filter(u => u.role === this.filters.role);
+            if (this.filters.group) list = list.filter(u => u.group === this.filters.group);
+            if (this.sortField === 'student_id') {
+                list.sort((a,b) => {
+                    const av = a.student_id || '';
+                    const bv = b.student_id || '';
+                    return this.sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+                });
+            }
+            return list;
+        }
+    },
     methods: {
+        toggleSort(field) {
+            if (this.sortField === field) {
+                this.sortAsc = !this.sortAsc;
+            } else {
+                this.sortField = field;
+                this.sortAsc = true;
+            }
+        },
         enableEdit(user, field) {
             if (field === 'role') {
                 user.editingRole = true;
