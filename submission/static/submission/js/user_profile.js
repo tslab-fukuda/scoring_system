@@ -3,6 +3,7 @@ new Vue({
     data: {
       userProfile: {},
       submissions: [],
+      scoreSummary: [],
       showPwChange: false,
       password1: "",
       password2: "",
@@ -16,6 +17,7 @@ new Vue({
             this.userProfile = data.profile;
             if (data.profile.role === "student") {
               this.submissions = data.submissions || [];
+              this.scoreSummary = data.score_summary || [];
             }
           });
       },

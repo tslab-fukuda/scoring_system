@@ -66,7 +66,12 @@ def grading_form(request, submission_id):
         return JsonResponse({'status': 'ok', 'new_file_url': submission.file.url})
 
     # GET時
-    return render(request, 'submission/grading_form.html', {'submission': submission, 'pdf_url': submission.file.url})
+    score_json = json.dumps(submission.score_details) if submission.score_details else 'null'
+    return render(request, 'submission/grading_form.html', {
+        'submission': submission,
+        'pdf_url': submission.file.url,
+        'score_details': score_json,
+    })
 
 @login_required
 def scoring_items_api(request):
