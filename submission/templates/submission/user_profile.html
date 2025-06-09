@@ -46,6 +46,13 @@
             </li>
         </ul>
         <div v-if="submissions.length === 0">提出レポートなし</div>
+
+        <h4 class="mt-4">実験別合計得点</h4>
+        <ul>
+            <li v-for="sum in scoreSummary">
+                {{ sum.experiment_number }}: {{ sum.total_score }}
+            </li>
+        </ul>
     </div>
     {% endverbatim %}
 </div>
