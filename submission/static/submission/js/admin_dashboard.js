@@ -15,7 +15,7 @@ window.app = new Vue({
         summaryLoaded: false,
         showAddModal: false,
         showEditModal: false,
-        filter: { experiment_day: '', experiment_group: '', experiment_number: '' },
+        filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
         form: {
             id: null,
             date: '',
@@ -83,7 +83,11 @@ window.app = new Vue({
                 });
         },
         fetchStudens() {
-            fetch('/submission/admin_students_api/')
+            const params = [];
+            if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            let url = '/submission/admin_students_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     console.log(data.students_json);
@@ -92,7 +96,11 @@ window.app = new Vue({
                 });
         },
         fetchSummary() {
-            fetch('/submission/admin_summary_api/')
+            const params = [];
+            if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            let url = '/submission/admin_summary_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     this.submissionSummary = data.submission_summary;

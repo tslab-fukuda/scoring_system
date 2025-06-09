@@ -70,16 +70,24 @@ def admin_get_submissions_api(request):
     return JsonResponse({'submissions': submissions})
 
 def get_students_api(request):
+    student_id = request.GET.get('student_id')
+    qs = UserProfile.objects.filter(role='student')
+    if student_id:
+        qs = qs.filter(student_id__icontains=student_id)
     students = list(
-        UserProfile.objects.filter(role='student').values(
-            'id', 'full_name', 'student_id', 'user__email', 'experiment_day', 'experiment_group'
+        qs.values(
+            'id', 'full_name', 'student_id', 'user__email',
+            'experiment_day', 'experiment_group'
         )
     )
     return JsonResponse({'students_json': students})
 
 def get_summary_api(request):
     experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
+    student_id = request.GET.get('student_id')
     students = UserProfile.objects.filter(role='student')
+    if student_id:
+        students = students.filter(student_id__icontains=student_id)
     results = []
     for item in students:
         user = item.user
@@ -254,6 +262,7 @@ def user_list_view(request):
                 'id': user.id,
                 'name': profile.full_name,
                 'email': user.email,
+                'student_id': profile.student_id,
                 'role': role,
                 'group': group,
                 'last_login': last_login

@@ -70,17 +70,35 @@
                 <tr>
                     <th>名前</th>
                     <th>メールアドレス</th>
-                    <th>ロール</th>
-                    <th>グループ</th>
+                    <th @click="toggleSort('student_id')" style="cursor:pointer">学生番号</th>
+                    <th>ロール
+                        <div>
+                            <select v-model="filters.role" class="form-select form-select-sm">
+                                <option value="">全て</option>
+                                <option value="student">student</option>
+                                <option value="teacher">teacher</option>
+                                <option value="admin">admin</option>
+                            </select>
+                        </div>
+                    </th>
+                    <th>グループ
+                        <div>
+                            <select v-model="filters.group" class="form-select form-select-sm">
+                                <option value="">全て</option>
+                                <option v-for="option in groupOptions" :value="option" v-text="option"></option>
+                            </select>
+                        </div>
+                    </th>
                     <th>最終アクセス</th>
                     <th>操作</th>
                 </tr>
             </thead>
             <tbody>
             {% verbatim %}
-                <tr v-for="user in users" :key="user.id">
+                <tr v-for="user in processedUsers" :key="user.id">
                     <td>{{ user.name }}</td>
                     <td>{{ user.email }}</td>
+                    <td>{{ user.student_id }}</td>
                     <!-- ロール編集 -->
                     <td>
                         <span v-if="!user.editingRole">
