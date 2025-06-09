@@ -49,7 +49,7 @@ class UserProfile(models.Model):
         ('火', '火'), ('木', '木')
     ])
     experiment_group = models.CharField(max_length=2)
-    email = models.EmailField()
+    email = models.EmailField(max_length=255, null=True, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
 
     def __str__(self):
