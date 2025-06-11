@@ -20,6 +20,8 @@
             <div class="pdf-toolbar mb-2">
                 <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
                     @click="tool='pen'">ペン</button>
+                <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
+                    @click="tool='highlight'">蛍光ペン</button>
                 <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
                     @click="tool='eraser'">消しゴム</button>
                 <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
@@ -29,6 +31,10 @@
                     <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
                     {% endverbatim %}
                 </select>
+                <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
+                <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
             </div>
             <div id="pdf-area" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
                 <div id="pdf-pages">

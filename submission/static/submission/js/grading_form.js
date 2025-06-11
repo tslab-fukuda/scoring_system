@@ -14,6 +14,8 @@ new Vue({
         undoStack: [],
         stamps: [],
         selectedStamp: "",
+        penWidth: 2,
+        highlightWidth: 10,
     },
     computed: {
         totalScore() {
@@ -27,7 +29,7 @@ new Vue({
         inc(item) { item.value++; },
         dec(item) { if (item.value > 0) item.value--; },
         isPenActive() { return this.tool === 'pen'; },
-        isDrawable() { return this.tool === 'pen' || this.tool === 'eraser'; },
+        isDrawable() { return this.tool === 'pen' || this.tool === 'eraser' || this.tool === 'highlight'; },
         startDraw(idx, e) {
             if (this.tool === 'stamp') {
                 const rect = e.target.getBoundingClientRect();
@@ -47,7 +49,9 @@ new Vue({
             this.lastY = e.clientY - rect.top;
             if (!this.drawData[idx]) this.drawData[idx] = [];
             if (!this.undoStack[idx]) this.undoStack[idx] = [];
-            this.drawData[idx].push({ tool: this.tool, points: [{ x: this.lastX, y: this.lastY }] });
+            let width = this.penWidth;
+            if (this.tool === 'highlight') width = this.highlightWidth;
+            this.drawData[idx].push({ tool: this.tool, width: width, points: [{ x: this.lastX, y: this.lastY }] });
         },
         draw(idx, e) {
             if (this.tool === 'stamp') return;
@@ -60,10 +64,14 @@ new Vue({
             if (this.tool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.lineWidth = 30;
+            } else if (this.tool === 'highlight') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = 'rgba(255,255,0,0.4)';
+                ctx.lineWidth = this.highlightWidth;
             } else {
                 ctx.globalCompositeOperation = 'source-over';
                 ctx.strokeStyle = "red";
-                ctx.lineWidth = 2;
+                ctx.lineWidth = this.penWidth;
             }
             ctx.lineCap = "round";
             ctx.beginPath();
@@ -102,10 +110,14 @@ new Vue({
                 if (stroke.tool === 'eraser') {
                     ctx.globalCompositeOperation = 'destination-out';
                     ctx.lineWidth = 10;
+                } else if (stroke.tool === 'highlight') {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = 'rgba(255,255,0,0.4)';
+                    ctx.lineWidth = stroke.width || this.highlightWidth;
                 } else {
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.strokeStyle = "red";
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = stroke.width || this.penWidth;
                 }
                 ctx.beginPath();
                 for (let i = 0; i < stroke.points.length; i++) {
