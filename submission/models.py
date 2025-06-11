@@ -49,6 +49,7 @@ class UserProfile(models.Model):
         ('火', '火'), ('木', '木')
     ])
     experiment_group = models.CharField(max_length=2)
+    nfc_id = models.CharField(max_length=50, null=True, blank=True)
     email = models.EmailField(max_length=255, null=True, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
 
