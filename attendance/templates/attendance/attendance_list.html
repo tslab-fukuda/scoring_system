@@ -10,7 +10,9 @@
 
 {% block content %}
 <div class="ts-attendance-wrapper">
-    <h2>本日の出席記録</h2>
+    <h2 class="ts-attendance-title">本日の出席記録
+        <span id="current-time" class="ts-current-time"></span>
+    </h2>
     {% verbatim %}
     <div id="nfc-app">
         <button class="btn btn-primary mb-3" @click="open">NFC登録</button>
@@ -48,13 +50,13 @@
         <div class="ts-column">
             <h3>入室中</h3>
             <div class="ts-table-container">
-                <table class="ts-table">
+                <table class="ts-table" id="in-table">
                     <thead>
                         <tr>
-                            <th>学籍番号</th>
+                            <th class="sortable">学籍番号</th>
                             <th>氏名</th>
                             <th>曜日</th>
-                            <th>班</th>
+                            <th class="sortable">班</th>
                             <th>入室</th>
                         </tr>
                     </thead>
@@ -75,13 +77,13 @@
         <div class="ts-column">
             <h3>退室済み</h3>
             <div class="ts-table-container">
-                <table class="ts-table">
+                <table class="ts-table" id="out-table">
                     <thead>
                         <tr>
-                            <th>学籍番号</th>
+                            <th class="sortable">学籍番号</th>
                             <th>氏名</th>
                             <th>曜日</th>
-                            <th>班</th>
+                            <th class="sortable">班</th>
                             <th>入室</th>
                             <th>退室</th>
                         </tr>
@@ -111,4 +113,5 @@
     var CSRF_TOKEN = '{{ csrf_token }}';
 </script>
 <script src="{% static 'attendance/js/nfc_register.js' %}"></script>
+<script src="{% static 'attendance/js/attendance_list_page.js' %}"></script>
 {% endblock %}

@@ -1,6 +1,7 @@
 from datetime import date, time, datetime, timedelta
 from zoneinfo import ZoneInfo
 import math
+import json
 
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
@@ -104,10 +105,11 @@ def attendance_list(request):
     students = UserProfile.objects.filter(role='student').values(
         'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id'
     )
+    students_json = json.dumps(list(students), ensure_ascii=False)
     context = {
         'in_records': in_room,
         'out_records': out_room,
-        'students_json': list(students),
+        'students_json': students_json,
     }
     return render(request, 'attendance/attendance_list.html', context)
 

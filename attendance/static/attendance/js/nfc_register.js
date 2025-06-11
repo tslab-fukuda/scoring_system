@@ -5,12 +5,8 @@ document.addEventListener('DOMContentLoaded', function () {
             showModal: false,
             students: window.STUDENTS || [],
             selectedId: '',
-            nfcId: ''
-        },
-        computed: {
-            selectedUser() {
-                return this.students.find(s => s.student_id === this.selectedId) || {};
-            }
+            nfcId: '',
+            selectedUser: {}
         },
         methods: {
             open() {
@@ -52,7 +48,20 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         },
         watch: {
-            selectedId() {
+            selectedId(newId) {
+                if (!newId) {
+                    this.selectedUser = {};
+                } else {
+                    fetch(`/attendance/user_info/${newId}/`)
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.status === 'success') {
+                                this.selectedUser = d.user;
+                            } else {
+                                this.selectedUser = {};
+                            }
+                        });
+                }
                 this.$nextTick(() => {
                     if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
                 });
