@@ -12,6 +12,8 @@
 <div id="user-table" class="p-4">
     <h2>ユーザ一覧</h2>
     <button class="btn btn-primary mb-3" @click="showModal = true">＋ 新規ユーザー登録</button>
+    <button class="btn btn-secondary mb-3" @click="triggerFileInput">ユーザ一括登録</button>
+    <input type="file" ref="csvInput" accept=".csv" @change="uploadCsv" style="display:none">
 
     <!-- 新規ユーザー登録モーダル -->
     {% verbatim %}
