@@ -1,0 +1,37 @@
+.ts-attendance-wrapper {
+    max-width: 1000px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(60,60,90,0.09);
+    padding: 28px 32px 38px 32px;
+}
+.ts-table-container { width: 100%; overflow-x: auto; }
+.ts-table {
+    width: 100%;
+    background: #fff;
+    border-collapse: separate;
+    border-spacing: 0;
+    box-shadow: 0 2px 12px rgba(90,80,120,0.05);
+    font-size: 1rem;
+}
+.ts-table th, .ts-table td {
+    padding: 0.7em 1.2em;
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid #eaeaea;
+}
+.ts-table th {
+    background: #f7f6fb;
+    font-weight: bold;
+    color: #3c2669;
+}
+
+.ts-attendance-columns {
+    display: flex;
+    gap: 2%;
+}
+
+.ts-column {
+    flex: 1;
+}

@@ -1,30 +1,72 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>Attendance List</title>
-</head>
-<body>
-<h1>Today's Attendance</h1>
-<table border="1">
-    <tr>
-        <th>Student ID</th>
-        <th>Name</th>
-        <th>Day</th>
-        <th>Group</th>
-        <th>Check In</th>
-        <th>Check Out</th>
-    </tr>
-    {% for record in records %}
-    <tr>
-        <td>{{ record.user.userprofile.student_id }}</td>
-        <td>{{ record.user.userprofile.full_name }}</td>
-        <td>{{ record.user.userprofile.experiment_day }}</td>
-        <td>{{ record.user.userprofile.experiment_group }}</td>
-        <td>{{ record.check_in }}</td>
-        <td>{{ record.check_out }}</td>
-    </tr>
-    {% endfor %}
-</table>
-</body>
-</html>
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}出席一覧{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'attendance/css/attendance_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="ts-attendance-wrapper">
+    <h2>本日の出席記録</h2>
+    <div class="ts-attendance-columns">
+        <div class="ts-column">
+            <h3>入室中</h3>
+            <div class="ts-table-container">
+                <table class="ts-table">
+                    <thead>
+                        <tr>
+                            <th>学籍番号</th>
+                            <th>氏名</th>
+                            <th>曜日</th>
+                            <th>班</th>
+                            <th>入室</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for record in in_records %}
+                        <tr>
+                            <td>{{ record.user.userprofile.student_id }}</td>
+                            <td>{{ record.user.userprofile.full_name }}</td>
+                            <td>{{ record.user.userprofile.experiment_day }}</td>
+                            <td>{{ record.user.userprofile.experiment_group }}</td>
+                            <td>{{ record.check_in|date:'H:i' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="ts-column">
+            <h3>退室済み</h3>
+            <div class="ts-table-container">
+                <table class="ts-table">
+                    <thead>
+                        <tr>
+                            <th>学籍番号</th>
+                            <th>氏名</th>
+                            <th>曜日</th>
+                            <th>班</th>
+                            <th>入室</th>
+                            <th>退室</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for record in out_records %}
+                        <tr>
+                            <td>{{ record.user.userprofile.student_id }}</td>
+                            <td>{{ record.user.userprofile.full_name }}</td>
+                            <td>{{ record.user.userprofile.experiment_day }}</td>
+                            <td>{{ record.user.userprofile.experiment_group }}</td>
+                            <td>{{ record.check_in|date:'H:i' }}</td>
+                            <td>{{ record.check_out|date:'H:i' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,7 +4,8 @@ new Vue({
         users: USERS_DATA.map(user => ({
             ...user,
             editingRole: false,
-            editingGroup: false
+            editingGroup: false,
+            can_view_attendance: user.can_view_attendance
         })),
         groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
@@ -104,6 +105,20 @@ new Vue({
                 user.editingGroup = false;
                 $(`#groups-${user.id}`).select2('destroy');
             }
+        },
+        toggleAttendance(user) {
+            fetch(`/users/update_permission/${user.id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({ allow: user.can_view_attendance })
+            }).then(res => {
+                if (!res.ok) {
+                    user.can_view_attendance = !user.can_view_attendance;
+                }
+            });
         },
         deleteUser(user) {
             if (!confirm(`${user.name} を本当に削除しますか？`)) return;

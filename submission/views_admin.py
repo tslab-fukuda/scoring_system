@@ -14,7 +14,7 @@ from submission.decorators import role_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from collections import Counter
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Permission
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -274,7 +274,8 @@ def user_list_view(request):
                 'student_id': profile.student_id,
                 'role': role,
                 'group': group,
-                'last_login': last_login
+                'last_login': last_login,
+                'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
             })
         except UserProfile.DoesNotExist:
             continue
@@ -320,6 +321,23 @@ def update_group_view(request, user_id):
             profile.experiment_day = data['experiment_day']
             profile.experiment_group = data['experiment_group']
             profile.save()
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@csrf_exempt
+@role_required('admin')
+def update_attendance_permission(request, user_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            allow = data.get('allow', False)
+            user = User.objects.get(id=user_id)
+            perm = Permission.objects.get(codename='view_attendancerecord')
+            if allow:
+                user.user_permissions.add(perm)
+            else:
+                user.user_permissions.remove(perm)
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

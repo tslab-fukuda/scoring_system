@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, datetime, timedelta
 from zoneinfo import ZoneInfo
 import math
 
@@ -14,6 +14,21 @@ from submission.models import UserProfile, Submission, ScoringItem
 JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 20)
 CLASS_END = time(16, 40)
+MAX_EARLY_MINUTES = 30
+
+
+def _finalize_previous_day():
+    """Set checkout time to 23:59 for yesterday's unfinished records."""
+    today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
+    incomplete = AttendanceRecord.objects.filter(
+        date=yesterday, check_in__isnull=False, check_out__isnull=True
+    )
+    if not incomplete:
+        return
+    default_dt = datetime.combine(yesterday, time(23, 59))
+    aware_dt = timezone.make_aware(default_dt, JST)
+    incomplete.update(check_out=aware_dt)
 
 def _increment_score(submissions, label, minutes):
     item = ScoringItem.objects.filter(label=label).first()
@@ -31,6 +46,7 @@ def _increment_score(submissions, label, minutes):
 
 @login_required
 def scan_card(request, student_id):
+    _finalize_previous_day()
     if not request.user.has_perm('attendance.change_attendancerecord'):
         return HttpResponseForbidden()
 
@@ -48,29 +64,43 @@ def scan_card(request, student_id):
     else:
         previous_out = record.check_out
         record.check_out = now
-        prev_minutes = 0
+        prev_after = prev_early = 0
         if previous_out:
             prev_local = timezone.localtime(previous_out, JST)
             prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
             if prev_diff > 0:
-                prev_minutes = math.ceil(prev_diff)
+                prev_after = math.ceil(prev_diff)
+            elif prev_diff < 0:
+                prev_early = min(MAX_EARLY_MINUTES, math.ceil(-prev_diff))
         diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-        new_minutes = math.ceil(diff) if diff > 0 else 0
-        extra = new_minutes - prev_minutes
-        if extra > 0:
+        new_after = math.ceil(diff) if diff > 0 else 0
+        new_early = min(MAX_EARLY_MINUTES, math.ceil(-diff)) if diff < 0 else 0
+        extra_after = new_after - prev_after
+        extra_early = new_early - prev_early
+        if extra_after > 0 or extra_early > 0:
             submissions = Submission.objects.filter(
                 student=user,
                 graded=True,
                 report_type='prep',
                 date=date.today(),
             )
-            _increment_score(submissions, "実験時間", extra)
+            if extra_after > 0:
+                _increment_score(submissions, "実験時間", extra_after)
+            if extra_early > 0:
+                _increment_score(submissions, "実験時間", extra_early)
     record.save()
     return JsonResponse({'status': 'ok'})
 
 @login_required
 def attendance_list(request):
+    _finalize_previous_day()
     if not request.user.has_perm('attendance.view_attendancerecord'):
         return HttpResponseForbidden()
-    records = AttendanceRecord.objects.filter(date=date.today())
-    return render(request, 'attendance/attendance_list.html', {'records': records})
+    today_records = AttendanceRecord.objects.filter(date=date.today())
+    in_room = today_records.filter(check_out__isnull=True)
+    out_room = today_records.filter(check_out__isnull=False)
+    context = {
+        'in_records': in_room,
+        'out_records': out_room,
+    }
+    return render(request, 'attendance/attendance_list.html', context)
