@@ -66,7 +66,7 @@ new Vue({
                 ctx.lineWidth = 30;
             } else if (this.tool === 'highlight') {
                 ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = 'rgba(255,255,0,0.3)';
+                ctx.strokeStyle = 'rgba(255,255,0,0.1)';
                 ctx.lineWidth = this.highlightWidth;
             } else {
                 ctx.globalCompositeOperation = 'source-over';
@@ -112,7 +112,7 @@ new Vue({
                     ctx.lineWidth = 10;
                 } else if (stroke.tool === 'highlight') {
                     ctx.globalCompositeOperation = 'source-over';
-                    ctx.strokeStyle = 'rgba(255,255,0,0.3)';
+                    ctx.strokeStyle = 'rgba(255,255,0,0.1)';
                     ctx.lineWidth = stroke.width || this.highlightWidth;
                 } else {
                     ctx.globalCompositeOperation = 'source-over';
