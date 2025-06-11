@@ -25,6 +25,7 @@ urlpatterns = [
     path('submission/', include('submission.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('users/', include('submission.urls')),
+    path('attendance/', include('attendance.urls')),
     path('accounts/redirect-after-login/', redirect_after_login, name='redirect_after_login'),
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
