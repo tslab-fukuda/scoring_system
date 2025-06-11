@@ -24,6 +24,7 @@ urlpatterns = [
     path('update_group/<int:user_id>/', views_admin.update_group_view, name='update_group'),
     path('delete/<int:user_id>/', views_admin.delete_user_view, name='delete_user'),
     path('create/', views_admin.create_user_view, name='create_user'),
+    path('bulk_create/', views_admin.bulk_create_users, name='bulk_create_users'),
     
     path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
     path('admin_submissions_api/', views_admin.admin_get_submissions_api, name='admin_get_submissions_api'),

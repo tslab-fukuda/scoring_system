@@ -158,6 +158,34 @@ new Vue({
             .catch(err => {
                 console.error("通信エラー", err);
             });
+        },
+        triggerFileInput() {
+            this.$refs.csvInput.click();
+        },
+        uploadCsv(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch('/users/bulk_create/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': CSRF_TOKEN,
+                },
+                body: formData,
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('登録が完了しました');
+                    location.reload();
+                } else {
+                    alert('登録失敗: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error('通信エラー', err);
+            });
         }
     }
 });

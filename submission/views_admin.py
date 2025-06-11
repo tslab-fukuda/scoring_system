@@ -1,7 +1,15 @@
 from django.shortcuts import render
-from submission.models import UserProfile, Submission, Schedule, Stamp, ScoringItem, ExperimentCompletion
+from submission.models import (
+    UserProfile,
+    Submission,
+    Schedule,
+    Stamp,
+    ScoringItem,
+    ExperimentCompletion,
+)
 from django.views.decorators.csrf import csrf_exempt
 import json
+import csv
 from submission.decorators import role_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -355,3 +363,51 @@ def create_user_view(request):
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@csrf_exempt
+@role_required('admin')
+def bulk_create_users(request):
+    """Create multiple users from uploaded CSV file.
+
+    Expected CSV columns: 名前, メールアドレス, 学生番号, 曜日, 班番号
+    Password will be set to 学生番号.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)
+
+    csv_file = request.FILES.get('file')
+    if not csv_file:
+        return JsonResponse({'status': 'error', 'message': 'CSVファイルが必要です'}, status=400)
+
+    created = 0
+    skipped = 0
+    try:
+        decoded = csv_file.read().decode('utf-8-sig').splitlines()
+        reader = csv.DictReader(decoded)
+        for row in reader:
+            email = row.get('メールアドレス')
+            if not email:
+                skipped += 1
+                continue
+            if User.objects.filter(username=email).exists():
+                skipped += 1
+                continue
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=row.get('学生番号', '')
+            )
+            UserProfile.objects.create(
+                user=user,
+                full_name=row.get('名前', ''),
+                email=email,
+                student_id=row.get('学生番号', ''),
+                experiment_day=row.get('曜日', ''),
+                experiment_group=row.get('班番号', ''),
+                role='student'
+            )
+            created += 1
+        return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
