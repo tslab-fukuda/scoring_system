@@ -1,10 +1,9 @@
 from django.shortcuts import render
-from submission.models import UserProfile, Submission, Schedule, Stamp
+from submission.models import UserProfile, Submission, Schedule, Stamp, ScoringItem, ExperimentCompletion
 from django.views.decorators.csrf import csrf_exempt
 import json
 from submission.decorators import role_required
 from django.http import JsonResponse
-from submission.models import ScoringItem
 from django.views.decorators.http import require_POST
 from collections import Counter
 from django.contrib.auth.models import User
@@ -31,7 +30,10 @@ def admin_get_submissions_api(request):
 
     # 3回提出されているものを自動で受付
     for (student_id, experiment_number), cnt in count_map.items():
-        if cnt >= 3:
+        comp_status = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number).values_list('completed', flat=True)
+        completed = comp_status[0] if comp_status else False
+        print(completed)
+        if cnt >= 3 and completed:
             Submission.objects.filter(
                 report_type='main', graded=False, accepted=False,
                 student_id=student_id, experiment_number=experiment_number

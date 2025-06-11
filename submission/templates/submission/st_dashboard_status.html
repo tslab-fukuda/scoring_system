@@ -39,7 +39,7 @@
                 </td>
                 <!-- 添削結果 -->
                 <td>
-                    <button v-if="item.graded_score" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                    <button v-if="item.graded_score !== null" class="btn btn-link p-0" @click="showScoreDetail(item)">
                         {{ item.graded_score }} 点
                     </button>
                     <span v-else>-</span>

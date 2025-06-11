@@ -1,10 +1,5 @@
 <h4>学生情報</h4>
 {% verbatim %}
-<select v-model="selectedStudentId" class="form-select w-50 mb-3">
-  <option v-for="student in students" :value="student.id" :key="student.id">
-    {{ student.name }}（{{ student.student_id }}）
-  </option>
-</select>
 <div class="student-ticket-list">
   <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
     <div class="student-photo"></div>

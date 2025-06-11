@@ -30,7 +30,7 @@
                 </td>
                 <td>
                     <!-- {{ item.score == null ? '' : item.score }} -->
-                    <button v-if="item.score" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                    <button v-if="item.score !== null" class="btn btn-link p-0" @click="showScoreDetail(item)">
                         {{ item.score }} 点
                     </button>
                     <span v-else>-</span>

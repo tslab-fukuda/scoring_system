@@ -37,8 +37,6 @@ def student_dashboard(request):
                 if sub.score_details else "0"
             ), #採点結果
             "score_details":sub.score_details if sub.score_details else ""
-            # "graded_file_name": sub.graded_file.name.split('/')[-1] if sub.graded_file else "", #添削ファイル名
-            # "graded_file_url": sub.graded_file.url if sub.graded_file else "", #添削ファイルURL
         })
 
     user_profile = request.user.userprofile
