@@ -24,5 +24,6 @@
         var USER_ROLE = "{{ request.user.userprofile.role }}";
     </script>
     <script src="{% static 'submission/js/header.js' %}"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

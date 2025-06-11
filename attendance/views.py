@@ -7,6 +7,8 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import AttendanceRecord
 from submission.models import UserProfile, Submission, ScoringItem
@@ -99,8 +101,53 @@ def attendance_list(request):
     today_records = AttendanceRecord.objects.filter(date=date.today())
     in_room = today_records.filter(check_out__isnull=True)
     out_room = today_records.filter(check_out__isnull=False)
+    students = UserProfile.objects.filter(role='student').values(
+        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id'
+    )
     context = {
         'in_records': in_room,
         'out_records': out_room,
+        'students_json': list(students),
     }
     return render(request, 'attendance/attendance_list.html', context)
+
+
+@login_required
+def get_user_info(request, student_id):
+    if not request.user.has_perm('attendance.change_attendancerecord'):
+        return HttpResponseForbidden()
+    try:
+        profile = UserProfile.objects.get(student_id=student_id)
+        data = {
+            'student_id': profile.student_id,
+            'full_name': profile.full_name,
+            'experiment_day': profile.experiment_day,
+            'experiment_group': profile.experiment_group,
+            'nfc_id': profile.nfc_id or ''
+        }
+        return JsonResponse({'status': 'success', 'user': data})
+    except UserProfile.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+
+@csrf_exempt
+@login_required
+@require_POST
+def register_nfc(request):
+    if not request.user.has_perm('attendance.change_attendancerecord'):
+        return HttpResponseForbidden()
+    try:
+        import json
+        data = json.loads(request.body)
+        student_id = data.get('student_id')
+        nfc_id = data.get('nfc_id')
+        if not student_id or not nfc_id:
+            return JsonResponse({'status': 'error', 'message': 'invalid'}, status=400)
+        profile = UserProfile.objects.get(student_id=student_id)
+        profile.nfc_id = nfc_id
+        profile.save()
+        return JsonResponse({'status': 'success'})
+    except UserProfile.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

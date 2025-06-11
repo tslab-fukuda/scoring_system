@@ -5,11 +5,45 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'attendance/css/attendance_list.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/user_table.css' %}">
 {% endblock %}
 
 {% block content %}
 <div class="ts-attendance-wrapper">
     <h2>本日の出席記録</h2>
+    {% verbatim %}
+    <div id="nfc-app">
+        <button class="btn btn-primary mb-3" @click="open">NFC登録</button>
+        <div v-if="showModal" class="ts-modal-overlay">
+            <div class="ts-modal">
+                <h3>NFC登録</h3>
+                <div class="ts-form-group">
+                    <label>学生番号</label>
+                    <select v-model="selectedId">
+                        <option value="">選択してください</option>
+                        <option v-for="s in students" :value="s.student_id">
+                            {{ s.student_id }} {{ s.full_name }}
+                        </option>
+                    </select>
+                </div>
+                <div class="ts-form-group">
+                    <p>氏名: <span v-text="selectedUser.full_name"></span></p>
+                    <p>曜日: <span v-text="selectedUser.experiment_day"></span></p>
+                    <p>班: <span v-text="selectedUser.experiment_group"></span></p>
+                    <p>NFC: <span v-text="selectedUser.nfc_id"></span></p>
+                </div>
+                <div class="ts-form-group">
+                    <label>NFC ID</label>
+                    <input type="text" v-model="nfcId" ref="nfcInput">
+                </div>
+                <div class="ts-modal-actions">
+                    <button class="ts-create-btn" @click="registerNfc">登録</button>
+                    <button class="ts-cancel-btn" @click="close">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endverbatim %}
     <div class="ts-attendance-columns">
         <div class="ts-column">
             <h3>入室中</h3>
@@ -69,4 +103,12 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var STUDENTS = {{ students_json|safe }};
+    var CSRF_TOKEN = '{{ csrf_token }}';
+</script>
+<script src="{% static 'attendance/js/nfc_register.js' %}"></script>
 {% endblock %}
