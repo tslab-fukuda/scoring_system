@@ -91,6 +91,7 @@
                             </select>
                         </div>
                     </th>
+                    <th>出席閲覧</th>
                     <th>最終アクセス</th>
                     <th>操作</th>
                 </tr>
@@ -130,6 +131,9 @@
                             <button class="ts-save-btn" @click="saveGroup(user)">💾</button>
                             <button class="ts-cancel-edit-btn" @click="cancelEdit(user, 'group')">✕</button>
                         </span>
+                    </td>
+                    <td>
+                        <input type="checkbox" v-model="user.can_view_attendance" @change="toggleAttendance(user)">
                     </td>
                     <td>{{ user.last_login }}</td>
                     <td>

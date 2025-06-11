@@ -22,6 +22,7 @@ urlpatterns = [
     path('list/', views_admin.user_list_view, name='user_list'),
     path('update_role/<int:user_id>/', views_admin.update_user_role, name='update_role'),
     path('update_group/<int:user_id>/', views_admin.update_group_view, name='update_group'),
+    path('update_permission/<int:user_id>/', views_admin.update_attendance_permission, name='update_attendance_permission'),
     path('delete/<int:user_id>/', views_admin.delete_user_view, name='delete_user'),
     path('create/', views_admin.create_user_view, name='create_user'),
     path('bulk_create/', views_admin.bulk_create_users, name='bulk_create_users'),
