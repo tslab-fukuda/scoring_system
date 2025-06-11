@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance List</title>
+</head>
+<body>
+<h1>Today's Attendance</h1>
+<table border="1">
+    <tr>
+        <th>Student ID</th>
+        <th>Name</th>
+        <th>Day</th>
+        <th>Group</th>
+        <th>Check In</th>
+        <th>Check Out</th>
+    </tr>
+    {% for record in records %}
+    <tr>
+        <td>{{ record.user.userprofile.student_id }}</td>
+        <td>{{ record.user.userprofile.full_name }}</td>
+        <td>{{ record.user.userprofile.experiment_day }}</td>
+        <td>{{ record.user.userprofile.experiment_group }}</td>
+        <td>{{ record.check_in }}</td>
+        <td>{{ record.check_out }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</body>
+</html>
