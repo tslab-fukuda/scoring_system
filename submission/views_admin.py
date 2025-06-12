@@ -8,6 +8,7 @@ from submission.models import (
     ExperimentCompletion,
 )
 from django.views.decorators.csrf import csrf_exempt
+from django.core.files.storage import default_storage
 import json
 import csv
 from submission.decorators import role_required
@@ -83,12 +84,17 @@ def get_students_api(request):
     qs = UserProfile.objects.filter(role='student')
     if student_id:
         qs = qs.filter(student_id__icontains=student_id)
-    students = list(
-        qs.values(
-            'id', 'full_name', 'student_id', 'user__email',
-            'experiment_day', 'experiment_group'
-        )
-    )
+    students = []
+    for up in qs:
+        students.append({
+            'id': up.id,
+            'full_name': up.full_name,
+            'student_id': up.student_id,
+            'user__email': up.user.email,
+            'experiment_day': up.experiment_day,
+            'experiment_group': up.experiment_group,
+            'photo': up.photo.url if up.photo else ''
+        })
     return JsonResponse({'students_json': students})
 
 def get_summary_api(request):
@@ -429,3 +435,23 @@ def bulk_create_users(request):
         return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@csrf_exempt
+@role_required('admin')
+def upload_student_photo(request, student_id):
+    """Receive uploaded photo and save to UserProfile"""
+    if request.method == 'POST':
+        try:
+            profile = UserProfile.objects.get(id=student_id)
+            photo = request.FILES.get('photo')
+            if not photo:
+                return JsonResponse({'status': 'error', 'message': 'photo required'}, status=400)
+            filename = f"{profile.student_id}.png"
+            path = default_storage.save(f"student_photos/{filename}", photo)
+            profile.photo.name = path
+            profile.save()
+            return JsonResponse({'status': 'success', 'photo_url': profile.photo.url})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    return JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)

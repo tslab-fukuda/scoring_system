@@ -33,6 +33,7 @@ urlpatterns = [
     path('api_student_reports/', views_admin.api_student_reports, name='api_student_reports'),
     path('admin_schedule_api/', views_admin.get_schedule_api, name='get_schedule_api'),
     path('admin_summary_api/', views_admin.get_summary_api, name='get_summary_api'),
+    path('upload_photo/<int:student_id>/', views_admin.upload_student_photo, name='upload_student_photo'),
     path('add_schedule_api/', views_admin.add_schedule_api, name='add_schedule_api'),
     path('update_schedule_api/<int:schedule_id>/', views_admin.update_schedule_api, name='update_schedule_api'),
     path('delete_schedule_api/<int:schedule_id>/', views_admin.delete_schedule_api, name='delete_schedule_api'),

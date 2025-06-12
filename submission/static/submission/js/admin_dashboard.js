@@ -25,6 +25,8 @@ window.app = new Vue({
         selectedStudent: null,
         showStudentModal: false,
         studentReports: [],
+        showPhotoModal: false,
+        videoStream: null,
     },
     computed: {
         mainReportItems() {
@@ -235,7 +237,8 @@ window.app = new Vue({
             this.modalStudent = {};
         },
         openStudentModal(student) {
-            this.selectedStudent = student;
+            this.selectedStudent = student.full_name;
+            this.selectedStudentId = student.id;
             fetch(`/submission/api_student_reports/?student_id=${student.id}`)
                 .then(res => res.json())
                 .then(data => {
@@ -247,6 +250,45 @@ window.app = new Vue({
         closeStudentModal() {
             this.showStudentModal = false;
             this.studentReports = [];
+        },
+        openPhotoModal() {
+            this.showPhotoModal = true;
+            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                this.videoStream = stream;
+                this.$refs.video.srcObject = stream;
+            });
+        },
+        closePhotoModal() {
+            this.showPhotoModal = false;
+            if (this.videoStream) {
+                this.videoStream.getTracks().forEach(t => t.stop());
+                this.videoStream = null;
+            }
+        },
+        capturePhoto() {
+            const video = this.$refs.video;
+            const canvas = this.$refs.canvas;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            canvas.toBlob(blob => {
+                const fd = new FormData();
+                fd.append('photo', blob, 'photo.png');
+                fetch(`/submission/upload_photo/${this.selectedStudentId}/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': window.csrfToken },
+                    body: fd
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const student = this.students.find(s => s.id === this.selectedStudentId);
+                        if (student) student.photo = data.photo_url;
+                    }
+                    this.closePhotoModal();
+                });
+            }, 'image/png');
         },
     },
     mounted() {
