@@ -107,6 +107,7 @@ def teacher_students_api(request):
             'student_id': up.student_id,
             'experiment_day': up.experiment_day,
             'experiment_group': up.experiment_group,
+            'photo': up.photo.url if up.photo else '',
             'experiment_completion': completed,
         })
     return JsonResponse({'students': students})

@@ -2,11 +2,30 @@
 {% verbatim %}
 <div class="student-ticket-list">
   <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
-    <div class="student-photo"></div>
+    <div class="student-photo">
+        <img v-if="stu.photo" :src="stu.photo" alt="photo">
+    </div>
     <div class="fw-bold">{{ stu.full_name }}</div>
     <div>学籍番号: {{ stu.student_id }}</div>
     <div>曜日: {{ stu.experiment_day }}</div>
     <div>班: {{ stu.experiment_group }}</div>
+  </div>
+</div>
+<div v-if="showPhotoModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">顔写真撮影</h5>
+        <button type="button" class="btn-close" @click="closePhotoModal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <video ref="video" autoplay style="width:100%"></video>
+        <canvas ref="canvas" style="display:none;"></canvas>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" @click="capturePhoto">撮影</button>
+      </div>
+    </div>
   </div>
 </div>
 {% endverbatim %}
@@ -26,6 +45,9 @@
           </li>
         </ul>
         <div v-if="studentReports.length === 0">レポート提出なし</div>
+        <div class="text-end mt-2">
+            <button class="btn btn-secondary" @click="openPhotoModal">顔写真</button>
+        </div>
         {% endverbatim %}
       </div>
     </div>

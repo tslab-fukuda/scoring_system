@@ -80,7 +80,9 @@
             <div class="student-ticket-list">
                 {% verbatim %}
                 <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
-                    <div class="student-photo"></div>
+                    <div class="student-photo">
+                        <img v-if="stu.photo" :src="stu.photo" alt="photo">
+                    </div>
                     <div class="fw-bold">{{ stu.full_name }}</div>
                     <div>曜日: {{ stu.experiment_day }}</div>
                     <div>班: {{ stu.experiment_group }}</div>
