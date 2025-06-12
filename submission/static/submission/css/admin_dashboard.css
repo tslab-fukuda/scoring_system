@@ -113,3 +113,11 @@ tr.clickable-row:hover {
     object-fit: cover;
     border-radius: 50%;
 }
+
+/* Ensure photo capture modal appears above the student info modal */
+.photo-modal {
+    z-index: 1060;
+}
+.student-modal {
+    z-index: 1050;
+}

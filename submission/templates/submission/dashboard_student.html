@@ -11,7 +11,7 @@
     <div>班: {{ stu.experiment_group }}</div>
   </div>
 </div>
-<div v-if="showPhotoModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+<div v-if="showPhotoModal" class="modal photo-modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
@@ -29,7 +29,7 @@
   </div>
 </div>
 {% endverbatim %}
-<div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+<div v-if="showStudentModal" class="modal student-modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
