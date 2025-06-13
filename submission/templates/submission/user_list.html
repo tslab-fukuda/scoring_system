@@ -79,6 +79,7 @@
                                 <option value="">全て</option>
                                 <option value="student">student</option>
                                 <option value="teacher">teacher</option>
+                                <option value="non-editing teacher">non-editing teacher</option>
                                 <option value="admin">admin</option>
                             </select>
                         </div>
@@ -112,6 +113,7 @@
                             <select :id="'roles-' + user.id" style="width: 120px;">
                                 <option value="student">student</option>
                                 <option value="teacher">teacher</option>
+                                <option value="non-editing teacher">non-editing teacher</option>
                                 <option value="admin">admin</option>
                             </select>
                             <button class="ts-save-btn" @click="saveRole(user)">💾</button>
