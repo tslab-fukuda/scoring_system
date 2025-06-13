@@ -18,10 +18,12 @@
                 <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
             </div>
             <div class="pdf-toolbar mb-2">
+                {% if request.user.userprofile.role != 'non-editing teacher' %}
                 <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
                     @click="tool='pen'">ペン</button>
                 <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
                     @click="tool='highlight'">蛍光ペン</button>
+                {% endif %}
                 <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
                     @click="tool='eraser'">消しゴム</button>
                 <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
@@ -31,19 +33,23 @@
                     <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
                     {% endverbatim %}
                 </select>
+                {% if request.user.userprofile.role != 'non-editing teacher' %}
                 <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                 <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                 <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
                 <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
+                {% endif %}
             </div>
             <div id="pdf-area" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
                 <div id="pdf-pages">
                     <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
                     <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
                         <canvas :ref="'pdfCanvas' + idx"></canvas>
-                        <canvas :ref="'drawCanvas' + idx" style="position:absolute;left:0;top:0;pointer-events:auto;"
+                        <canvas :ref="'drawCanvas' + idx" style="position:absolute;left:0;top:0;pointer-events:{% if request.user.userprofile.role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
+                            {% if request.user.userprofile.role != 'non-editing teacher' %}
                             @mousedown="startDraw(idx, $event)" @mousemove="draw(idx, $event)" @mouseup="stopDraw(idx)"
-                            @mouseleave="stopDraw(idx)"></canvas>
+                            @mouseleave="stopDraw(idx)"
+                            {% endif %}></canvas>
                     </div>
                 </div>
             </div>
