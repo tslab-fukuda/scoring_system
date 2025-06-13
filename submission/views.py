@@ -55,6 +55,8 @@ def index_redirect(request):
         return redirect('admin_dashboard')
     elif role == "teacher":
         return redirect('teacher_dashboard')
+    elif role == "non-editing teacher":
+        return redirect('non_editing_teacher_dashboard')
     elif role == "student":
         return redirect('student_dashboard')
     else:
