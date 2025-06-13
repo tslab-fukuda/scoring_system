@@ -266,11 +266,7 @@ def user_list_view(request):
     for user in User.objects.all():
         try:
             profile = user.userprofile
-            role = (
-                'admin' if user.is_superuser else
-                'teacher' if user.is_staff else
-                'student'
-            )
+            role = profile.role
             group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
             last_login = user.last_login.strftime("%Y-%m-%d %H:%M") if user.last_login else "未ログイン"
             user_data.append({
