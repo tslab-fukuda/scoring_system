@@ -93,7 +93,33 @@ def final_grading_form(request, submission_id):
         report_type='prep'
     ).order_by('-submitted_at').first()
 
-    total_score = calc_total(prep_sub) + calc_total(submission)
+    # 得点項目マスターを取得
+    pre_master = list(
+        ScoringItem.objects.filter(category='pre').order_by('order').values('label', 'weight')
+    )
+    main_master = list(
+        ScoringItem.objects.filter(category='main').order_by('order').values('label', 'weight')
+    )
+
+    def attach_values(master, details):
+        result = []
+        for m in master:
+            val = 0
+            if details:
+                for d in details:
+                    if d.get('label') == m['label']:
+                        val = d.get('value', 0)
+                        break
+            result.append({'label': m['label'], 'weight': int(m['weight']), 'value': val})
+        return result
+
+    pre_items = attach_values(pre_master, prep_sub.score_details if prep_sub else None)
+    main_items = attach_values(main_master, submission.score_details)
+
+    total_score = (
+        sum(i['value'] * i.get('weight', 1) for i in pre_items)
+        + sum(i['value'] * i.get('weight', 1) for i in main_items)
+    )
 
     if request.method == 'POST':
         try:
@@ -114,4 +140,6 @@ def final_grading_form(request, submission_id):
         'submission': submission,
         'total_score': total_score,
         'final_value': final_value,
+        'pre_items': pre_items,
+        'main_items': main_items,
     })
