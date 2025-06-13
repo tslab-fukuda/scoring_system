@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/grading_form.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -19,7 +20,7 @@
     <iframe src="{{ submission.file.url }}" style="width:100%; height:70vh;"></iframe>
   </div>
   <div class="mb-3">
-    <h5>採点詳細</h5>
+    <h5>採点エリア</h5>
     <table class="table">
       <thead>
         <tr><th colspan="2">予習レポート</th></tr>
@@ -28,7 +29,11 @@
         {% for item in pre_items %}
         <tr>
           <td>{{ item.label }}</td>
-          <td>{{ item.value }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary" disabled>-</button>
+            <span class="mx-2">{{ item.value }}</span>
+            <button class="btn btn-sm btn-outline-secondary" disabled>+</button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -39,23 +44,26 @@
         {% for item in main_items %}
         <tr>
           <td>{{ item.label }}</td>
-          <td>{{ item.value }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary" disabled>-</button>
+            <span class="mx-2">{{ item.value }}</span>
+            <button class="btn btn-sm btn-outline-secondary" disabled>+</button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <div class="score-total">
+      合計：{{ total_score }}
+    </div>
+    <form method="post" class="mt-3">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label">最終評価 (0~100)</label>
+        <input type="number" name="final_value" min="0" max="100" step="0.1" class="form-control" value="{{ final_value }}">
+      </div>
+      <button type="submit" class="btn btn-success w-100">完了（保存）</button>
+    </form>
   </div>
-  <form method="post" class="mt-3">
-    {% csrf_token %}
-    <div class="mb-3">
-      <label class="form-label">合計得点</label>
-      <input type="text" class="form-control" value="{{ total_score }}" readonly>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">最終評価 (0~100)</label>
-      <input type="number" name="final_value" min="0" max="100" step="0.1" class="form-control" value="{{ final_value }}">
-    </div>
-    <button type="submit" class="btn btn-primary">保存</button>
-  </form>
 </div>
 {% endblock %}
