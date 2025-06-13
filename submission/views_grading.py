@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
@@ -15,8 +15,8 @@ import base64
 import fitz  # PyMuPDF
 from PIL import Image
 
-@login_required 
-@role_required('teacher','admin')
+@login_required
+@role_required('teacher','admin','non-editing teacher')
 def grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
     if request.method == 'POST':
@@ -75,3 +75,43 @@ def scoring_items_api(request):
 def stamps_api(request):
     stamps = list(Stamp.objects.all().values('id','text'))
     return JsonResponse({'stamps': stamps})
+
+
+@login_required
+@role_required('non-editing teacher', 'teacher', 'admin')
+def final_grading_form(request, submission_id):
+    submission = get_object_or_404(Submission, pk=submission_id)
+
+    def calc_total(sub):
+        if not sub or not sub.score_details:
+            return 0
+        return sum(d.get('value', 0) * d.get('weight', 1) for d in sub.score_details)
+
+    prep_sub = Submission.objects.filter(
+        student=submission.student,
+        experiment_number=submission.experiment_number,
+        report_type='prep'
+    ).order_by('-submitted_at').first()
+
+    total_score = calc_total(prep_sub) + calc_total(submission)
+
+    if request.method == 'POST':
+        try:
+            final_val = float(request.POST.get('final_value', 0))
+        except ValueError:
+            final_val = 0
+        submission.final_score = final_val + (total_score / 100.0)
+        submission.final_evaluated = True
+        submission.save()
+        return redirect('/submission/non_editing_teacher_dashboard/')
+
+    final_value = (
+        submission.final_score - (total_score / 100.0)
+        if submission.final_score is not None else ''
+    )
+
+    return render(request, 'submission/final_grading_form.html', {
+        'submission': submission,
+        'total_score': total_score,
+        'final_value': final_value,
+    })
