@@ -34,7 +34,7 @@
             <td>{{ row.experiment_number }}</td>
             <td>{{ row.full_name }}</td>
             <td class="filename-td">
-                <a :href="'/submission/grading_form/' + row.id + '/'" @click.stop>
+                <a :href="USER_ROLE === 'non-editing teacher' ? '/submission/final_grading_form/' + row.id + '/' : '/submission/grading_form/' + row.id + '/'" @click.stop>
                     {{ row.file ? row.file.split('/').pop().slice(0, 20) + (row.file.split('/').pop().length > 20 ?
                     '...' : '') : '' }}
                 </a>
