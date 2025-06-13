@@ -50,9 +50,13 @@ urlpatterns = [
     
     # TA系
     path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),
+    path('non_editing_teacher_dashboard/', views_teacher.non_editing_teacher_dashboard, name='non_editing_teacher_dashboard'),
     path('get_ungraded_submissions/', views_teacher.get_ungraded_submissions, name='get_ungraded_submissions'),
     path('get_graded_submissions/', views_teacher.get_graded_submissions, name='get_graded_submissions'),
+    path('get_ungraded_main_reports/', views_teacher.get_ungraded_main_reports, name='get_ungraded_main_reports'),
+    path('get_graded_main_reports/', views_teacher.get_graded_main_reports, name='get_graded_main_reports'),
     path('grading_form/<int:submission_id>/', views_grading.grading_form, name='grading_form'),
+    path('final_grading_form/<int:submission_id>/', views_grading.final_grading_form, name='final_grading_form'),
     path('scoring_items_api/', views_grading.scoring_items_api, name='scoring_items_api'),
     path('stamps_api/', views_grading.stamps_api, name='stamps_api'),
     path('mark_experiment_complete/', views_teacher.mark_experiment_complete, name='mark_experiment_complete'),

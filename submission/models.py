@@ -31,7 +31,9 @@ class Submission(models.Model):
     report_type = models.CharField(max_length=10, choices=REPORT_TYPE_CHOICES, default='main', verbose_name="レポート種別")
     experiment_number = models.CharField(max_length=10, choices=EXPERIMENT_NUMBER_CHOICES, verbose_name="実験番号")
     accepted = models.BooleanField(default=False) # 受け取り判定
-    #student_id = models.CharField(max_length=10, blank=True)     
+    final_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    final_evaluated = models.BooleanField(default=False)
+    #student_id = models.CharField(max_length=10, blank=True)
 
     def __str__(self):
         return f"{self.student.username} - {self.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}"
@@ -41,6 +43,7 @@ class UserProfile(models.Model):
         ('student', 'Student'),
         ('teacher', 'Teacher'),
         ('admin', 'Admin'),
+        ('non-editing teacher', 'Non-editing Teacher'),
     ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=100)
@@ -52,7 +55,7 @@ class UserProfile(models.Model):
     nfc_id = models.CharField(max_length=50, null=True, blank=True)
     email = models.EmailField(max_length=255, null=True, blank=True)
     photo = models.ImageField(upload_to='student_photos/', null=True, blank=True)
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
 
     def __str__(self):
         return f"{self.full_name} ({self.user.username})"

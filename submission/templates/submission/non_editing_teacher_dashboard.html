@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}教師ダッシュボード{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/teacher_dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div id="teacher-dashboard" class="container mt-4">
+    <h2 class="mb-4">教師ダッシュボード</h2>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
+                @click.prevent="tab = 'grading'; fetchList();">未評価レポート</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'graded' }" href="#"
+                @click.prevent="tab = 'graded'; fetchList();">評価済レポート</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'experiment_record' }" href="#"
+                @click.prevent="tab = 'experiment_record'; fetchStudents();">学生詳細</a>
+        </li>
+    </ul>
+
+    <div class="row mb-2">
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_day">
+                <option value="">曜日</option>
+                <option value="火">火</option>
+                <option value="木">木</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            {% verbatim %}
+            <select class="form-select" v-model="filter.experiment_group">
+                <option value="">班番号</option>
+                <option v-for="n in 20" :value="n < 10 ? '0'+n : n">{{ n < 10 ? '0' +n : n }}</option>
+            </select>
+            {% endverbatim %}
+        </div>
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_number">
+                <option value="">実験番号</option>
+                <option value="I-01,02">I-01,02</option>
+                <option value="I-03,04">I-03,04</option>
+                <option value="I-05,06">I-05,06</option>
+                <option value="I-07,08">I-07,08</option>
+                <option value="I-09,10">I-09,10</option>
+                <option value="II-01,02">II-01,02</option>
+                <option value="II-03,04">II-03,04</option>
+                <option value="II-05,06">II-05,06</option>
+                <option value="II-07,08">II-07,08</option>
+                <option value="II-09,10">II-09,10</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-primary" @click="tab === 'experiment_record' ? fetchStudents() : fetchList()">検索</button>
+        </div>
+    </div>
+
+    <transition name="fade" mode="out-in">
+        <div v-if="tab === 'grading'" key="grading">
+            {% include "submission/grading_list.html" %}
+        </div>
+        <div v-else-if="tab === 'graded'" key="graded">
+            {% include "submission/graded_list.html" %}
+        </div>
+    </transition>
+    <transition name="fade" mode="out-in">
+        <component :is="currentTabComponent" :items="items" @row-click="goToGrading"></component>
+    </transition>
+    <transition name="fade" mode="out-in">
+        <div v-if="tab === 'experiment_record'">
+            <div class="student-ticket-list">
+                {% verbatim %}
+                <div v-for="stu in students" :key="stu.id" class="student-ticket" @click="openStudentModal(stu)">
+                    <div class="student-photo">
+                        <img v-if="stu.photo" :src="stu.photo" alt="photo">
+                    </div>
+                    <div class="fw-bold">{{ stu.full_name }}</div>
+                    <div>曜日: {{ stu.experiment_day }}</div>
+                    <div>班: {{ stu.experiment_group }}</div>
+                    <div>学籍番号: {{ stu.student_id }}</div>
+                </div>
+                {% endverbatim %}
+            </div>
+            <!-- モーダル: 実験一覧+終了判定 -->
+            <div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+                <div class="modal-dialog modal-dialog-centered">
+                    {% verbatim %}
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ selectedStudent.full_name }} の実験終了記録</h5>
+                            <button type="button" class="btn-close" @click="showStudentModal=false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table">
+                                <tr v-for="exp in experimentNumbers" :key="exp">
+                                    <td>{{ exp }}</td>
+                                    <td>
+                                        <button class="btn"
+                                            :class="isExperimentComplete(exp) ? 'btn-success' : 'btn-outline-secondary'"
+                                            @click="toggleExperimentComplete(selectedStudent.id, exp)">
+                                            {{ isExperimentComplete(exp) ? '終了' : '未了' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    {% endverbatim %}
+                </div>
+            </div>
+        </div>
+    </transition>
+</div>
+<script>
+    window.csrfToken = '{{ csrf_token }}';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/non_editing_teacher_dashboard.js' %}"></script>
+
+{% endblock %}
