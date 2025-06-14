@@ -51,6 +51,18 @@
     letter-spacing: 1.5px;
     color: #37294e;
 }
+.dark-toggle {
+    position: absolute;
+    right: 1.3rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    z-index: 2002;
+}
+.dark-toggle span { pointer-events: none; }
 .menu-overlay {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;

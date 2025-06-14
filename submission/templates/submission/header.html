@@ -5,6 +5,10 @@
     <span :class="{ open: showMenu }"></span>
   </button>
   <span class="ts-header-title">情報工学実験Ⅱ管理システム presented by TSlab</span>
+  <button class="dark-toggle" type="button" @click="toggleDark">
+    <span v-if="isDark">☀</span>
+    <span v-else>🌙</span>
+  </button>
   <transition name="fade">
     <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
       <aside class="menu-panel glass" @click.stop>

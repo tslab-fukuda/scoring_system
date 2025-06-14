@@ -1,0 +1,40 @@
+body.dark-mode {
+    background: #121212;
+    color: #e0e0e0;
+}
+body.dark-mode .ts-header {
+    background: #333;
+    color: #fff;
+}
+body.dark-mode .ts-header-title {
+    color: #fff;
+}
+body.dark-mode .burger-menu span {
+    background: #ccc;
+}
+body.dark-mode .menu-panel.glass {
+    background: rgba(30,30,30,0.95);
+    color: #e0e0e0;
+}
+body.dark-mode .menu-link {
+    color: #e0e0e0;
+}
+body.dark-mode .menu-link:hover:not(.disabled) {
+    background: #444;
+    color: #fff;
+}
+body.dark-mode .menu-overlay {
+    background: rgba(0,0,0,0.5);
+}
+body.dark-mode .ts-footer {
+    background: #222;
+    color: #ccc;
+}
+body.dark-mode .footer-link,
+body.dark-mode .footer-home {
+    color: #bbb;
+}
+body.dark-mode .footer-link:hover,
+body.dark-mode .footer-home:hover {
+    color: #fff;
+}
