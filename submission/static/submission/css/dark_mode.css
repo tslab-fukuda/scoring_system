@@ -1,0 +1,10 @@
+body.dark-mode {
+    background: #121212;
+    color: #e0e0e0;
+}
+body.dark-mode a { color: #8ab4f8; }
+body.dark-mode a:hover { color: #a1cbff; }
+body.dark-mode img,
+body.dark-mode video {
+    filter: invert(1) hue-rotate(180deg);
+}

@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
     <link rel="stylesheet" href="{% static 'submission/css/header.css' %}">
     <link rel="stylesheet" href="{% static 'submission/css/footer.css' %}">
+    <link rel="stylesheet" href="{% static 'submission/css/dark_mode.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -18,6 +19,11 @@
     </div>
     <div id="footer-area">{% include 'submission/footer.html' %}</div>
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script>
+        if (localStorage.getItem('ts-theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
     <script>
         // Djangoのユーザー情報をグローバルJS変数にしてheader.jsで参照
         var USER_NAME = "{{ request.user.get_full_name|default:request.user.username }}";
