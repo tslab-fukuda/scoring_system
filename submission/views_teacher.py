@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from .models import Submission, UserProfile, ExperimentCompletion
+from decimal import Decimal
 from django.db.models import Q
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt
@@ -124,6 +125,16 @@ def get_graded_main_reports(request):
     result = []
     for items in qs:
         up = items.student.userprofile
+        total = (
+            sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
+            if items.score_details else 0
+        )
+        final_value = None
+        if items.final_score is not None:
+            try:
+                final_value = float(items.final_score - (Decimal(total) / Decimal('100')))
+            except Exception:
+                final_value = None
         result.append({
             'id': items.id,
             'experiment_day': up.experiment_day,
@@ -131,10 +142,7 @@ def get_graded_main_reports(request):
             'experiment_number': items.experiment_number,
             'full_name': up.full_name,
             'file': items.file.url if items.file else '',
-            'score': (
-                sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
-                if items.score_details else '0'
-            ),
+            'score': final_value,
             'score_details': items.score_details if items.score_details else ''
         })
     return JsonResponse(result, safe=False)
