@@ -13,6 +13,7 @@ import io
 import json
 import base64
 import fitz  # PyMuPDF
+from decimal import Decimal
 from PIL import Image
 
 @login_required
@@ -123,16 +124,16 @@ def final_grading_form(request, submission_id):
 
     if request.method == 'POST':
         try:
-            final_val = float(request.POST.get('final_value', 0))
-        except ValueError:
-            final_val = 0
-        submission.final_score = final_val + (total_score / 100.0)
+            final_val = Decimal(request.POST.get('final_value', '0'))
+        except Exception:
+            final_val = Decimal('0')
+        submission.final_score = final_val + (Decimal(total_score) / Decimal('100'))
         submission.final_evaluated = True
         submission.save()
         return redirect('/submission/non_editing_teacher_dashboard/')
 
     final_value = (
-        submission.final_score - (total_score / 100.0)
+        float(submission.final_score - (Decimal(total_score) / Decimal('100')))
         if submission.final_score is not None else ''
     )
 
