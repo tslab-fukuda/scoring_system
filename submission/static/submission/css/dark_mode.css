@@ -38,3 +38,30 @@ body.dark-mode .footer-link:hover,
 body.dark-mode .footer-home:hover {
     color: #fff;
 }
+body.dark-mode table,
+body.dark-mode .ts-table {
+    background: #1e1e1e;
+    color: #e0e0e0;
+}
+body.dark-mode th,
+body.dark-mode td,
+body.dark-mode .ts-table th,
+body.dark-mode .ts-table td {
+    border-color: #444;
+}
+body.dark-mode tbody tr,
+body.dark-mode .ts-table tbody tr {
+    background: #1e1e1e;
+}
+body.dark-mode th,
+body.dark-mode .ts-table th {
+    background: #333;
+    color: #fff;
+}
+body.dark-mode .ts-user-table-wrapper,
+body.dark-mode .ts-attendance-wrapper {
+    background: #1e1e1e;
+}
+body.dark-mode tr.clickable-row:hover {
+    background: #333;
+}

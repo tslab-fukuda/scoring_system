@@ -45,7 +45,7 @@ def admin_get_submissions_api(request):
             Submission.objects.filter(
                 report_type='main', graded=False, accepted=False,
                 student_id=student_id, experiment_number=experiment_number
-            ).update(accepted=True)
+            ).update(graded=True,accepted=True)
     
     qs = Submission.objects.filter(report_type='main', graded=False, accepted=False).select_related('student', 'student__userprofile')
     if day:
