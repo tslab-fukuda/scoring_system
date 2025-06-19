@@ -88,11 +88,17 @@ def final_grading_form(request, submission_id):
             return 0
         return sum(d.get('value', 0) * d.get('weight', 1) for d in sub.score_details)
 
-    prep_sub = Submission.objects.filter(
+    prep_subs = Submission.objects.filter(
         student=submission.student,
         experiment_number=submission.experiment_number,
         report_type='prep'
-    ).order_by('-submitted_at').first()
+    )
+
+    main_subs = Submission.objects.filter(
+        student=submission.student,
+        experiment_number=submission.experiment_number,
+        report_type='main'
+    )
 
     # 得点項目マスターを取得
     pre_master = list(
@@ -102,20 +108,24 @@ def final_grading_form(request, submission_id):
         ScoringItem.objects.filter(category='main').order_by('order').values('label', 'weight')
     )
 
-    def attach_values(master, details):
+    def attach_values(master, detail_lists):
         result = []
         for m in master:
             val = 0
-            if details:
-                for d in details:
-                    if d.get('label') == m['label']:
-                        val = d.get('value', 0)
-                        break
+            if detail_lists:
+                for details in detail_lists:
+                    for d in details:
+                        if d.get('label') == m['label']:
+                            val += d.get('value', 0)
+                            break
             result.append({'label': m['label'], 'weight': int(m['weight']), 'value': val})
         return result
 
-    pre_items = attach_values(pre_master, prep_sub.score_details if prep_sub else None)
-    main_items = attach_values(main_master, submission.score_details)
+    pre_details_list = [s.score_details for s in prep_subs if s.score_details]
+    main_details_list = [s.score_details for s in main_subs if s.score_details]
+
+    pre_items = attach_values(pre_master, pre_details_list)
+    main_items = attach_values(main_master, main_details_list)
 
     total_score = (
         sum(i['value'] * i.get('weight', 1) for i in pre_items)
