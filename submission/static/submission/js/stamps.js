@@ -24,6 +24,23 @@ new Vue({
           alert('登録失敗');
         }
       });
+    },
+    deleteStamp(id) {
+      if (!confirm('本当に削除しますか？')) return;
+      fetch(`/submission/delete_stamp_api/${id}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': window.csrfToken
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          this.stamps = this.stamps.filter(s => s.id !== id);
+        } else {
+          alert('削除失敗: ' + (data.message || ''));
+        }
+      });
     }
   }
 });
