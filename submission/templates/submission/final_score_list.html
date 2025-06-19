@@ -27,6 +27,7 @@
                             </select>
                         </div>
                     </th>
+                    {% verbatim %}
                     <th>
                         班番号
                         <div>
@@ -36,7 +37,6 @@
                             </select>
                         </div>
                     </th>
-                    {% verbatim %}
                     <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
                     {% endverbatim %}
                 </tr>
