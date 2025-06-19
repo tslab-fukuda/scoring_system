@@ -11,8 +11,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 import json
 import csv
+import io
+import os
+import zipfile
 from submission.decorators import role_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from collections import Counter
 from django.contrib.auth.models import User, Permission
@@ -483,4 +486,64 @@ def final_score_list_view(request):
         'experiment_numbers': json.dumps(experiment_numbers, ensure_ascii=False),
     }
     return render(request, 'submission/final_score_list.html', context)
+
+
+@role_required('admin')
+def final_score_list_csv(request):
+    """Download final scores as CSV."""
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    students_qs = UserProfile.objects.filter(role='student').select_related('user')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="final_scores.csv"'
+
+    # Add BOM for Excel compatibility
+    response.write('\ufeff')
+    writer = csv.writer(response)
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers
+    writer.writerow(header)
+
+    for up in students_qs:
+        row = [up.full_name, up.student_id, up.experiment_day, up.experiment_group]
+        for ex in experiment_numbers:
+            sub = (
+                Submission.objects.filter(
+                    student=up.user,
+                    experiment_number=ex,
+                    report_type='main',
+                    final_evaluated=True,
+                )
+                .order_by('-submitted_at')
+                .first()
+            )
+            if sub and sub.final_score is not None:
+                row.append(float(sub.final_score))
+            else:
+                row.append('')
+        writer.writerow(row)
+
+    return response
+
+
+@role_required('admin')
+def download_accepted_reports(request):
+    """Download all accepted reports grouped by experiment number as a zip."""
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+
+    memfile = io.BytesIO()
+    with zipfile.ZipFile(memfile, 'w') as zf:
+        for ex in experiment_numbers:
+            submissions = Submission.objects.filter(experiment_number=ex, accepted=True)
+            for sub in submissions:
+                if sub.file and default_storage.exists(sub.file.name):
+                    filename = os.path.basename(sub.file.name)
+                    student_id = getattr(sub.student.userprofile, 'student_id', sub.student.username)
+                    arcname = f"{ex}/{student_id}_{filename}"
+                    with default_storage.open(sub.file.name, 'rb') as f:
+                        zf.writestr(arcname, f.read())
+
+    memfile.seek(0)
+    response = HttpResponse(memfile.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename="accepted_reports.zip"'
+    return response
 
