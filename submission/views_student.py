@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from submission.models import UserProfile, Submission, Schedule
-from django.views.decorators.csrf import csrf_exempt
 import json
 from submission.decorators import role_required
 from django.contrib.auth.decorators import login_required
@@ -11,7 +10,6 @@ from django.utils import timezone
 from django.middleware.csrf import get_token
 import os
 
-@csrf_exempt
 @role_required('student')
 def student_dashboard(request):
     # ユーザ自身の提出物一覧を抽出

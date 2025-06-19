@@ -7,7 +7,6 @@ from submission.models import (
     ScoringItem,
     ExperimentCompletion,
 )
-from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 import json
 import csv
@@ -136,7 +135,6 @@ def get_schedule_api(request):
     ]
     return JsonResponse({'schedule_json': schedule})
 
-@csrf_exempt
 @role_required('admin')
 def add_schedule_api(request):
     if request.method == 'POST':
@@ -153,7 +151,6 @@ def add_schedule_api(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
 
-@csrf_exempt
 @role_required('admin')
 def update_schedule_api(request, schedule_id):
     if request.method == 'POST':
@@ -173,7 +170,6 @@ def update_schedule_api(request, schedule_id):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
 
-@csrf_exempt
 @role_required('admin')
 def delete_schedule_api(request, schedule_id):
     if request.method == 'POST':
@@ -231,7 +227,6 @@ def stamps_view(request):
         'stamps': json.dumps(stamps, ensure_ascii=False)
     })
 
-@csrf_exempt
 @role_required('admin')
 def delete_stamp_api(request, stamp_id):
     if request.method == 'POST':
@@ -245,7 +240,6 @@ def delete_stamp_api(request, stamp_id):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
 
-@csrf_exempt
 @require_POST
 @role_required('admin')
 def accept_submission(request):
@@ -311,7 +305,6 @@ def user_list_view(request):
     return render(request, 'submission/user_list.html', context)
 
 
-@csrf_exempt
 @role_required('admin')
 def update_user_role(request, user_id):
     if request.method == 'POST':
@@ -333,7 +326,6 @@ def update_user_role(request, user_id):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
-@csrf_exempt
 @role_required('admin')
 def update_group_view(request, user_id):
     if request.method == 'POST':
@@ -348,7 +340,6 @@ def update_group_view(request, user_id):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
-@csrf_exempt
 @role_required('admin')
 def update_attendance_permission(request, user_id):
     if request.method == 'POST':
@@ -365,7 +356,6 @@ def update_attendance_permission(request, user_id):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
         
-@csrf_exempt
 @role_required('admin')
 def delete_user_view(request, user_id):
     if request.method == 'POST':
@@ -376,7 +366,6 @@ def delete_user_view(request, user_id):
         except User.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
 
-@csrf_exempt
 @role_required('admin')
 def create_user_view(request):
     if request.method == 'POST':
@@ -406,7 +395,6 @@ def create_user_view(request):
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
-@csrf_exempt
 @role_required('admin')
 def bulk_create_users(request):
     """Create multiple users from uploaded CSV file.
@@ -454,7 +442,6 @@ def bulk_create_users(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
-@csrf_exempt
 @role_required('admin')
 def upload_student_photo(request, student_id):
     """Receive uploaded photo and save to UserProfile"""

@@ -11,7 +11,15 @@ from .models import UserProfile
 class SubmissionForm(forms.ModelForm):
     class Meta:
         model = Submission
-        fields = ['report_type', 'experiment_number', 'file'] 
+        fields = ['report_type', 'experiment_number', 'file']
+
+    def clean_file(self):
+        uploaded = self.cleaned_data.get('file')
+        if uploaded:
+            content_type = uploaded.content_type
+            if content_type != 'application/pdf' or not uploaded.name.lower().endswith('.pdf'):
+                raise ValidationError('PDFファイルのみアップロードできます。')
+        return uploaded
 
 # サインアップフォーム
 class SignUpForm(forms.ModelForm):
