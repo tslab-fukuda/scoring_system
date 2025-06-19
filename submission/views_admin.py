@@ -231,6 +231,20 @@ def stamps_view(request):
     })
 
 @csrf_exempt
+@role_required('admin')
+def delete_stamp_api(request, stamp_id):
+    if request.method == 'POST':
+        try:
+            stamp = Stamp.objects.get(id=stamp_id)
+            stamp.delete()
+            return JsonResponse({'status': 'success'})
+        except Stamp.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'Stampが見つかりません'}, status=404)
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
+
+@csrf_exempt
 @require_POST
 @role_required('admin')
 def accept_submission(request):
