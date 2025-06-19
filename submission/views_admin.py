@@ -19,6 +19,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from collections import Counter
 from django.contrib.auth.models import User, Permission
+from django.utils import timezone
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -269,7 +270,7 @@ def api_student_reports(request):
             "file": items.file.url if items.file else "",
             "experiment_number": items.experiment_number,
             "report_type": '予' if items.report_type == 'prep' else '本' ,
-            "submitted_at": items.submitted_at.strftime('%Y-%m-%d %H:%M'),
+            "submitted_at": timezone.localtime(items.submitted_at).strftime('%Y-%m-%d %H:%M'),
         })
     return JsonResponse({'reports': data,'full_name': full_name})
 
@@ -285,7 +286,10 @@ def user_list_view(request):
             profile = user.userprofile
             role = profile.role
             group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
-            last_login = user.last_login.strftime("%Y-%m-%d %H:%M") if user.last_login else "未ログイン"
+            last_login = (
+                timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
+                if user.last_login else "未ログイン"
+            )
             user_data.append({
                 'id': user.id,
                 'name': profile.full_name,

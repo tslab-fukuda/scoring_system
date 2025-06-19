@@ -12,6 +12,7 @@ from django.core.serializers import serialize
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.decorators import login_required
+from django.utils import timezone
 
 from .models import UserProfile, Submission, Schedule
 from .forms import SubmissionForm, SignUpForm
@@ -81,7 +82,7 @@ def api_user_profile(request):
                 "file": s.file.url if s.file else "",
                 "experiment_number": s.experiment_number,
                 "report_type": '予レポート' if s.report_type == 'prep' else '本レポート',
-                "submitted_at": s.submitted_at.strftime('%Y-%m-%d %H:%M'),
+                "submitted_at": timezone.localtime(s.submitted_at).strftime('%Y-%m-%d %H:%M'),
             }
             for s in submissions
         ]
