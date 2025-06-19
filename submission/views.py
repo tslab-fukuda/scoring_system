@@ -2,23 +2,21 @@ from django.shortcuts import render
 
 # Create your views here.
 import json
-from django.http import HttpResponse
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.auth import login
 from django.shortcuts import redirect
 from django.contrib.auth.models import User
 from django.core.serializers import serialize
-from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import UserProfile, Submission, Schedule
 from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
 from django.http import HttpResponse
-from django.shortcuts import render, redirect
 
 def signup_view(request):
     if request.method == 'POST':
@@ -104,20 +102,18 @@ def api_user_profile(request):
     return JsonResponse(result)
 
 @login_required
-@csrf_exempt
+@require_POST
 def api_change_password(request):
-    if request.method == "POST":
-        import json
-        data = json.loads(request.body)
-        password = data.get("password")
-        if password and len(password) >= 6:
-            user = request.user
-            user.set_password(password)
-            user.save()
-            return JsonResponse({"status": "ok"})
-        else:
-            return JsonResponse({"status": "ng", "message": "パスワードは6文字以上です"})
-    return JsonResponse({"status": "ng", "message": "POSTのみ"})
+    import json
+    data = json.loads(request.body)
+    password = data.get("password")
+    if password and len(password) >= 6:
+        user = request.user
+        user.set_password(password)
+        user.save()
+        return JsonResponse({"status": "ok"})
+    else:
+        return JsonResponse({"status": "ng", "message": "パスワードは6文字以上です"})
 
 @login_required
 def user_profile_view(request):

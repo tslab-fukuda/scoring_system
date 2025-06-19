@@ -9,7 +9,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import AttendanceRecord
 from submission.models import UserProfile, Submission, ScoringItem
@@ -132,7 +131,6 @@ def get_user_info(request, student_id):
         return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
 
 
-@csrf_exempt
 @login_required
 @require_POST
 def register_nfc(request):

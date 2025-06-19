@@ -6,7 +6,6 @@ from .models import Submission, UserProfile, ExperimentCompletion
 from decimal import Decimal
 from django.db.models import Q
 from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
 
 @login_required
 def teacher_dashboard(request):
