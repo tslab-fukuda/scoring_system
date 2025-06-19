@@ -451,3 +451,36 @@ def upload_student_photo(request, student_id):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)
+
+@role_required('admin')
+def final_score_list_view(request):
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    students_qs = UserProfile.objects.filter(role='student').select_related('user')
+    student_data = []
+    for up in students_qs:
+        record = {
+            'name': up.full_name,
+            'student_id': up.student_id,
+            'experiment_day': up.experiment_day,
+            'experiment_group': up.experiment_group,
+        }
+        for ex in experiment_numbers:
+            sub = (
+                Submission.objects.filter(
+                    student=up.user,
+                    experiment_number=ex,
+                    report_type='main',
+                    final_evaluated=True,
+                )
+                .order_by('-submitted_at')
+                .first()
+            )
+            record[ex] = float(sub.final_score) if sub and sub.final_score is not None else ''
+        student_data.append(record)
+    context = {
+        'students_json': json.dumps(student_data, ensure_ascii=False),
+        'students': student_data,
+        'experiment_numbers': json.dumps(experiment_numbers, ensure_ascii=False),
+    }
+    return render(request, 'submission/final_score_list.html', context)
+

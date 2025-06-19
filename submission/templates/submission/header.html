@@ -18,7 +18,7 @@
           </a>
           <template v-if="role === 'admin'">
             <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
-            <li><span class="menu-link disabled"><span class="menu-ico">📝</span> 最終成績一覧</span></li>
+            <li><a href="{% url 'final_score_list' %}" class="menu-link"><span class="menu-ico">📝</span> 最終成績一覧</a></li>
             <li><a href="{% url 'scoring_items' %}" class="menu-link"><span class="menu-ico">✔</span> 採点項目編集</a></li>
             <li><a href="{% url 'stamp_list' %}" class="menu-link"><span class="menu-ico">🔖</span> スタンプ管理</a></li>
           </template>

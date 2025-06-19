@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}最終成績一覧{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="{% static 'submission/css/user_table.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="final-score-table" class="p-4">
+    <h2>最終成績一覧</h2>
+    <div class="table-responsive">
+        <table class="ts-table">
+            <thead>
+                <tr>
+                    <th>名前</th>
+                    <th @click="toggleSort('student_id')" style="cursor:pointer">学生番号</th>
+                    <th>
+                        曜日
+                        <div>
+                            <select v-model="filters.day" class="form-select form-select-sm">
+                                <option value="">全て</option>
+                                <option value="火">火</option>
+                                <option value="木">木</option>
+                            </select>
+                        </div>
+                    </th>
+                    <th>
+                        班番号
+                        <div>
+                            <select v-model="filters.group" class="form-select form-select-sm">
+                                <option value="">全て</option>
+                                <option v-for="n in 20" :key="n" :value="('0'+n).slice(-2)">{{ ('0'+n).slice(-2) }}</option>
+                            </select>
+                        </div>
+                    </th>
+                    {% verbatim %}
+                    <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
+                    {% endverbatim %}
+                </tr>
+            </thead>
+            <tbody>
+            {% verbatim %}
+                <tr v-for="stu in processedStudents" :key="stu.student_id">
+                    <td>{{ stu.name }}</td>
+                    <td>{{ stu.student_id }}</td>
+                    <td>{{ stu.experiment_day }}</td>
+                    <td>{{ stu.experiment_group }}</td>
+                    <td v-for="ex in experimentNumbers" :key="ex">{{ stu[ex] }}</td>
+                </tr>
+            {% endverbatim %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+var STUDENTS_DATA = {{ students_json|safe }};
+var EXPERIMENT_NUMBERS = {{ experiment_numbers|safe }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'submission/js/final_score_table.js' %}"></script>
+{% endblock %}
