@@ -11,6 +11,10 @@
 {% block content %}
 <div id="final-score-table" class="p-4">
     <h2>最終成績一覧</h2>
+    <div class="mb-3">
+        <a href="{% url 'final_score_list_csv' %}" class="btn btn-secondary">CSVダウンロード</a>
+        <a href="{% url 'download_accepted_reports' %}" class="btn btn-secondary">受理済レポート一括ダウンロード</a>
+    </div>
     <div class="table-responsive">
         <table class="ts-table">
             <thead>
