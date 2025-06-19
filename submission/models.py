@@ -2,6 +2,7 @@ from django.db import models
 
 # Create your models here.
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 class Submission(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE)  # 提出者（学生）
@@ -36,7 +37,8 @@ class Submission(models.Model):
     #student_id = models.CharField(max_length=10, blank=True)
 
     def __str__(self):
-        return f"{self.student.username} - {self.submitted_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        local_time = timezone.localtime(self.submitted_at)
+        return f"{self.student.username} - {local_time.strftime('%Y-%m-%d %H:%M:%S')}"
 
 class UserProfile(models.Model):
     ROLE_CHOICES = [

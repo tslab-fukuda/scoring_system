@@ -5,8 +5,9 @@ import json
 from submission.decorators import role_required
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse 
+from django.http import JsonResponse
 import datetime
+from django.utils import timezone
 from django.middleware.csrf import get_token
 import os
 
@@ -30,7 +31,7 @@ def student_dashboard(request):
             "experiment_number": sub.experiment_number,  # 実験番号
             "file_name": sub.file.name.split('/')[-1] if sub.file else "",
             "file_url": sub.file.url if sub.file else "",
-            "submitted_at": sub.submitted_at.strftime('%Y-%m-%d %H:%M'), #提出日
+            "submitted_at": timezone.localtime(sub.submitted_at).strftime('%Y-%m-%d %H:%M'), #提出日
             "status": status,
             "graded_score": (
                 sum(item.get("value", 0) * item.get("weight", 1) for item in sub.score_details)
