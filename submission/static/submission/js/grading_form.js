@@ -32,18 +32,25 @@ new Vue({
         isDrawable() { return this.tool === 'pen' || this.tool === 'eraser' || this.tool === 'highlight'; },
         startDraw(idx, e) {
             if (this.tool === 'stamp') {
+                const canvas = this.$refs['drawCanvas' + idx][0];
                 const rect = e.target.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
                 if (!this.drawData[idx]) this.drawData[idx] = [];
                 if (!this.undoStack[idx]) this.undoStack[idx] = [];
-                this.drawData[idx].push({ tool: 'stamp', text: this.selectedStamp, x, y });
+                this.drawData[idx].push({
+                    tool: 'stamp',
+                    text: this.selectedStamp,
+                    xRatio: x / canvas.width,
+                    yRatio: y / canvas.height
+                });
                 this.redraw(idx);
                 return;
             }
             if (!this.isDrawable()) return;
             this.drawing = true;
             this.currentPage = idx;
+            const canvas = this.$refs['drawCanvas' + idx][0];
             const rect = e.target.getBoundingClientRect();
             this.lastX = e.clientX - rect.left;
             this.lastY = e.clientY - rect.top;
@@ -51,7 +58,14 @@ new Vue({
             if (!this.undoStack[idx]) this.undoStack[idx] = [];
             let width = this.penWidth;
             if (this.tool === 'highlight') width = this.highlightWidth;
-            this.drawData[idx].push({ tool: this.tool, width: width, points: [{ x: this.lastX, y: this.lastY }] });
+            this.drawData[idx].push({
+                tool: this.tool,
+                width: width,
+                points: [{
+                    xRatio: this.lastX / canvas.width,
+                    yRatio: this.lastY / canvas.height
+                }]
+            });
         },
         draw(idx, e) {
             if (this.tool === 'stamp') return;
@@ -80,7 +94,10 @@ new Vue({
             ctx.stroke();
             ctx.globalCompositeOperation = 'source-over';
             this.lastX = x; this.lastY = y;
-            this.drawData[idx][this.drawData[idx].length - 1].points.push({ x, y });
+            this.drawData[idx][this.drawData[idx].length - 1].points.push({
+                xRatio: x / canvas.width,
+                yRatio: y / canvas.height
+            });
         },
         stopDraw(idx) {
             if (this.tool === 'stamp') return;
@@ -94,15 +111,17 @@ new Vue({
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             (this.drawData[idx] || []).forEach(stroke => {
                 if (stroke.tool === 'stamp') {
+                    const x = stroke.xRatio * canvas.width;
+                    const y = stroke.yRatio * canvas.height;
                     ctx.save();
                     ctx.font = '16px sans-serif';
                     const textWidth = ctx.measureText(stroke.text).width;
                     const padding = 4;
                     ctx.strokeStyle = 'red';
                     ctx.lineWidth = 1;
-                    ctx.strokeRect(stroke.x - padding, stroke.y - 16 - padding, textWidth + padding * 2, 16 + padding * 2);
+                    ctx.strokeRect(x - padding, y - 16 - padding, textWidth + padding * 2, 16 + padding * 2);
                     ctx.fillStyle = 'red';
-                    ctx.fillText(stroke.text, stroke.x, stroke.y);
+                    ctx.fillText(stroke.text, x, y);
                     ctx.restore();
                     return;
                 }
@@ -122,8 +141,10 @@ new Vue({
                 ctx.beginPath();
                 for (let i = 0; i < stroke.points.length; i++) {
                     const pt = stroke.points[i];
-                    if (i == 0) ctx.moveTo(pt.x, pt.y);
-                    else ctx.lineTo(pt.x, pt.y);
+                    const x = pt.xRatio * canvas.width;
+                    const y = pt.yRatio * canvas.height;
+                    if (i == 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 }
                 ctx.lineCap = "round";
                 ctx.stroke();
