@@ -85,3 +85,17 @@ body {
     .footer-content { font-size: 0.93em; }
     .footer-home { font-size: 0.93em; }
 }
+
+.f-log{
+    margin: 0.2em auto 0 auto;
+    height: 40px;
+    float: left;
+}
+
+.copylight{
+    grid-area: copylight;
+    font-size: 12px;
+    width: 100%;
+    text-align: center;
+    line-height: 25px;
+}
