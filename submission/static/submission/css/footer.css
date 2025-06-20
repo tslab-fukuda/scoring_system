@@ -15,7 +15,7 @@ body {
 
 /* --- ここから固定フッター --- */
 .ts-footer {
-    background: #383c41;
+    background: #5f6369;
     color: #fff;
     text-align: center;
     padding: 20px 0 10px 0;
@@ -30,8 +30,14 @@ body {
     max-width: 1600px;
     margin: 0 auto;
     text-align: center;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-rows: 30px;
+    grid-template-columns: 160px 1fr 160px;
+    grid-template-areas:
+        "logo login"
+        "logo copylight";
+    /* justify-content: space-between; */
+    justify-content: center;
     align-items: center;
     flex-wrap: wrap;
 }
@@ -46,11 +52,6 @@ body {
 .footer-link:hover {
     color: #a1cbff;
     text-decoration: underline;
-}
-
-.footer-login {
-    margin: 0.2em 0 0.4em 0;
-    font-size: 0.99em;
 }
 
 .footer-user {
@@ -102,18 +103,26 @@ body {
 
 .f-log{
     margin-right: 6px;
-    height: 40px;
+    height: 50px;
 }
 
-.footer-left {
+.footer-log {
+    grid-area: logo;
     padding: 0 10px;
     display: flex;
     align-items: center;
+    float: left;
+}
+
+.footer-login {
+    grid-area: login;
+    margin: 0.2em 0 0.4em 0;
+    font-size: 0.99em;
 }
 
 .copylight{
+    grid-area: copylight;
     font-size: 12px;
     text-align: center;
     line-height: 25px;
-    width: max-content;
 }

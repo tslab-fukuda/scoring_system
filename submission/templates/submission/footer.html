@@ -1,13 +1,19 @@
 <footer class="ts-footer">
     <div class="footer-content">
         {% load static %}
-        <div class="footer-left"><img src="{% static 'submission/main-logo_small.png' %}" alt="ロゴ" class="f-log">高橋研究室</div>
+        <div class="footer-log">
+            <a href="https://new.nu-tf-lab.jp/" target="_blank" style="text-decoration:none; color:inherit;">
+                <img src="{% static 'submission/main-logo_small.png' %}" alt="ロゴ" class="f-log">高橋研究室
+            </a>
+        </div>
         {% if request.user.is_authenticated %}
         <div class="footer-login">
-            あなたは <span class="footer-user">{{ request.user.username }} {{ request.user.get_full_name }}</span> としてログインしています
+            あなたは <span class="footer-user">{{ request.user.username }} {{ request.user.get_full_name }}</span>
+            としてログインしています
             (<form method="post" action="{% url 'logout' %}" style="display:inline;">
                 {% csrf_token %}
-                <button type="submit" class="footer-logout" style="background:none;border:none;padding:0;">ログアウト</button>
+                <button type="submit" class="footer-logout"
+                    style="background:none;border:none;padding:0;">ログアウト</button>
             </form>)
         </div>
         {% endif %}
