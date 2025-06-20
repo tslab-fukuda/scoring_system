@@ -11,11 +11,12 @@
     z-index: 1100;
 }
 .subtitle {
-    display: block;
+    display: inline-block;
+    vertical-align: sub;
     font-size: 70%;
     margin-left: 4px;
     color: #666;
-  }
+}
 .ts-burger-menu {
     position: absolute;
     left: 1.3rem;
