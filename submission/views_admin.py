@@ -451,7 +451,7 @@ def upload_student_photo(request, student_id):
             photo = request.FILES.get('photo')
             if not photo:
                 return JsonResponse({'status': 'error', 'message': 'photo required'}, status=400)
-            filename = f"{profile.student_id}.png"
+            filename = f"{profile.student_id}_{profile.full_name}.png"
             path = default_storage.save(f"student_photos/{filename}", photo)
             profile.photo.name = path
             profile.save()

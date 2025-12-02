@@ -253,9 +253,24 @@ window.app = new Vue({
         },
         openPhotoModal() {
             this.showPhotoModal = true;
-            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-                this.videoStream = stream;
-                this.$refs.video.srcObject = stream;
+
+            // モーダルDOMが描画されてからカメラ起動
+            this.$nextTick(() => {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        console.log("Camera OK", stream);
+                        this.videoStream = stream;
+                        const video = this.$refs.video;
+                        if (video) {
+                            video.srcObject = stream;
+                        } else {
+                            console.error("video ref is null");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Camera ERROR:", err.name, err.message);
+                        alert("カメラ取得に失敗しました: " + err.name);
+                    });
             });
         },
         closePhotoModal() {
@@ -280,14 +295,14 @@ window.app = new Vue({
                     headers: { 'X-CSRFToken': window.csrfToken },
                     body: fd
                 })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        const student = this.students.find(s => s.id === this.selectedStudentId);
-                        if (student) student.photo = data.photo_url;
-                    }
-                    this.closePhotoModal();
-                });
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const student = this.students.find(s => s.id === this.selectedStudentId);
+                            if (student) student.photo = data.photo_url;
+                        }
+                        this.closePhotoModal();
+                    });
             }, 'image/png');
         },
     },

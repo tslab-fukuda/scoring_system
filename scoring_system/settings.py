@@ -26,7 +26,11 @@ SECRET_KEY = 'django-insecure-=4xauwinrc@xeu6i^njyx@mc*i0ciulrn*059(cox4!sr4dqy7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.100.200', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['192.168.100.200', 'localhost', '127.0.0.1','192.168.11.100','133.43.120.168','ceexp.nu-tf-lab.jp']
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://ceexp.nu-tf-lab.jp',
+]
 
 # 05_06　追加
 MEDIA_URL = '/media/'

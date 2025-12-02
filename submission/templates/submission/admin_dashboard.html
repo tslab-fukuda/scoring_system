@@ -96,6 +96,7 @@
     var submissions = [];
     var schedule = [];
     var isAdmin = [{{ is_admin|safe }}];
+    window.csrfToken = '{{ csrf_token }}';
 </script>
 
 <script src="{% static 'submission/js/admin_dashboard.js' %}"></script>
