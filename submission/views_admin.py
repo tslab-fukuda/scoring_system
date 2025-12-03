@@ -19,6 +19,7 @@ from django.views.decorators.http import require_POST
 from collections import Counter
 from django.contrib.auth.models import User, Permission
 from django.utils import timezone
+from urllib.parse import unquote
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -584,7 +585,8 @@ def download_accepted_reports(request):
             submissions = Submission.objects.filter(experiment_number=ex, accepted=True)
             for sub in submissions:
                 if sub.file and default_storage.exists(sub.file.name):
-                    filename = os.path.basename(sub.file.name)
+                    filename_row = os.path.basename(sub.file.name)
+                    filename = unquote(filename_raw)
                     student_id = getattr(sub.student.userprofile, 'student_id', sub.student.username)
                     arcname = f"{ex}/{student_id}_{filename}"
                     with default_storage.open(sub.file.name, 'rb') as f:
