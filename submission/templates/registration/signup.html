@@ -11,7 +11,7 @@
     border: 1px solid #ddd;
     border-radius: 8px;
     font-family: "Segoe UI", sans-serif;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   }
 
   .signup-container h2 {
@@ -30,7 +30,8 @@
     margin-bottom: 6px;
   }
 
-  input, select {
+  input,
+  select {
     width: 100%;
     padding: 10px;
     font-size: 14px;
@@ -38,7 +39,7 @@
     border-radius: 4px;
   }
 
-  button {
+  .signup-container button {
     width: 100%;
     padding: 12px;
     background-color: #1a73e8;
@@ -49,7 +50,7 @@
     cursor: pointer;
   }
 
-  button:hover {
+  .signup-container button:hover {
     background-color: #1669c1;
   }
 
@@ -65,16 +66,16 @@
   <form method="post">
     {% csrf_token %}
     {% for field in form %}
-      <div class="form-group">
-        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}
-        {% if field.help_text %}
-          <small style="color: gray;">{{ field.help_text }}</small>
-        {% endif %}
-        {% for error in field.errors %}
-          <div class="error">{{ error }}</div>
-        {% endfor %}
-      </div>
+    <div class="form-group">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}
+      <small style="color: gray;">{{ field.help_text }}</small>
+      {% endif %}
+      {% for error in field.errors %}
+      <div class="error">{{ error }}</div>
+      {% endfor %}
+    </div>
     {% endfor %}
     <button type="submit">サインアップ</button>
   </form>
