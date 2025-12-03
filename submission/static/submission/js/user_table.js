@@ -3,14 +3,13 @@ new Vue({
     data: {
         users: USERS_DATA.map(user => ({
             ...user,
-            editingRole: false,
-            editingGroup: false,
             can_view_attendance: user.can_view_attendance
         })),
         groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
         )),
         showModal: false,
+        showEditModal: false,
         filters: { role: '', group: '' },
         sortField: '',
         sortAsc: true,
@@ -22,6 +21,15 @@ new Vue({
             student_id: '',
             experiment_day: '火',
             experiment_group: '01'
+        },
+        editUser: {
+            id: null,
+            full_name: '',
+            email: '',
+            student_id: '',
+            experiment_day: '火',
+            experiment_group: '01',
+            role: 'student'
         }
     },
     computed: {
@@ -48,63 +56,18 @@ new Vue({
                 this.sortAsc = true;
             }
         },
-        enableEdit(user, field) {
-            if (field === 'role') {
-                user.editingRole = true;
-                this.$nextTick(() => {
-                    $(`#roles-${user.id}`).select2().val(user.role).trigger('change');
-                });
-            }
-            if (field === 'group') {
-                user.editingGroup = true;
-                this.$nextTick(() => {
-                    $(`#groups-${user.id}`).select2().val(user.group).trigger('change');
-                });
-            }
-        },
-        saveRole(user) {
-            const role = $(`#roles-${user.id}`).val();
-            user.editingRole = false;
-            $(`#roles-${user.id}`).select2('destroy');
-            fetch(`/users/update_role/${user.id}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
-                },
-                body: JSON.stringify({ role })
-            }).then(res => {
-                if (res.ok) {
-                    user.role = role;
-                }
-            });
-        },
-        saveGroup(user) {
-            const group = $(`#groups-${user.id}`).val();
-            const [day, grp] = group.split('-');
-            fetch(`/users/update_group/${user.id}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
-                },
-                body: JSON.stringify({ experiment_day: day, experiment_group: grp })
-            }).then(res => {
-                if (res.ok) {
-                    user.group = group;
-                    user.editingGroup = false;
-                }
-            });
-        },
-        cancelEdit(user, field) {
-            if (field === 'role') {
-                user.editingRole = false;
-                $(`#roles-${user.id}`).select2('destroy');
-            }
-            if (field === 'group') {
-                user.editingGroup = false;
-                $(`#groups-${user.id}`).select2('destroy');
-            }
+        openEditModal(user) {
+            const [experiment_day, experiment_group] = (user.group || '火-01').split('-');
+            this.editUser = {
+                id: user.id,
+                full_name: user.name,
+                email: user.email,
+                student_id: user.student_id,
+                experiment_day,
+                experiment_group,
+                role: user.role
+            };
+            this.showEditModal = true;
         },
         toggleAttendance(user) {
             fetch(`/users/update_permission/${user.id}/`, {
@@ -139,6 +102,49 @@ new Vue({
             .catch(err => {
                 console.error(err);
                 alert('通信エラーが発生しました');
+            });
+        },
+        updateUser() {
+            if (!this.editUser.id) return;
+
+            fetch(`/users/update/${this.editUser.id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN,
+                },
+                body: JSON.stringify({
+                    full_name: this.editUser.full_name,
+                    email: this.editUser.email,
+                    student_id: this.editUser.student_id,
+                    experiment_day: this.editUser.experiment_day,
+                    experiment_group: this.editUser.experiment_group,
+                    role: this.editUser.role,
+                }),
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const idx = this.users.findIndex(u => u.id === this.editUser.id);
+                    if (idx !== -1) {
+                        const updatedGroup = `${this.editUser.experiment_day}-${this.editUser.experiment_group}`;
+                        this.users.splice(idx, 1, {
+                            ...this.users[idx],
+                            name: this.editUser.full_name,
+                            email: this.editUser.email,
+                            student_id: this.editUser.student_id,
+                            group: updatedGroup,
+                            role: this.editUser.role,
+                        });
+                    }
+                    this.showEditModal = false;
+                    alert('ユーザー情報を更新しました');
+                } else {
+                    alert('更新に失敗しました: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error('通信エラー', err);
             });
         },
         createUser() {
