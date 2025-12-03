@@ -396,6 +396,49 @@ def create_user_view(request):
 
 
 @role_required('admin')
+def update_user_view(request, user_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+
+        user = User.objects.get(id=user_id)
+        profile = user.userprofile
+
+        new_email = data.get('email', '').strip()
+        if not new_email:
+            return JsonResponse({'status': 'error', 'message': 'メールアドレスは必須です。'}, status=400)
+
+        # 他ユーザとの重複チェック
+        if User.objects.filter(username=new_email).exclude(id=user_id).exists():
+            return JsonResponse({'status': 'error', 'message': 'このメールアドレスは既に使用されています。'}, status=400)
+
+        new_role = data.get('role', profile.role)
+
+        user.username = new_email
+        user.email = new_email
+        user.is_superuser = new_role == 'admin'
+        user.is_staff = new_role in ['teacher', 'admin']
+
+        profile.email = new_email
+        profile.full_name = data.get('full_name', profile.full_name)
+        profile.student_id = data.get('student_id', profile.student_id)
+        profile.experiment_day = data.get('experiment_day', profile.experiment_day)
+        profile.experiment_group = data.get('experiment_group', profile.experiment_group)
+        profile.role = new_role
+
+        profile.save()
+        user.save()
+
+        return JsonResponse({'status': 'success'})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@role_required('admin')
 def bulk_create_users(request):
     """Create multiple users from uploaded CSV file.
 
