@@ -91,6 +91,7 @@ def admin_get_accepted_submissions_api(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    student_id = request.GET.get('student_id')
     qs = Submission.objects.filter(report_type='main', accepted=True).select_related('student', 'student__userprofile')
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
@@ -98,6 +99,8 @@ def admin_get_accepted_submissions_api(request):
         qs = qs.filter(student__userprofile__experiment_group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    if student_id:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id)
 
     submissions = []
     for sub in qs:
@@ -119,6 +122,26 @@ def admin_get_accepted_submissions_api(request):
             "score_details": sub.score_details if sub.score_details else "",
         })
     return JsonResponse({'submissions': submissions})
+
+
+@role_required('admin')
+@require_POST
+def admin_return_submission(request):
+    try:
+        data = json.loads(request.body)
+        submission_id = data.get('submission_id')
+        sub = Submission.objects.get(id=submission_id, report_type='main')
+        # ファイル物理削除
+        if sub.file and os.path.isfile(sub.file.path):
+            os.remove(sub.file.path)
+        if sub.graded_file and os.path.isfile(sub.graded_file.path):
+            os.remove(sub.graded_file.path)
+        sub.delete()
+        return JsonResponse({'status': 'success'})
+    except Submission.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '提出物が見つかりません'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 def get_students_api(request):
     student_id = request.GET.get('student_id')

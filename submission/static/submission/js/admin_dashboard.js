@@ -124,6 +124,7 @@ window.app = new Vue({
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
             let url = '/submission/admin_accepted_submissions_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -131,6 +132,26 @@ window.app = new Vue({
                 .then(data => {
                     this.items = data.submissions;
                 });
+        },
+        returnSubmission(submissionId) {
+            if (!confirm('このレポートを返却（削除）しますか？')) return;
+            fetch('/submission/admin_return_submission/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({ submission_id: submissionId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    this.items = this.items.filter(s => s.id !== submissionId);
+                } else {
+                    alert(data.message || '返却に失敗しました');
+                }
+            })
+            .catch(() => alert('返却に失敗しました'));
         },
         formatMonthDay(dateStr) {
             if (!dateStr) return '';

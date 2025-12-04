@@ -69,6 +69,45 @@
         </div>
     </div>
 
+    <div class="row mb-2" v-if="tab === 'accepted'">
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_day">
+                <option value="">曜日</option>
+                <option value="火">火</option>
+                <option value="木">木</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            {% verbatim %}
+            <select class="form-select" v-model="filter.experiment_group">
+                <option value="">班番号</option>
+                <option v-for="n in 20" :value="n < 10 ? '0'+n : n">{{ n < 10 ? '0' +n : n }}</option>
+            </select>
+            {% endverbatim %}
+        </div>
+        <div class="col-auto">
+            <select class="form-select" v-model="filter.experiment_number">
+                <option value="">実験番号</option>
+                <option value="I-01,02">I-01,02</option>
+                <option value="I-03,04">I-03,04</option>
+                <option value="I-05,06">I-05,06</option>
+                <option value="I-07,08">I-07,08</option>
+                <option value="I-09,10">I-09,10</option>
+                <option value="II-01,02">II-01,02</option>
+                <option value="II-03,04">II-03,04</option>
+                <option value="II-05,06">II-05,06</option>
+                <option value="II-07,08">II-07,08</option>
+                <option value="II-09,10">II-09,10</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="text" class="form-control" v-model="filter.student_id" placeholder="学籍番号">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-primary" @click="fetchAccepted()">検索</button>
+        </div>
+    </div>
+
     <div class="row mb-2" v-if="tab === 'summary' || tab === 'student'">
         <div class="col-auto">
             <input type="text" class="form-control" v-model="filter.student_id" placeholder="学籍番号">
