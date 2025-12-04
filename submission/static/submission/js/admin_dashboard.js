@@ -57,6 +57,9 @@ window.app = new Vue({
                 // 「main」のみをitemsに
                 this.fetchList();
             }
+            if (val === 'accepted') {
+                this.fetchAccepted();
+            }
             if (val === 'summary' && !this.summaryLoaded) {
                 this.fetchSummary();
             }
@@ -114,6 +117,19 @@ window.app = new Vue({
                 .then(r => r.json())
                 .then(data => {
                     this.schedule = data.schedule_json;
+                });
+        },
+        fetchAccepted() {
+            const params = [];
+            if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
+            if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
+            if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            let url = '/submission/admin_accepted_submissions_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    this.items = data.submissions;
                 });
         },
         formatMonthDay(dateStr) {

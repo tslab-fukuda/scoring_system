@@ -16,6 +16,10 @@
                 @click.prevent="tab = 'submissions'">提出物確認</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'accepted' }" href="#"
+                @click.prevent="tab = 'accepted'; fetchAccepted();">回収済レポート</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'summary' }" href="#"
                 @click.prevent="tab = 'summary'; ">提出状況一覧</a>
         </li>
@@ -77,6 +81,9 @@
     <transition name="fade" mode="out-in">
         <div v-if="tab === 'submissions'" key="submissions">
             {% include 'submission/grading_list.html' %}
+        </div>
+        <div v-else-if="tab === 'accepted'" key="accepted">
+            {% include 'submission/accepted_list_admin.html' %}
         </div>
         <div v-else-if="tab === 'summary'" key="summary">
             {% include 'submission/dashboard_summary.html' %}

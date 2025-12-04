@@ -85,6 +85,41 @@ def admin_get_submissions_api(request):
         })
     return JsonResponse({'submissions': submissions})
 
+
+@role_required('admin')
+def admin_get_accepted_submissions_api(request):
+    day = request.GET.get('experiment_day')
+    group = request.GET.get('experiment_group')
+    exp_no = request.GET.get('experiment_number')
+    qs = Submission.objects.filter(report_type='main', accepted=True).select_related('student', 'student__userprofile')
+    if day:
+        qs = qs.filter(student__userprofile__experiment_day=day)
+    if group:
+        qs = qs.filter(student__userprofile__experiment_group=group)
+    if exp_no:
+        qs = qs.filter(experiment_number=exp_no)
+
+    submissions = []
+    for sub in qs:
+        up = getattr(sub.student, 'userprofile', None)
+        submissions.append({
+            'id': sub.id,
+            'experiment_day': up.experiment_day if up else "",
+            'experiment_group': up.experiment_group if up else "",
+            'experiment_number': sub.experiment_number,
+            'full_name': up.full_name if up else "",
+            'student_id': up.student_id if up else "",
+            'file': sub.file.url if sub.file else "",
+            'file_url': sub.file.url if sub.file else "",
+            'file_name': sub.file.name.split('/')[-1] if sub.file else "",
+            'score': (
+                sum(detail.get("value", 0) * detail.get("weight", 1) for detail in sub.score_details)
+                if sub.score_details else "0"
+            ),
+            "score_details": sub.score_details if sub.score_details else "",
+        })
+    return JsonResponse({'submissions': submissions})
+
 def get_students_api(request):
     student_id = request.GET.get('student_id')
     qs = UserProfile.objects.filter(role='student')

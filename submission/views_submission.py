@@ -13,6 +13,16 @@ def submit_assignment(request):
     if request.method == "POST" and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = SubmissionForm(request.POST, request.FILES)
         if form.is_valid():
+            exp_no = form.cleaned_data.get('experiment_number')
+            # 既に回収（accepted）された同一実験番号がある場合は提出不可
+            already_accepted = Submission.objects.filter(
+                student=request.user,
+                experiment_number=exp_no,
+                accepted=True
+            ).exists()
+            if already_accepted:
+                return JsonResponse({'status': 'error', 'message': '既に回収されたデータがあります'}, status=400)
+
             submission = form.save(commit=False)
             submission.student = request.user
             submission.date = request.POST.get('date')
