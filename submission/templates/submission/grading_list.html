@@ -35,8 +35,13 @@
             <td>{{ row.full_name }}</td>
             <td class="filename-td">
                 <a :href="(USER_ROLE === 'non-editing teacher' ? '/submission/final_grading_form/' : '/submission/grading_form/') + row.id + '/'" @click.stop>
-                    {{ row.file ? row.file.split('/').pop().slice(0, 20) + (row.file.split('/').pop().length > 20 ?
-                    '...' : '') : '' }}
+                    {{
+                        (
+                            (row.file_name || (row.file || '').split('/').pop()) || ''
+                        ).length > 20
+                            ? (row.file_name || (row.file || '').split('/').pop()).slice(0, 20) + '...'
+                            : (row.file_name || (row.file || '').split('/').pop())
+                    }}
                 </a>
             </td>
             <td>{{ row.score == null ? '' : row.score }}</td>
