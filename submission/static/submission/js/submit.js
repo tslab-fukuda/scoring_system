@@ -9,6 +9,17 @@ new Vue({
     pdfNumPages: 0,
     reportType: "",        // ← 追加
     experimentNumber: "",  // ← 追加
+    cmapUrl: "",
+    standardFontUrl: "",
+  },
+  mounted() {
+    // grading_form.js と同様にフォント/CMAPを指定して文字化けを防ぐ
+    const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/";
+    const STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/";
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    this.cmapUrl = CMAP_URL;
+    this.standardFontUrl = STANDARD_FONT_URL;
   },
   methods: {
     onFileChange(e) {
@@ -32,8 +43,13 @@ new Vue({
       // PDF.js worker設定
       if (window.pdfjsLib) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        pdfjsLib.getDocument(this.pdfUrl).promise.then(pdf => {
+          "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        pdfjsLib.getDocument({
+          url: this.pdfUrl,
+          cMapUrl: this.cmapUrl,
+          cMapPacked: true,
+          standardFontDataUrl: this.standardFontUrl,
+        }).promise.then(pdf => {
           this.pdfNumPages = pdf.numPages;
           // containerを空に
           const container = document.getElementById('pdf-preview-container');
@@ -75,15 +91,24 @@ new Vue({
     },
     onConfirm() {
       // DB登録
+      if (!this.formData) {
+        alert("PDFファイルを選択してください。");
+        return;
+      }
       this.formData.set('report_type', this.reportType);
       this.formData.set('experiment_number', this.experimentNumber);
       for (let pair of this.formData.entries()) {
         console.log(pair[0] + ': ' + pair[1]);
       }
-      fetch("", {
+      const submitUrl = window.location.pathname + window.location.search;
+      fetch(submitUrl, {
         method: "POST",
         body: this.formData,
-        headers: { "X-Requested-With": "XMLHttpRequest" }
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": this.csrfToken,
+        },
+        credentials: "same-origin",
       }).then(res => res.json())
         .then(data => {
           if (data.status === 'success') {

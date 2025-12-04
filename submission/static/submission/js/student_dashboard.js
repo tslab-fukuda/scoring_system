@@ -7,6 +7,11 @@ new Vue({
         experimentDay: EXPERIMENT_DAY,
         showScoreModal: false,
         scoreDetails: [],
+        showEditModal: false,
+        editingSubmission: null,
+        editReportType: "",
+        editExperimentNumber: "",
+        editError: "",
     },
     computed: {
         filteredScheduleList() {
@@ -58,6 +63,53 @@ new Vue({
                 } else {
                     alert(data.message || "削除に失敗しました");
                 }
+            });
+        },
+        openEditModal(item) {
+            this.editingSubmission = item;
+            this.editReportType = item.report_type;
+            this.editExperimentNumber = item.experiment_number;
+            this.editError = "";
+            this.showEditModal = true;
+        },
+        closeEditModal() {
+            this.showEditModal = false;
+            this.editingSubmission = null;
+            this.editReportType = "";
+            this.editExperimentNumber = "";
+            this.editError = "";
+        },
+        submitEdit() {
+            if (!this.editReportType || !this.editExperimentNumber) {
+                this.editError = "すべての項目を選択してください";
+                return;
+            }
+            if (!this.editingSubmission) return;
+
+            const body = `submission_id=${encodeURIComponent(this.editingSubmission.id)}&report_type=${encodeURIComponent(this.editReportType)}&experiment_number=${encodeURIComponent(this.editExperimentNumber)}`;
+            fetch('/users/update_submission/', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": CSRF_TOKEN,
+                },
+                body
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success" && data.data) {
+                    this.statusList = this.statusList.map(s =>
+                        s.id === data.data.id
+                            ? { ...s, report_type: data.data.report_type, experiment_number: data.data.experiment_number }
+                            : s
+                    );
+                    this.closeEditModal();
+                } else {
+                    this.editError = data.message || "更新に失敗しました";
+                }
+            })
+            .catch(() => {
+                this.editError = "更新に失敗しました";
             });
         }
     }

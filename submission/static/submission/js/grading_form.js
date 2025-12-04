@@ -175,38 +175,38 @@ new Vue({
                     "X-CSRFToken": window.csrfToken,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     drawImages: images,
                     scoreItems: this.scoreItems
-                 })
+                })
             })
-            .then(res => res.json())
-            .then(res => {
-                if (res.status === "ok" && res.new_file_url) {
-                    const iframe = document.getElementById("pdf-preview-iframe");
-                    if (iframe) {
-                        iframe.src = res.new_file_url;
-                        const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
-                        modal.show();
-                        document.getElementById("pdf-preview-close-btn").onclick = function () {
+                .then(res => res.json())
+                .then(res => {
+                    if (res.status === "ok" && res.new_file_url) {
+                        const iframe = document.getElementById("pdf-preview-iframe");
+                        if (iframe) {
+                            iframe.src = res.new_file_url;
+                            const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
+                            modal.show();
+                            document.getElementById("pdf-preview-close-btn").onclick = function () {
+                                let redirectUrl = "/submission/teacher_dashboard/";
+                                console.log(window.userRole);
+                                if (window.userRole === "admin") {
+                                    redirectUrl = "/submission/admin_dashboard/";
+                                }
+                                window.location.href = redirectUrl;
+                            };
+                        } else {
                             let redirectUrl = "/submission/teacher_dashboard/";
                             console.log(window.userRole);
                             if (window.userRole === "admin") {
                                 redirectUrl = "/submission/admin_dashboard/";
                             }
+                            window.open(res.new_file_url, "_blank");
                             window.location.href = redirectUrl;
-                        };
-                    } else {
-                        let redirectUrl = "/submission/teacher_dashboard/";
-                        console.log(window.userRole);
-                        if (window.userRole === "admin") {
-                            redirectUrl = "/submission/admin_dashboard/";
                         }
-                        window.open(res.new_file_url, "_blank");
-                        window.location.href = redirectUrl;
                     }
-                }
-            });
+                });
         },
         loadPage(pdf, i) {
             if (this.loadedPages[i]) return;
@@ -224,34 +224,45 @@ new Vue({
         }
     },
     mounted() {
+        const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/";
+        const STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/";
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js";
         // 採点項目の動的反映
         fetch("/submission/scoring_items_api/")
-          .then(res => res.json())
-          .then(items => {
-            if (window.reportType === "prep") {
-                this.scoreItems = (items.pre || []).map(lab => ({
-                    label: lab.label,
-                    weight: lab.weight,
-                    value: 0,
-                    key: lab.label
-                  }));
-            } else {
-                this.scoreItems = (items.main || []).map(lab => ({
-                    label: lab.label,
-                    weight: lab.weight,
-                    value: 0,
-                    key: lab.label
-                  }));
-            }
-            const saved = window.initialScoreDetails || [];
-            this.scoreItems.forEach(item => {
-                const found = saved.find(s => s.label === item.label);
-                if (found) item.value = found.value || 0;
+            .then(res => res.json())
+            .then(items => {
+                if (window.reportType === "prep") {
+                    this.scoreItems = (items.pre || []).map(lab => ({
+                        label: lab.label,
+                        weight: lab.weight,
+                        value: 0,
+                        key: lab.label
+                    }));
+                } else {
+                    this.scoreItems = (items.main || []).map(lab => ({
+                        label: lab.label,
+                        weight: lab.weight,
+                        value: 0,
+                        key: lab.label
+                    }));
+                }
+                const saved = window.initialScoreDetails || [];
+                this.scoreItems.forEach(item => {
+                    const found = saved.find(s => s.label === item.label);
+                    if (found) item.value = found.value || 0;
+                });
             });
-          });
         // PDF.js lazy load
         const url = window.pdf_url;
-        pdfjsLib.getDocument(url).promise.then(pdf => {
+        const loadingTask = pdfjsLib.getDocument({
+            url: url,
+            cMapUrl: CMAP_URL,
+            cMapPacked: true,
+            standardFontDataUrl: STANDARD_FONT_URL,
+        });
+
+        loadingTask.promise.then(pdf => {
             this.pdfPages = Array(pdf.numPages).fill(0);
             // まず先頭3ページだけ
             for (let i = 0; i < Math.min(3, pdf.numPages); i++) this.loadPage(pdf, i);
@@ -277,11 +288,11 @@ new Vue({
 
         // スタンプ取得
         fetch("/submission/stamps_api/")
-          .then(res => res.json())
-          .then(data => {
-            this.stamps = data.stamps || [];
-            if (this.stamps.length) this.selectedStamp = this.stamps[0].text;
-          });
+            .then(res => res.json())
+            .then(data => {
+                this.stamps = data.stamps || [];
+                if (this.stamps.length) this.selectedStamp = this.stamps[0].text;
+            });
 
         // キーボードショートカット
         window.addEventListener('keydown', (e) => {

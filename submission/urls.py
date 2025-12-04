@@ -49,6 +49,7 @@ urlpatterns = [
     # 学生系
     path('student_dashboard/', views_student.student_dashboard, name='student_dashboard'),
     path('delete_submission/', views_student.delete_submission, name='delete_submission'),
+    path('update_submission/', views_student.update_submission, name='update_submission'),
     path('submit/', views_submission.submit_assignment, name='submit_assignment'),
     path('complete/', views_submission.complete_submission, name='submission_complete'),
 
@@ -67,4 +68,3 @@ urlpatterns = [
     path('mark_experiment_complete/', views_teacher.mark_experiment_complete, name='mark_experiment_complete'),
     path('teacher_students_api/', views_teacher.teacher_students_api, name='teacher_students_api'),
 ]
-

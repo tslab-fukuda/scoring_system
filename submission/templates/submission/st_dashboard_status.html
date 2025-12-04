@@ -15,7 +15,7 @@
         </thead>
         <tbody v-if="!statusList || statusList.length === 0">
             <tr>
-                <td colspan="6" class="text-center text-muted">提出物はまだありません</td>
+                <td colspan="7" class="text-center text-muted">提出物はまだありません</td>
             </tr>
         </tbody>
         <tbody v-else>
@@ -46,8 +46,11 @@
                 </td>
                 <!-- 編集 -->
                 <td>
-                    <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)"
-                        v-if="item.status !== '添削済' && item.status !== '受取済'">削除</button>
+                    <div class="d-flex gap-2" v-if="item.status !== '添削済' && item.status !== '受取済'">
+                        <button class="btn btn-primary btn-sm" @click="openEditModal(item)">修正</button>
+                        <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)">削除</button>
+                    </div>
+                    <span v-else class="text-muted">-</span>
                 </td>
             </tr>
         </tbody>
@@ -81,6 +84,49 @@
                         </tbody>
                     </table>
                     <div v-else>{{ scoreDetail }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提出内容修正のポップアップ -->
+    <div v-if="showEditModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">提出内容を修正</h5>
+                    <button type="button" class="btn-close" @click="closeEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit-report-type" class="form-label">レポート種別</label>
+                        <select v-model="editReportType" id="edit-report-type" class="form-control" required>
+                            <option value="">選択してください</option>
+                            <option value="main">本レポート</option>
+                            <option value="prep">予習レポート</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-experiment-number" class="form-label">実験番号</label>
+                        <select v-model="editExperimentNumber" id="edit-experiment-number" class="form-control" required>
+                            <option value="">選択してください</option>
+                            <option value="I-01,02">I-01,02</option>
+                            <option value="I-03,04">I-03,04</option>
+                            <option value="I-05,06">I-05,06</option>
+                            <option value="I-07,08">I-07,08</option>
+                            <option value="I-09,10">I-09,10</option>
+                            <option value="II-01,02">II-01,02</option>
+                            <option value="II-03,04">II-03,04</option>
+                            <option value="II-05,06">II-05,06</option>
+                            <option value="II-07,08">II-07,08</option>
+                            <option value="II-09,10">II-09,10</option>
+                        </select>
+                    </div>
+                    <div v-if="editError" class="text-danger small">{{ editError }}</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeEditModal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" @click="submitEdit">保存</button>
                 </div>
             </div>
         </div>

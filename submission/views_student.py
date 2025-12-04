@@ -83,3 +83,45 @@ def delete_submission(request):
         return JsonResponse({"status": "error", "message": "提出物が見つかりません"}, status=404)
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def update_submission(request):
+    """
+    まだ添削・受取が済んでいない提出物のレポート種別と実験番号を更新する。
+    """
+    submission_id = request.POST.get("submission_id")
+    report_type = request.POST.get("report_type")
+    experiment_number = request.POST.get("experiment_number")
+
+    valid_report_types = [choice[0] for choice in Submission.REPORT_TYPE_CHOICES]
+    valid_experiment_numbers = [choice[0] for choice in Submission.EXPERIMENT_NUMBER_CHOICES]
+
+    if report_type not in valid_report_types:
+        return JsonResponse({"status": "error", "message": "レポート種別が不正です"}, status=400)
+    if experiment_number not in valid_experiment_numbers:
+        return JsonResponse({"status": "error", "message": "実験番号が不正です"}, status=400)
+
+    try:
+        sub = Submission.objects.get(id=submission_id, student=request.user)
+        if sub.graded or sub.accepted:
+            return JsonResponse({"status": "error", "message": "添削または受取済みの提出は編集できません"}, status=400)
+
+        sub.report_type = report_type
+        sub.experiment_number = experiment_number
+        sub.save(update_fields=["report_type", "experiment_number"])
+
+        return JsonResponse({
+            "status": "success",
+            "data": {
+                "id": sub.id,
+                "report_type": sub.report_type,
+                "experiment_number": sub.experiment_number,
+                "report_type_label": sub.get_report_type_display(),
+            }
+        })
+    except Submission.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "提出物が見つかりません"}, status=404)
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
