@@ -1,3 +1,6 @@
+:root {
+    --ts-header-height: 64px;
+}
 .ts-header {
     /* width: 100%; */
     background: #5f6369;
@@ -5,7 +8,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 54px;
+    min-height: var(--ts-header-height);
+    height: var(--ts-header-height);
     padding: 0 1.5rem;
     position: relative;
     z-index: 1100;
@@ -142,7 +146,8 @@
 }
 @media (max-width: 600px) {
     .ts-header {
-        min-height: 42px;
+        min-height: 54px;
+        height: 54px;
         padding: 0 0.2rem;
         font-size: 0.95rem;
     }

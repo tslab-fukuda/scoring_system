@@ -54,8 +54,8 @@
                 </div>
             </div>
         </div>
-        <!-- 採点ボタン：右上に固定 -->
-        <div style="position: fixed; right: 16px; top: 16px; z-index:10000;">
+        <!-- 採点ボタン：右上に固定（ヘッダー下に配置） -->
+        <div class="score-toggle-wrapper">
             <button class="btn btn-primary score-toggle-btn" @click="toggleScorePanel" :disabled="showScore">採点</button>
         </div>
         <!-- サイドモーダルは重ねて表示 -->

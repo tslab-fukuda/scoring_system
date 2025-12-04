@@ -6,9 +6,9 @@
 .score-modal-float {
     position: fixed;
     right: 0;
-    top: 0;
+    top: var(--ts-header-height, 60px);
     width: 360px;
-    height: 100vh;
+    height: calc(100vh - var(--ts-header-height, 60px));
     background: #fff;
     border-left: 2px solid #1976d2;
     z-index: 11000;
@@ -31,11 +31,16 @@
 }
 
 .score-toggle-btn {
-    position: fixed;
-    right: 16px;
-    top: 16px;
-    z-index: 10000;
     border-radius: 20px 0 0 20px;
+}
+.score-toggle-wrapper {
+    position: fixed;
+    left: auto;
+    right: 16px;
+    top: calc(var(--ts-header-height, 60px) + 12px);
+    z-index: 1200;
+    display: flex;
+    justify-content: flex-end;
 }
 
 [v-cloak] {
