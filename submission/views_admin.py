@@ -73,7 +73,9 @@ def admin_get_submissions_api(request):
             'experiment_group': up.experiment_group if up else "",
             'experiment_number': sub.experiment_number,
             'full_name': up.full_name if up else "",
-            'file': sub.file.url if sub.file else "",  # ここはteacherと同じkey
+            'file': sub.file.url if sub.file else "",  # 既存互換
+            'file_url': sub.file.url if sub.file else "",
+            'file_name': sub.file.name.split('/')[-1] if sub.file else "",
             'score': (
                 sum(detail.get("value", 0) * detail.get("weight", 1) for detail in sub.score_details)
                 if sub.score_details else "0"
@@ -596,4 +598,3 @@ def download_accepted_reports(request):
     response = HttpResponse(memfile.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = 'attachment; filename="accepted_reports.zip"'
     return response
-

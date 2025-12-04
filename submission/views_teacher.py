@@ -39,6 +39,8 @@ def get_ungraded_submissions(request):
             'experiment_number': items.experiment_number,
             'full_name': up.full_name,
             'file': items.file.url if items.file else '',
+            'file_url': items.file.url if items.file else '',
+            'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                 sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
                 if items.score_details else "0"
@@ -69,6 +71,8 @@ def get_graded_submissions(request):
             'experiment_number': items.experiment_number,
             'full_name': items.student.userprofile.full_name,
             'file': items.file.url if items.file else '',
+            'file_url': items.file.url if items.file else '',
+            'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                     sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
                     if items.score_details else "0"
@@ -100,6 +104,8 @@ def get_ungraded_main_reports(request):
             'experiment_number': items.experiment_number,
             'full_name': up.full_name,
             'file': items.file.url if items.file else '',
+            'file_url': items.file.url if items.file else '',
+            'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                 sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
                 if items.score_details else '0'
@@ -141,6 +147,8 @@ def get_graded_main_reports(request):
             'experiment_number': items.experiment_number,
             'full_name': up.full_name,
             'file': items.file.url if items.file else '',
+            'file_url': items.file.url if items.file else '',
+            'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': final_value,
             'score_details': items.score_details if items.score_details else ''
         })
