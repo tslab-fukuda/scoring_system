@@ -13,6 +13,7 @@ class Submission(models.Model):
     experiment_group = models.CharField(max_length=2, blank=True)  
     score_details = models.JSONField(null=True, blank=True)  # 添削結果
     graded_file = models.FileField(upload_to='graded_submissions/', null=True, blank=True, verbose_name='添削ファイル')  # 添削PDF等
+    final_comment = models.TextField(null=True, blank=True, verbose_name='最終コメント')
     REPORT_TYPE_CHOICES = [
         ('main', '本レポート'),
         ('prep', '予習レポート'),

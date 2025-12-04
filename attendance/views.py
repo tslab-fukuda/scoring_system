@@ -118,7 +118,9 @@ def get_user_info(request, student_id):
     if not request.user.has_perm('attendance.change_attendancerecord'):
         return HttpResponseForbidden()
     try:
-        profile = UserProfile.objects.get(student_id=student_id)
+        profile = UserProfile.objects.filter(student_id=student_id).first()
+        if not profile:
+            return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
         data = {
             'student_id': profile.student_id,
             'full_name': profile.full_name,
@@ -127,8 +129,8 @@ def get_user_info(request, student_id):
             'nfc_id': profile.nfc_id or ''
         }
         return JsonResponse({'status': 'success', 'user': data})
-    except UserProfile.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
 @login_required

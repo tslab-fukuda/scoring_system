@@ -65,6 +65,10 @@
             <input type="text" class="form-control" value="{{ total_score }}" readonly>
           </div>
           <div class="mb-3">
+            <label class="form-label">コメント</label>
+            <textarea name="final_comment" class="form-control" rows="3" placeholder="コメントを入力してください">{{ final_comment }}</textarea>
+          </div>
+          <div class="mb-3">
             <label class="form-label">最終評価 (0~100)</label>
             <input type="number" name="final_value" min="0" max="100" step="0.1" class="form-control"
               value="{{ final_value }}">

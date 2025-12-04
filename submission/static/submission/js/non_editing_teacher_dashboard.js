@@ -37,6 +37,8 @@ new Vue({
         completeMap: {}, // { [student_id]: { [exp]: true/false } }
         scoreDetail: "",
         showScoreModal: false,
+        scoreSummary: { pre_total: null, main_total: null, final_total: null, final_comment: "" },
+        hasScoreSummary: false,
     },
     computed: {
         currentTabComponent() {
@@ -64,6 +66,13 @@ new Vue({
         },
         showScoreDetail(item) {
             this.scoreDetail = item.score_details || "詳細情報なし";
+            this.scoreSummary = {
+                pre_total: item.pre_total ?? null,
+                main_total: item.main_total ?? null,
+                final_total: item.final_total ?? null,
+                final_comment: item.final_comment || ""
+            };
+            this.hasScoreSummary = !!(this.scoreSummary.pre_total || this.scoreSummary.main_total || this.scoreSummary.final_total || this.scoreSummary.final_comment);
             this.showScoreModal = true;
         },
 

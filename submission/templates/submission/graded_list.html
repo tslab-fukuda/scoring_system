@@ -52,6 +52,12 @@
                     <button type="button" class="btn-close" @click="showScoreModal=false"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-3">
+                        <div>予習レポート合計: {{ (scoreSummary.pre_total !== null && scoreSummary.pre_total !== undefined) ? scoreSummary.pre_total : '-' }}</div>
+                        <div>本レポート合計: {{ (scoreSummary.main_total !== null && scoreSummary.main_total !== undefined) ? scoreSummary.main_total : '-' }}</div>
+                        <div>最終評価合計: {{ (scoreSummary.final_total !== null && scoreSummary.final_total !== undefined) ? scoreSummary.final_total : '-' }}</div>
+                        <div>コメント: <span v-text="scoreSummary.final_comment || '-'"></span></div>
+                    </div>
                     <table v-if="Array.isArray(scoreDetail)" class="table table-bordered mb-0">
                         <thead>
                             <tr>
@@ -70,7 +76,7 @@
                             </tr>
                         </tbody>
                     </table>
-                    <div v-else>{{ scoreDetail }}</div>
+                    <div v-else-if="!hasScoreSummary">{{ scoreDetail }}</div>
                 </div>
             </div>
         </div>

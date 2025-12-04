@@ -139,6 +139,7 @@ def final_grading_form(request, submission_id):
             final_val = Decimal('0')
         submission.final_score = final_val + (Decimal(total_score) / Decimal('100'))
         submission.final_evaluated = True
+        submission.final_comment = request.POST.get('final_comment', '').strip()
         submission.save()
         return redirect('/submission/non_editing_teacher_dashboard/')
 
@@ -153,4 +154,5 @@ def final_grading_form(request, submission_id):
         'final_value': final_value,
         'pre_items': pre_items,
         'main_items': main_items,
+        'final_comment': submission.final_comment or '',
     })

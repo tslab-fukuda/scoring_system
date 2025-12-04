@@ -130,10 +130,16 @@ def get_graded_main_reports(request):
     result = []
     for items in qs:
         up = items.student.userprofile
-        total = (
-            sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
-            if items.score_details else 0
+        pre_total = 0
+        pre_subs = Submission.objects.filter(
+            student=items.student,
+            experiment_number=items.experiment_number,
+            report_type='prep',
+            score_details__isnull=False
         )
+        for p in pre_subs:
+            pre_total += sum(detail.get('value', 0) * detail.get('weight', 1) for detail in p.score_details)
+        total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details) if items.score_details else 0
         final_value = None
         if items.final_score is not None:
             try:
@@ -150,7 +156,11 @@ def get_graded_main_reports(request):
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': final_value,
-            'score_details': items.score_details if items.score_details else ''
+            'score_details': items.score_details if items.score_details else '',
+            'pre_total': pre_total,
+            'main_total': total,
+            'final_total': float(items.final_score) if items.final_score is not None else None,
+            'final_comment': items.final_comment or "",
         })
     return JsonResponse(result, safe=False)
 
