@@ -282,7 +282,10 @@ def user_list_view(request):
         try:
             profile = user.userprofile
             role = profile.role
-            group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
+            if profile.experiment_day and profile.experiment_group:
+                group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
+            else:
+                group = ""
             last_login = (
                 timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
                 if user.last_login else "未ログイン"

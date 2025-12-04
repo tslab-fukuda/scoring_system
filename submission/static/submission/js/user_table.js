@@ -57,7 +57,11 @@ new Vue({
             }
         },
         openEditModal(user) {
-            const [experiment_day, experiment_group] = (user.group || '火-01').split('-');
+            let experiment_day = '';
+            let experiment_group = '';
+            if (user.group && user.group.includes('-')) {
+                [experiment_day, experiment_group] = user.group.split('-');
+            }
             this.editUser = {
                 id: user.id,
                 full_name: user.name,
@@ -118,7 +122,7 @@ new Vue({
                     email: this.editUser.email,
                     student_id: this.editUser.student_id,
                     experiment_day: this.editUser.experiment_day,
-                    experiment_group: this.editUser.experiment_group,
+                    experiment_group: this.editUser.experiment_group || "",
                     role: this.editUser.role,
                 }),
             })
@@ -127,7 +131,9 @@ new Vue({
                 if (data.status === 'success') {
                     const idx = this.users.findIndex(u => u.id === this.editUser.id);
                     if (idx !== -1) {
-                        const updatedGroup = `${this.editUser.experiment_day}-${this.editUser.experiment_group}`;
+                        const updatedGroup = (this.editUser.experiment_day && this.editUser.experiment_group)
+                            ? `${this.editUser.experiment_day}-${this.editUser.experiment_group}`
+                            : "";
                         this.users.splice(idx, 1, {
                             ...this.users[idx],
                             name: this.editUser.full_name,
