@@ -6,6 +6,9 @@ from submission.models import (
     Stamp,
     ScoringItem,
     ExperimentCompletion,
+    Course,
+    CourseOffering,
+    Enrollment,
 )
 from django.core.files.storage import default_storage
 import json
@@ -20,6 +23,7 @@ from collections import Counter
 from django.contrib.auth.models import User, Permission
 from django.utils import timezone
 from urllib.parse import unquote
+from django.views.decorators.csrf import csrf_exempt
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -29,6 +33,11 @@ def admin_dashboard(request):
     return render(request, 'submission/admin_dashboard.html', {
         'is_admin': 'true' if is_admin else 'false',
     })
+
+
+@role_required('admin')
+def course_management(request):
+    return render(request, 'submission/course_management.html', {})
 
 @role_required('admin')
 def admin_get_submissions_api(request):
@@ -142,6 +151,161 @@ def admin_return_submission(request):
         return JsonResponse({'status': 'error', 'message': '提出物が見つかりません'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+# ---------------------------
+# Course / Offering / Enrollment API
+# ---------------------------
+@role_required('admin')
+def admin_course_data_api(request):
+    courses = list(Course.objects.all().values('id', 'name', 'code'))
+    offerings = []
+    for off in CourseOffering.objects.select_related('course'):
+        offerings.append({
+            'id': off.id,
+            'course_id': off.course_id,
+            'course_code': off.course.code,
+            'course_name': off.course.name,
+            'year': off.year,
+        })
+    enrollments = []
+    for enr in Enrollment.objects.select_related('user', 'course_offering', 'course_offering__course'):
+        up = getattr(enr.user, 'userprofile', None)
+        enrollments.append({
+            'id': enr.id,
+            'user_id': enr.user_id,
+            'full_name': up.full_name if up else enr.user.username,
+            'student_id': up.student_id if up else '',
+            'email': enr.user.email,
+            'course_offering_id': enr.course_offering_id,
+            'course_code': enr.course_offering.course.code,
+            'course_name': enr.course_offering.course.name,
+            'year': enr.course_offering.year,
+            'role': enr.role,
+            'experiment_day': enr.experiment_day,
+            'experiment_group': enr.experiment_group,
+        })
+    users = []
+    for u in User.objects.all():
+        up = getattr(u, 'userprofile', None)
+        users.append({
+            'id': u.id,
+            'full_name': up.full_name if up else u.username,
+            'student_id': up.student_id if up else '',
+            'email': u.email,
+        })
+    return JsonResponse({
+        'courses': courses,
+        'offerings': offerings,
+        'enrollments': enrollments,
+        'users': users,
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_add_course(request):
+    data = json.loads(request.body)
+    name = data.get('name')
+    code = data.get('code')
+    if not name or not code:
+        return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
+    course, created = Course.objects.get_or_create(code=code, defaults={'name': name})
+    if not created:
+        return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
+    return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code}})
+
+
+@role_required('admin')
+@require_POST
+def admin_delete_course(request, course_id):
+    try:
+        Course.objects.get(id=course_id).delete()
+        return JsonResponse({'status': 'success'})
+    except Course.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+
+@role_required('admin')
+@require_POST
+def admin_add_offering(request):
+    data = json.loads(request.body)
+    course_id = data.get('course_id')
+    year = data.get('year')
+    if not course_id or not year:
+        return JsonResponse({'status': 'error', 'message': 'course_id and year are required'}, status=400)
+    try:
+        course = Course.objects.get(id=course_id)
+    except Course.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'course not found'}, status=404)
+    off, created = CourseOffering.objects.get_or_create(course=course, year=year)
+    if not created:
+        return JsonResponse({'status': 'error', 'message': 'offering already exists'}, status=400)
+    return JsonResponse({'status': 'success', 'offering': {
+        'id': off.id, 'course_id': course.id, 'course_code': course.code, 'course_name': course.name, 'year': off.year
+    }})
+
+
+@role_required('admin')
+@require_POST
+def admin_delete_offering(request, offering_id):
+    try:
+        CourseOffering.objects.get(id=offering_id).delete()
+        return JsonResponse({'status': 'success'})
+    except CourseOffering.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+
+@role_required('admin')
+@require_POST
+def admin_add_enrollment(request):
+    data = json.loads(request.body)
+    user_id = data.get('user_id')
+    offering_id = data.get('offering_id')
+    role = data.get('role')
+    exp_day = data.get('experiment_day', '')
+    exp_group = data.get('experiment_group', '')
+    if not (user_id and offering_id and role):
+        return JsonResponse({'status': 'error', 'message': 'user_id, offering_id, role are required'}, status=400)
+    try:
+        user = User.objects.get(id=user_id)
+        offering = CourseOffering.objects.get(id=offering_id)
+        enr, created = Enrollment.objects.get_or_create(
+            user=user, course_offering=offering, role=role,
+            defaults={'experiment_day': exp_day, 'experiment_group': exp_group}
+        )
+        if not created:
+            return JsonResponse({'status': 'error', 'message': 'already enrolled'}, status=400)
+        return JsonResponse({'status': 'success', 'enrollment': {
+            'id': enr.id,
+            'user_id': user.id,
+            'full_name': getattr(user, 'userprofile', None).full_name if hasattr(user, 'userprofile') else user.username,
+            'student_id': getattr(user, 'userprofile', None).student_id if hasattr(user, 'userprofile') else '',
+            'email': user.email,
+            'course_offering_id': offering.id,
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+            'role': enr.role,
+            'experiment_day': enr.experiment_day,
+            'experiment_group': enr.experiment_group,
+        }})
+    except User.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'user not found'}, status=404)
+    except CourseOffering.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@role_required('admin')
+@require_POST
+def admin_delete_enrollment(request, enrollment_id):
+    try:
+        Enrollment.objects.get(id=enrollment_id).delete()
+        return JsonResponse({'status': 'success'})
+    except Enrollment.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
 
 def get_students_api(request):
     student_id = request.GET.get('student_id')
@@ -335,6 +499,18 @@ def user_list_view(request):
     if not request.user.is_staff:
         return render(request, 'submission/permission_denied.html')
 
+    offerings_qs = CourseOffering.objects.select_related('course')
+    offerings_data = [
+        {
+            'id': o.id,
+            'course_id': o.course_id,
+            'course_code': o.course.code,
+            'course_name': o.course.name,
+            'year': o.year
+        }
+        for o in offerings_qs
+    ]
+
     user_data = []
     for user in User.objects.all():
         try:
@@ -363,7 +539,8 @@ def user_list_view(request):
 
     context = {
             'users': user_data,
-            'users_json': json.dumps(user_data, ensure_ascii=False)
+            'users_json': json.dumps(user_data, ensure_ascii=False),
+            'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
         }
 
     return render(request, 'submission/user_list.html', context)
@@ -516,6 +693,14 @@ def bulk_create_users(request):
     if not csv_file:
         return JsonResponse({'status': 'error', 'message': 'CSVファイルが必要です'}, status=400)
 
+    offering_id = request.POST.get('offering_id')
+    offering = None
+    if offering_id:
+        try:
+            offering = CourseOffering.objects.get(id=offering_id)
+        except CourseOffering.DoesNotExist:
+            return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=400)
+
     created = 0
     skipped = 0
     try:
@@ -534,7 +719,7 @@ def bulk_create_users(request):
                 email=email,
                 password=row.get('学生番号', '')
             )
-            UserProfile.objects.create(
+            profile = UserProfile.objects.create(
                 user=user,
                 full_name=row.get('名前', ''),
                 email=email,
@@ -543,6 +728,16 @@ def bulk_create_users(request):
                 experiment_group=row.get('班番号', ''),
                 role='student'
             )
+            if offering:
+                Enrollment.objects.get_or_create(
+                    user=user,
+                    course_offering=offering,
+                    role='student',
+                    defaults={
+                        'experiment_day': profile.experiment_day,
+                        'experiment_group': profile.experiment_group,
+                    }
+                )
             created += 1
         return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped})
     except Exception as e:

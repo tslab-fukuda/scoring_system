@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}科目/年度管理{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+{% endblock %}
+
+{% block content %}
+<div id="course-management" class="container mt-4">
+  <h2 class="mb-4">科目/年度管理</h2>
+
+  <div class="row">
+    <div class="col-md-4">
+      <h5>Course</h5>
+      <form @submit.prevent="addCourse" class="mb-3">
+        <div class="mb-2">
+          <label class="form-label">科目名</label>
+          <input type="text" v-model="courseForm.name" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">科目コード</label>
+          <input type="text" v-model="courseForm.code" class="form-control" required>
+        </div>
+        <button class="btn btn-primary w-100">追加</button>
+      </form>
+      <table class="table table-sm table-bordered">
+        <thead><tr><th>コード</th><th>科目名</th><th>削除</th></tr></thead>
+        <tbody>
+          {% verbatim %}
+          <tr v-for="c in courses" :key="c.id">
+            <td>{{ c.code }}</td>
+            <td>{{ c.name }}</td>
+            <td><button class="btn btn-sm btn-outline-danger" @click="deleteCourse(c.id)">削除</button></td>
+          </tr>
+          {% endverbatim %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-md-4">
+      <h5>CourseOffering (年度)</h5>
+      <form @submit.prevent="addOffering" class="mb-3">
+        <div class="mb-2">
+          <label class="form-label">科目</label>
+          <select v-model="offeringForm.course_id" class="form-select" required>
+            <option value="">選択</option>
+            {% verbatim %}
+            <option v-for="c in courses" :value="c.id">{{ c.code }} - {{ c.name }}</option>
+            {% endverbatim %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">年度</label>
+          <input type="number" v-model.number="offeringForm.year" class="form-control" required>
+        </div>
+        <button class="btn btn-primary w-100">追加</button>
+      </form>
+      <table class="table table-sm table-bordered">
+        <thead><tr><th>科目</th><th>年度</th><th>削除</th></tr></thead>
+        <tbody>
+          {% verbatim %}
+          <tr v-for="o in offerings" :key="o.id">
+            <td>{{ o.course_code }}</td>
+            <td>{{ o.year }}</td>
+            <td><button class="btn btn-sm btn-outline-danger" @click="deleteOffering(o.id)">削除</button></td>
+          </tr>
+          {% endverbatim %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-md-4">
+      <h5>Enrollment（受講/担当紐付け）</h5>
+      <form @submit.prevent="addEnrollment" class="mb-3">
+        <div class="mb-2">
+          <label class="form-label">ユーザ</label>
+          <select v-model="enrollmentForm.user_id" class="form-select" required>
+            <option value="">選択</option>
+            {% verbatim %}
+            <option v-for="u in users" :value="u.id">{{ u.full_name }} ({{ u.student_id || u.email }})</option>
+            {% endverbatim %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">科目/年度</label>
+          <select v-model="enrollmentForm.offering_id" class="form-select" required>
+            <option value="">選択</option>
+            {% verbatim %}
+            <option v-for="o in offerings" :value="o.id">{{ o.course_code }} ({{ o.year }})</option>
+            {% endverbatim %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">ロール</label>
+          <select v-model="enrollmentForm.role" class="form-select" required>
+            <option value="student">student</option>
+            <option value="teacher">teacher</option>
+            <option value="non-editing teacher">non-editing teacher</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">曜日</label>
+          <select v-model="enrollmentForm.experiment_day" class="form-select">
+            <option value="">-</option>
+            <option value="火">火</option>
+            <option value="木">木</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">班</label>
+          <select v-model="enrollmentForm.experiment_group" class="form-select">
+            <option value="">-</option>
+            {% verbatim %}
+            <option v-for="n in 20" :value="('0'+n).slice(-2)">{{ ('0'+n).slice(-2) }}</option>
+            {% endverbatim %}
+          </select>
+        </div>
+        <button class="btn btn-primary w-100">追加</button>
+      </form>
+      <table class="table table-sm table-bordered">
+        <thead><tr><th>ユーザ</th><th>科目/年度</th><th>ロール</th><th>曜/班</th><th>削除</th></tr></thead>
+        <tbody>
+          {% verbatim %}
+          <tr v-for="e in enrollments" :key="e.id">
+            <td>{{ e.full_name }}<div class="text-muted small">{{ e.student_id }}</div></td>
+            <td>{{ e.course_code }} ({{ e.year }})</td>
+            <td>{{ e.role }}</td>
+            <td>{{ e.experiment_day || '-' }}/{{ e.experiment_group || '-' }}</td>
+            <td><button class="btn btn-sm btn-outline-danger" @click="deleteEnrollment(e.id)">削除</button></td>
+          </tr>
+          {% endverbatim %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+  window.csrfToken = '{{ csrf_token }}';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/course_management.js' %}"></script>
+{% endblock %}

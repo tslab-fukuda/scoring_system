@@ -99,3 +99,42 @@ class ExperimentCompletion(models.Model):
     completed = models.BooleanField(default=False)
     class Meta:
         unique_together = ('student', 'experiment_number')
+
+
+class Course(models.Model):
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class CourseOffering(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='offerings')
+    year = models.IntegerField()
+
+    class Meta:
+        unique_together = ('course', 'year')
+
+    def __str__(self):
+        return f"{self.course.code} ({self.year})"
+
+
+class Enrollment(models.Model):
+    ROLE_CHOICES = [
+        ('student', 'student'),
+        ('teacher', 'teacher'),
+        ('non-editing teacher', 'non-editing teacher'),
+        ('admin', 'admin'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    course_offering = models.ForeignKey(CourseOffering, on_delete=models.CASCADE, related_name='enrollments')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    experiment_day = models.CharField(max_length=2, blank=True)
+    experiment_group = models.CharField(max_length=2, blank=True)
+
+    class Meta:
+        unique_together = ('user', 'course_offering', 'role')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.course_offering} ({self.role})"

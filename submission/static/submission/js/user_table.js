@@ -8,6 +8,10 @@ new Vue({
         groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
         )),
+        offerings: OFFERINGS || [],
+        bulkCourseId: "",
+        bulkYear: "",
+        bulkOfferingId: "",
         showModal: false,
         showEditModal: false,
         filters: { role: '', group: '' },
@@ -45,6 +49,18 @@ new Vue({
                 });
             }
             return list;
+        },
+        courseOptions() {
+            const seen = {};
+            return this.offerings.filter(o => {
+                if (seen[o.course_id]) return false;
+                seen[o.course_id] = true;
+                return true;
+            });
+        },
+        yearOptions() {
+            const years = new Set(this.offerings.map(o => o.year));
+            return Array.from(years).sort();
         }
     },
     methods: {
@@ -192,8 +208,16 @@ new Vue({
         uploadCsv(event) {
             const file = event.target.files[0];
             if (!file) return;
+            this.resolveBulkOffering();
+            if (!this.bulkOfferingId) {
+                if (this.bulkCourseId || this.bulkYear) {
+                    alert("科目と年度の組み合わせが一致する開講情報がありません");
+                    return;
+                }
+            }
             const formData = new FormData();
             formData.append('file', file);
+            if (this.bulkOfferingId) formData.append('offering_id', this.bulkOfferingId);
             fetch('/users/bulk_create/', {
                 method: 'POST',
                 headers: {
@@ -213,6 +237,14 @@ new Vue({
             .catch(err => {
                 console.error('通信エラー', err);
             });
+        },
+        resolveBulkOffering() {
+            if (!this.bulkCourseId || !this.bulkYear) {
+                this.bulkOfferingId = "";
+                return;
+            }
+            const found = this.offerings.find(o => String(o.course_id) === String(this.bulkCourseId) && String(o.year) === String(this.bulkYear));
+            this.bulkOfferingId = found ? found.id : "";
         }
     }
 });
