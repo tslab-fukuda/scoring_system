@@ -170,6 +170,11 @@ new Vue({
             });
         },
         createUser() {
+            this.resolveBulkOffering();
+            if (!this.bulkOfferingId) {
+                alert("科目と年度を選択してください");
+                return;
+            }
             if (this.newUser.password !== this.newUser.password2) {
                 alert("パスワードが一致しません");
                 return;
@@ -187,6 +192,7 @@ new Vue({
                     student_id: this.newUser.student_id,
                     experiment_day: this.newUser.experiment_day,
                     experiment_group: this.newUser.experiment_group,
+                    offering_id: this.bulkOfferingId,
                 }),
             })
             .then(response => response.json())
@@ -210,10 +216,8 @@ new Vue({
             if (!file) return;
             this.resolveBulkOffering();
             if (!this.bulkOfferingId) {
-                if (this.bulkCourseId || this.bulkYear) {
-                    alert("科目と年度の組み合わせが一致する開講情報がありません");
-                    return;
-                }
+                alert("科目と年度を選択してください");
+                return;
             }
             const formData = new FormData();
             formData.append('file', file);

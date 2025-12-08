@@ -617,6 +617,14 @@ def create_user_view(request):
             if User.objects.filter(username=data['email']).exists():
                 return JsonResponse({'status': 'error', 'message': 'このメールアドレスは既に登録されています。'}, status=400)
 
+            offering_id = data.get('offering_id')
+            if not offering_id:
+                return JsonResponse({'status': 'error', 'message': 'offering_id is required'}, status=400)
+            try:
+                offering = CourseOffering.objects.get(id=offering_id)
+            except CourseOffering.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=400)
+
             user = User.objects.create_user(
                 username=data['email'],
                 email=data['email'],
@@ -630,6 +638,15 @@ def create_user_view(request):
                 experiment_day=data['experiment_day'],
                 experiment_group=data['experiment_group'],
                 role='student'
+            )
+            Enrollment.objects.get_or_create(
+                user=user,
+                course_offering=offering,
+                role='student',
+                defaults={
+                    'experiment_day': profile.experiment_day,
+                    'experiment_group': profile.experiment_group,
+                }
             )
             return JsonResponse({'status': 'success'})
         except Exception as e:
