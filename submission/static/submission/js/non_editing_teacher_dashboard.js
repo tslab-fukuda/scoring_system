@@ -20,12 +20,16 @@ Vue.component('graded-list', {
     template: '#graded-list-template'
 });
 
+const offeringContext = window.teacherOfferings || { offerings: [], defaultOfferingId: null };
+
 new Vue({
     el: '#teacher-dashboard',
     data: {
         tab: 'grading',
-        filter: { experiment_day: '', experiment_group: '', experiment_number: '' },
+        filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
         items: [],
+        offerings: offeringContext.offerings || [],
+        selectedOfferingId: offeringContext.defaultOfferingId || null,
         // ▼実験終了記録タブ用
         students: [],
         showStudentModal: false,
@@ -48,11 +52,36 @@ new Vue({
         }
     },
     methods: {
+        ensureOfferingSelected() {
+            if (this.selectedOfferingId || !this.offerings.length) return;
+            const sorted = [...this.offerings].sort((a, b) => (b.year - a.year) || (b.id - a.id));
+            const latest = sorted[0];
+            this.selectedOfferingId = latest ? Number(latest.id) : null;
+        },
+        refreshCurrentTab() {
+            if (this.tab === 'experiment_record') {
+                this.fetchStudents();
+            } else {
+                this.fetchList();
+            }
+        },
+        selectOffering(id) {
+            const numericId = Number(id);
+            if (this.selectedOfferingId === numericId) return;
+            this.selectedOfferingId = numericId;
+            this.refreshCurrentTab();
+        },
         fetchList() {
+            this.ensureOfferingSelected();
+            if (!this.selectedOfferingId) {
+                this.items = [];
+                return;
+            }
             let url = this.tab === 'grading'
                 ? '/submission/get_ungraded_main_reports/'
                 : '/submission/get_graded_main_reports/';
             const params = [];
+            params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
@@ -78,7 +107,13 @@ new Vue({
 
         // ▼実験終了記録タブ用
         fetchStudents() {
+            this.ensureOfferingSelected();
+            if (!this.selectedOfferingId) {
+                this.students = [];
+                return;
+            }
             let params = [];
+            params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
@@ -99,13 +134,20 @@ new Vue({
         },
         toggleExperimentComplete(student_id, experiment_number) {
             console.log('toggleExperimentComplete')
+            const body = new URLSearchParams({
+                student_id,
+                experiment_number
+            });
+            if (this.selectedOfferingId) {
+                body.append('offering_id', this.selectedOfferingId);
+            }
             fetch("/submission/mark_experiment_complete/", {
                 method: "POST",
                 headers: {
                     "X-CSRFToken": window.csrfToken,
                     "Content-Type": "application/x-www-form-urlencoded"
                 },
-                body: `student_id=${student_id}&experiment_number=${experiment_number}`
+                body: body.toString()
             })
             .then(res => res.json())
             .then(res => {
@@ -120,15 +162,11 @@ new Vue({
     },
     watch: {
         tab(newTab) {
-            if (newTab === 'grading' || newTab === 'graded') {
-                this.fetchList();
-            }
-            if (newTab === 'experiment_record') {
-                this.fetchStudents();
-            }
+            this.refreshCurrentTab();
         }
     },
     mounted() {
-        this.fetchList();
+        this.ensureOfferingSelected();
+        this.refreshCurrentTab();
     }
 });

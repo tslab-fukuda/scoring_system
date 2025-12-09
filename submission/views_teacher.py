@@ -1,28 +1,109 @@
+import json
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
-from .models import Submission, UserProfile, ExperimentCompletion
 from decimal import Decimal
-from django.db.models import Q
-from django.contrib.auth.models import User
 
-@login_required
+from submission.decorators import role_required
+from .models import (
+    CourseOffering,
+    Enrollment,
+    ExperimentCompletion,
+    Submission,
+    UserProfile,
+)
+
+TEACHER_ROLES = ['teacher', 'non-editing teacher']
+
+
+def _get_accessible_offerings(user):
+    if not hasattr(user, "userprofile"):
+        return CourseOffering.objects.none()
+    if user.userprofile.role == "admin":
+        return CourseOffering.objects.select_related('course')
+    course_ids = (
+        Enrollment.objects
+        .filter(user=user, role__in=TEACHER_ROLES)
+        .values_list('course_offering__course_id', flat=True)
+        .distinct()
+    )
+    return (
+        CourseOffering.objects
+        .filter(course_id__in=course_ids)
+        .select_related('course')
+        .distinct()
+    )
+
+
+def _resolve_offering(user, offering_id):
+    offerings = list(_get_accessible_offerings(user))
+    if not offerings:
+        return None, offerings, None
+    allowed_ids = {off.id for off in offerings}
+    selected_id = None
+    if offering_id:
+        try:
+            candidate = int(offering_id)
+        except (TypeError, ValueError):
+            candidate = None
+        if candidate and candidate not in allowed_ids:
+            return None, offerings, JsonResponse(
+                {'status': 'error', 'message': '対象の科目/年度にはアクセスできません'},
+                status=403
+            )
+        selected_id = candidate
+    if not selected_id:
+        latest = max(offerings, key=lambda o: (o.year, o.id))
+        selected_id = latest.id
+    return selected_id, offerings, None
+
+
+def _dashboard_context(user):
+    default_offering_id, offerings, _ = _resolve_offering(user, None)
+    offerings_data = [
+        {
+            'id': off.id,
+            'course_code': off.course.code,
+            'course_name': off.course.name,
+            'year': off.year,
+        }
+        for off in offerings
+    ]
+    return {
+        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+        'default_offering_id': default_offering_id,
+    }
+
+
+@role_required('teacher', 'non-editing teacher', 'admin')
 def teacher_dashboard(request):
-    return render(request, 'submission/teacher_dashboard.html')
+    context = _dashboard_context(request.user)
+    return render(request, 'submission/teacher_dashboard.html', context)
 
-@login_required
+
+@role_required('teacher', 'non-editing teacher', 'admin')
 def non_editing_teacher_dashboard(request):
-    return render(request, 'submission/non_editing_teacher_dashboard.html')
+    context = _dashboard_context(request.user)
+    return render(request, 'submission/non_editing_teacher_dashboard.html', context)
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 def get_ungraded_submissions(request):
     # サーチ条件
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(graded=False, report_type='prep')
-    qs = qs.select_related('student', 'student__userprofile')
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse([], safe=False)
+    qs = Submission.objects.filter(
+        graded=False,
+        report_type='prep',
+        student__enrollment__course_offering_id=offering_id,
+        student__enrollment__role='student',
+    )
+    qs = qs.select_related('student', 'student__userprofile').distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -49,13 +130,23 @@ def get_ungraded_submissions(request):
         })
     return JsonResponse(result, safe=False)
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 def get_graded_submissions(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(graded=True, report_type='prep')
-    qs = qs.select_related('student', 'student__userprofile')
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse([], safe=False)
+    qs = Submission.objects.filter(
+        graded=True,
+        report_type='prep',
+        student__enrollment__course_offering_id=offering_id,
+        student__enrollment__role='student',
+    )
+    qs = qs.select_related('student', 'student__userprofile').distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -81,13 +172,24 @@ def get_graded_submissions(request):
         })
     return JsonResponse(result, safe=False)
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 def get_ungraded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(accepted=True, final_evaluated=False, report_type='main')
-    qs = qs.select_related('student', 'student__userprofile')
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse([], safe=False)
+    qs = Submission.objects.filter(
+        accepted=True,
+        final_evaluated=False,
+        report_type='main',
+        student__enrollment__course_offering_id=offering_id,
+        student__enrollment__role='student',
+    )
+    qs = qs.select_related('student', 'student__userprofile').distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -114,13 +216,24 @@ def get_ungraded_main_reports(request):
         })
     return JsonResponse(result, safe=False)
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 def get_graded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    qs = Submission.objects.filter(accepted=True, final_evaluated=True, report_type='main')
-    qs = qs.select_related('student', 'student__userprofile')
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse([], safe=False)
+    qs = Submission.objects.filter(
+        accepted=True,
+        final_evaluated=True,
+        report_type='main',
+        student__enrollment__course_offering_id=offering_id,
+        student__enrollment__role='student',
+    )
+    qs = qs.select_related('student', 'student__userprofile').distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -164,13 +277,18 @@ def get_graded_main_reports(request):
         })
     return JsonResponse(result, safe=False)
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 @require_POST
 def mark_experiment_complete(request):
     student_id = request.POST.get('student_id')
     experiment_number = request.POST.get('experiment_number')
     user_profile = UserProfile.objects.get(pk=student_id)
     user = user_profile.user
+    accessible_offering_ids = list(_get_accessible_offerings(request.user).values_list('id', flat=True))
+    if not accessible_offering_ids:
+        return JsonResponse({'status': 'error', 'message': 'アクセスできる科目/年度がありません'}, status=403)
+    if not Enrollment.objects.filter(user=user, role='student', course_offering_id__in=accessible_offering_ids).exists():
+        return JsonResponse({'status': 'error', 'message': '対象学生にアクセスできません'}, status=403)
     ec, created = ExperimentCompletion.objects.get_or_create(
         student=user, experiment_number=experiment_number
     )
@@ -178,12 +296,21 @@ def mark_experiment_complete(request):
     ec.save()
     return JsonResponse({'status': 'ok'})
 
-@login_required
+@role_required('teacher', 'non-editing teacher', 'admin')
 def teacher_students_api(request):
     students = []
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
-    qs = UserProfile.objects.filter(role='student')
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse({'students': students})
+    student_ids = Enrollment.objects.filter(
+        role='student',
+        course_offering_id=offering_id,
+    ).values_list('user_id', flat=True)
+    qs = UserProfile.objects.filter(role='student', user_id__in=student_ids)
     if day:
         qs = qs.filter(experiment_day=day)
     if group:

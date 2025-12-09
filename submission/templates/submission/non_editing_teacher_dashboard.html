@@ -13,18 +13,29 @@
 
 <div id="teacher-dashboard" class="container mt-4">
     <h2 class="mb-4">教師ダッシュボード</h2>
+    {% verbatim %}
+    <div class="step-arrow mb-3">
+        <button v-for="off in offerings" :key="off.id"
+                class="step-arrow-btn"
+                :class="{ active: Number(selectedOfferingId) === Number(off.id) }"
+                @click.prevent="selectOffering(off.id)">
+            {{ off.year }}
+        </button>
+        <div v-if="!offerings.length" class="text-muted small ms-2">割り当てられた科目/年度がありません</div>
+    </div>
+    {% endverbatim %}
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
-                @click.prevent="tab = 'grading'; fetchList();">未評価レポート</a>
+                @click.prevent="tab = 'grading'">未評価レポート</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'graded' }" href="#"
-                @click.prevent="tab = 'graded'; fetchList();">評価済レポート</a>
+                @click.prevent="tab = 'graded'">評価済レポート</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'experiment_record' }" href="#"
-                @click.prevent="tab = 'experiment_record'; fetchStudents();">学生詳細</a>
+                @click.prevent="tab = 'experiment_record'">学生詳細</a>
         </li>
     </ul>
 
@@ -121,6 +132,10 @@
     </transition>
 </div>
 <script>
+    window.teacherOfferings = {
+        offerings: {{ offerings_json|safe }},
+        defaultOfferingId: {{ default_offering_id|default:"null" }}
+    };
     window.csrfToken = '{{ csrf_token }}';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
