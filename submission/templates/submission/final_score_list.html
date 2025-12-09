@@ -12,8 +12,28 @@
 {% block content %}
 <div id="final-score-table" class="p-4">
     <h2>最終成績一覧</h2>
+    {% verbatim %}
+    <div class="row g-3 mb-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">科目</label>
+            <select class="form-select" v-model="selectedCourseId">
+                <option value="">選択なし</option>
+                <option v-for="c in courseOptions" :value="c.course_id">{{ c.course_code }} - {{ c.course_name }}</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">年度</label>
+            <select class="form-select" v-model="selectedYear">
+                <option value="">選択なし</option>
+                <option v-for="y in yearOptions" :value="y">{{ y }}</option>
+            </select>
+        </div>
+    </div>
+    {% endverbatim %}
     <div class="mb-3 d-flex gap-2">
-        <a href="{% url 'final_score_list_csv' %}" class="btn btn-secondary">CSVダウンロード</a>
+        {% verbatim %}
+        <a :href="csvUrl" class="btn btn-secondary">CSVダウンロード</a>
+        {% endverbatim %}
         <a href="{% url 'download_accepted_reports' %}" class="btn btn-secondary">受理済レポート一括ダウンロード</a>
     </div>
     <div class="table-responsive">
@@ -63,6 +83,10 @@
 <script>
 var STUDENTS_DATA = {{ students_json|safe }};
 var EXPERIMENT_NUMBERS = {{ experiment_numbers|safe }};
+var FINAL_SCORE_META = {
+    offerings: {{ offerings_json|safe }},
+    defaultOfferingId: {{ default_offering_id|default:"null" }}
+};
 </script>
 {% endblock %}
 

@@ -822,7 +822,73 @@ def upload_student_photo(request, student_id):
 @role_required('admin')
 def final_score_list_view(request):
     experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+
+    offerings = list(CourseOffering.objects.select_related('course'))
+    offering_options = [
+        {
+            'id': o.id,
+            'course_id': o.course_id,
+            'course_code': o.course.code,
+            'course_name': o.course.name,
+            'year': o.year,
+        }
+        for o in offerings
+    ]
+    default_offering_id = None
+    if offerings:
+        latest = max(offerings, key=lambda o: (o.year, o.id))
+        default_offering_id = latest.id
+
+    offering_id = request.GET.get('offering_id') or default_offering_id
+    student_data = _build_final_score_rows(experiment_numbers, offering_id)
+    context = {
+        'students_json': json.dumps(student_data, ensure_ascii=False),
+        'students': student_data,
+        'experiment_numbers': json.dumps(experiment_numbers, ensure_ascii=False),
+        'offerings_json': json.dumps(offering_options, ensure_ascii=False),
+        'default_offering_id': default_offering_id,
+    }
+    return render(request, 'submission/final_score_list.html', context)
+
+
+@role_required('admin')
+def final_score_list_csv(request):
+    """Download final scores as CSV."""
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    offering_id = request.GET.get('offering_id')
+    student_data = _build_final_score_rows(experiment_numbers, offering_id)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="final_scores.csv"'
+
+    # Add BOM for Excel compatibility
+    response.write('\ufeff')
+    writer = csv.writer(response)
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers
+    writer.writerow(header)
+
+    for row_data in student_data:
+        row = [
+            row_data['name'],
+            row_data['student_id'],
+            row_data['experiment_day'],
+            row_data['experiment_group'],
+        ]
+        for ex in experiment_numbers:
+            row.append(row_data.get(ex, ''))
+        writer.writerow(row)
+
+    return response
+
+
+def _build_final_score_rows(experiment_numbers, offering_id):
     students_qs = UserProfile.objects.filter(role='student').select_related('user')
+    if offering_id:
+        student_ids = Enrollment.objects.filter(
+            role='student',
+            course_offering_id=offering_id,
+        ).values_list('user_id', flat=True)
+        students_qs = students_qs.filter(user_id__in=student_ids)
     student_data = []
     for up in students_qs:
         record = {
@@ -844,49 +910,15 @@ def final_score_list_view(request):
             )
             record[ex] = float(sub.final_score) if sub and sub.final_score is not None else ''
         student_data.append(record)
-    context = {
-        'students_json': json.dumps(student_data, ensure_ascii=False),
-        'students': student_data,
-        'experiment_numbers': json.dumps(experiment_numbers, ensure_ascii=False),
-    }
-    return render(request, 'submission/final_score_list.html', context)
+    return student_data
 
 
 @role_required('admin')
-def final_score_list_csv(request):
-    """Download final scores as CSV."""
+def final_score_data_api(request):
     experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
-    students_qs = UserProfile.objects.filter(role='student').select_related('user')
-
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="final_scores.csv"'
-
-    # Add BOM for Excel compatibility
-    response.write('\ufeff')
-    writer = csv.writer(response)
-    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers
-    writer.writerow(header)
-
-    for up in students_qs:
-        row = [up.full_name, up.student_id, up.experiment_day, up.experiment_group]
-        for ex in experiment_numbers:
-            sub = (
-                Submission.objects.filter(
-                    student=up.user,
-                    experiment_number=ex,
-                    report_type='main',
-                    final_evaluated=True,
-                )
-                .order_by('-submitted_at')
-                .first()
-            )
-            if sub and sub.final_score is not None:
-                row.append(float(sub.final_score))
-            else:
-                row.append('')
-        writer.writerow(row)
-
-    return response
+    offering_id = request.GET.get('offering_id')
+    data = _build_final_score_rows(experiment_numbers, offering_id)
+    return JsonResponse({'students': data, 'experiment_numbers': experiment_numbers})
 
 
 @role_required('admin')

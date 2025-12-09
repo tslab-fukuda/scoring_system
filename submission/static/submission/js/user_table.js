@@ -44,6 +44,8 @@ new Vue({
             let list = this.users.slice();
             if (this.filters.role) list = list.filter(u => u.role === this.filters.role);
             if (this.filters.group) list = list.filter(u => u.group === this.filters.group);
+            if (this.bulkCourseId) list = list.filter(u => String(u.course_id) === String(this.bulkCourseId));
+            if (this.bulkYear) list = list.filter(u => String(u.year) === String(this.bulkYear));
             if (this.sortField === 'student_id') {
                 list.sort((a,b) => {
                     const av = a.student_id || '';
@@ -62,7 +64,10 @@ new Vue({
             });
         },
         yearOptions() {
-            const years = new Set(this.offerings.map(o => o.year));
+            const filtered = this.bulkCourseId
+                ? this.offerings.filter(o => String(o.course_id) === String(this.bulkCourseId))
+                : this.offerings;
+            const years = new Set(filtered.map(o => o.year));
             return Array.from(years).sort();
         },
         hasOfferings() {
@@ -293,6 +298,16 @@ new Vue({
                 o => String(o.course_id) === String(this.editUser.course_id) && String(o.year) === String(this.editUser.year)
             );
             this.editUser.offering_id = found ? found.id : "";
+        }
+    },
+    watch: {
+        bulkCourseId(newVal) {
+            const yearsForCourse = this.offerings
+                .filter(o => String(o.course_id) === String(newVal))
+                .map(o => String(o.year));
+            if (newVal && this.bulkYear && !yearsForCourse.includes(String(this.bulkYear))) {
+                this.bulkYear = "";
+            }
         }
     }
 });

@@ -21,6 +21,7 @@ urlpatterns = [
     # admin系
     path('list/', views_admin.user_list_view, name='user_list'),
     path('final_score_list/', views_admin.final_score_list_view, name='final_score_list'),
+    path('final_score_list/data/', views_admin.final_score_data_api, name='final_score_data_api'),
     path('final_score_list/csv/', views_admin.final_score_list_csv, name='final_score_list_csv'),
     path('final_score_list/download_accepted/', views_admin.download_accepted_reports, name='download_accepted_reports'),
     path('update_role/<int:user_id>/', views_admin.update_user_role, name='update_role'),
