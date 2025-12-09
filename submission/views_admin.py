@@ -169,7 +169,7 @@ def admin_course_data_api(request):
             'year': off.year,
         })
     enrollments = []
-    for enr in Enrollment.objects.select_related('user', 'course_offering', 'course_offering__course'):
+    for enr in Enrollment.objects.exclude(role='student').select_related('user', 'course_offering', 'course_offering__course'):
         up = getattr(enr.user, 'userprofile', None)
         enrollments.append({
             'id': enr.id,
