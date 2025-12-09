@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from decimal import Decimal
+from django.db.models import Q
 
 from submission.decorators import role_required
 from .models import (
@@ -100,10 +101,11 @@ def get_ungraded_submissions(request):
     qs = Submission.objects.filter(
         graded=False,
         report_type='prep',
-        student__enrollment__course_offering_id=offering_id,
-        student__enrollment__role='student',
-    )
-    qs = qs.select_related('student', 'student__userprofile').distinct()
+    ).select_related('student', 'student__userprofile')
+    qs = qs.filter(
+        Q(course_offering_id=offering_id) |
+        Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
+    ).distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -143,10 +145,11 @@ def get_graded_submissions(request):
     qs = Submission.objects.filter(
         graded=True,
         report_type='prep',
-        student__enrollment__course_offering_id=offering_id,
-        student__enrollment__role='student',
-    )
-    qs = qs.select_related('student', 'student__userprofile').distinct()
+    ).select_related('student', 'student__userprofile')
+    qs = qs.filter(
+        Q(course_offering_id=offering_id) |
+        Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
+    ).distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -186,10 +189,11 @@ def get_ungraded_main_reports(request):
         accepted=True,
         final_evaluated=False,
         report_type='main',
-        student__enrollment__course_offering_id=offering_id,
-        student__enrollment__role='student',
-    )
-    qs = qs.select_related('student', 'student__userprofile').distinct()
+    ).select_related('student', 'student__userprofile')
+    qs = qs.filter(
+        Q(course_offering_id=offering_id) |
+        Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
+    ).distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -230,10 +234,11 @@ def get_graded_main_reports(request):
         accepted=True,
         final_evaluated=True,
         report_type='main',
-        student__enrollment__course_offering_id=offering_id,
-        student__enrollment__role='student',
-    )
-    qs = qs.select_related('student', 'student__userprofile').distinct()
+    ).select_related('student', 'student__userprofile')
+    qs = qs.filter(
+        Q(course_offering_id=offering_id) |
+        Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
+    ).distinct()
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -250,6 +255,8 @@ def get_graded_main_reports(request):
             report_type='prep',
             score_details__isnull=False
         )
+        if items.course_offering_id:
+            pre_subs = pre_subs.filter(course_offering_id=items.course_offering_id)
         for p in pre_subs:
             pre_total += sum(detail.get('value', 0) * detail.get('weight', 1) for detail in p.score_details)
         total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details) if items.score_details else 0
