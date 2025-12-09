@@ -33,7 +33,10 @@ new Vue({
             student_id: '',
             experiment_day: '火',
             experiment_group: '01',
-            role: 'student'
+            role: 'student',
+            course_id: '',
+            year: '',
+            offering_id: ''
         }
     },
     computed: {
@@ -61,6 +64,9 @@ new Vue({
         yearOptions() {
             const years = new Set(this.offerings.map(o => o.year));
             return Array.from(years).sort();
+        },
+        hasOfferings() {
+            return Array.isArray(this.offerings) && this.offerings.length > 0;
         }
     },
     methods: {
@@ -71,6 +77,10 @@ new Vue({
                 this.sortField = field;
                 this.sortAsc = true;
             }
+        },
+        openCreateModal() {
+            if (!this.ensureOfferingSelected()) return;
+            this.showModal = true;
         },
         openEditModal(user) {
             let experiment_day = '';
@@ -85,7 +95,10 @@ new Vue({
                 student_id: user.student_id,
                 experiment_day,
                 experiment_group,
-                role: user.role
+                role: user.role,
+                course_id: user.course_id || "",
+                year: user.year || "",
+                offering_id: user.offering_id || ""
             };
             this.showEditModal = true;
         },
@@ -127,6 +140,14 @@ new Vue({
         updateUser() {
             if (!this.editUser.id) return;
 
+            this.resolveEditOffering();
+
+            // 科目・年度の組み合わせが存在しない場合は中断
+            if ((this.editUser.course_id && this.editUser.year) && !this.editUser.offering_id) {
+                alert("有効な科目・年度の組み合わせを選択してください");
+                return;
+            }
+
             fetch(`/users/update/${this.editUser.id}/`, {
                 method: 'POST',
                 headers: {
@@ -140,6 +161,7 @@ new Vue({
                     experiment_day: this.editUser.experiment_day,
                     experiment_group: this.editUser.experiment_group || "",
                     role: this.editUser.role,
+                    offering_id: this.editUser.offering_id,
                 }),
             })
             .then(res => res.json())
@@ -157,6 +179,9 @@ new Vue({
                             student_id: this.editUser.student_id,
                             group: updatedGroup,
                             role: this.editUser.role,
+                            course_id: this.editUser.offering_id ? this.editUser.course_id : "",
+                            year: this.editUser.offering_id ? this.editUser.year : "",
+                            offering_id: this.editUser.offering_id || "",
                         });
                     }
                     this.showEditModal = false;
@@ -209,6 +234,7 @@ new Vue({
             });
         },
         triggerFileInput() {
+            if (!this.ensureOfferingSelected()) return;
             this.$refs.csvInput.click();
         },
         uploadCsv(event) {
@@ -242,6 +268,14 @@ new Vue({
                 console.error('通信エラー', err);
             });
         },
+        ensureOfferingSelected() {
+            this.resolveBulkOffering();
+            if (!this.bulkOfferingId) {
+                alert("科目と年度を選択してください");
+                return false;
+            }
+            return true;
+        },
         resolveBulkOffering() {
             if (!this.bulkCourseId || !this.bulkYear) {
                 this.bulkOfferingId = "";
@@ -249,6 +283,16 @@ new Vue({
             }
             const found = this.offerings.find(o => String(o.course_id) === String(this.bulkCourseId) && String(o.year) === String(this.bulkYear));
             this.bulkOfferingId = found ? found.id : "";
+        },
+        resolveEditOffering() {
+            if (!this.editUser.course_id || !this.editUser.year) {
+                this.editUser.offering_id = "";
+                return;
+            }
+            const found = this.offerings.find(
+                o => String(o.course_id) === String(this.editUser.course_id) && String(o.year) === String(this.editUser.year)
+            );
+            this.editUser.offering_id = found ? found.id : "";
         }
     }
 });

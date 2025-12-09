@@ -186,7 +186,7 @@ def admin_course_data_api(request):
             'experiment_group': enr.experiment_group,
         })
     users = []
-    for u in User.objects.all():
+    for u in User.objects.filter(userprofile__role__in=['admin', 'teacher', 'non-editing teacher']):
         up = getattr(u, 'userprofile', None)
         users.append({
             'id': u.id,
@@ -520,6 +520,18 @@ def user_list_view(request):
                 group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
             else:
                 group = ""
+            enrollment = (
+                Enrollment.objects
+                .filter(user=user, role=role)
+                .select_related('course_offering__course')
+                .first()
+            ) or (
+                Enrollment.objects
+                .filter(user=user)
+                .select_related('course_offering__course')
+                .first()
+            )
+            course_offering = enrollment.course_offering if enrollment else None
             last_login = (
                 timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
                 if user.last_login else "未ログイン"
@@ -531,6 +543,9 @@ def user_list_view(request):
                 'student_id': profile.student_id,
                 'role': role,
                 'group': group,
+                'offering_id': course_offering.id if course_offering else None,
+                'course_id': course_offering.course_id if course_offering else None,
+                'year': course_offering.year if course_offering else None,
                 'last_login': last_login,
                 'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
             })
@@ -688,6 +703,31 @@ def update_user_view(request, user_id):
 
         profile.save()
         user.save()
+
+        offering_id = data.get('offering_id')
+        if offering_id:
+            try:
+                offering = CourseOffering.objects.get(id=offering_id)
+            except CourseOffering.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=400)
+
+            enrollment = Enrollment.objects.filter(user=user, role=new_role).first()
+            if enrollment:
+                enrollment.course_offering = offering
+                enrollment.experiment_day = profile.experiment_day
+                enrollment.experiment_group = profile.experiment_group
+                enrollment.save()
+            else:
+                Enrollment.objects.create(
+                    user=user,
+                    course_offering=offering,
+                    role=new_role,
+                    experiment_day=profile.experiment_day,
+                    experiment_group=profile.experiment_group,
+                )
+        else:
+            # 科目・年度が未選択の場合は当該ロールの履修情報を削除する
+            Enrollment.objects.filter(user=user, role=new_role).delete()
 
         return JsonResponse({'status': 'success'})
     except User.DoesNotExist:
