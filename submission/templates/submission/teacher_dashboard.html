@@ -132,6 +132,10 @@
     </transition>
 </div>
 <script>
+    window.teacherOfferings = window.teacherOfferings || {
+        offerings: [],
+        defaultOfferingId: null
+    };
     window.teacherOfferings = {
         offerings: {{ offerings_json|safe }},
         defaultOfferingId: {{ default_offering_id|default:"null" }}

@@ -30,6 +30,10 @@ new Vue({
         this.formData.append('csrfmiddlewaretoken', this.csrfToken);
         this.formData.append('file', file);
         this.formData.append('date', this.date);
+        const offeringInput = document.querySelector('input[name="offering_id"]');
+        if (offeringInput && offeringInput.value) {
+          this.formData.append('offering_id', offeringInput.value);
+        }
         this.formData.append('report_type', this.reportType);
         this.formData.append('experiment_number', this.experimentNumber);
         this.$nextTick(this.renderAllPages);

@@ -191,7 +191,7 @@
             </thead>
             <tbody>
             {% verbatim %}
-                <tr v-for="user in processedUsers" :key="user.id">
+                <tr v-for="user in processedUsers" :key="user.row_key || user.id">
                     <td>{{ user.name }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ user.student_id }}</td>

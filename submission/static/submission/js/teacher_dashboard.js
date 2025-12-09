@@ -163,6 +163,9 @@ new Vue({
     watch: {
         tab(newTab) {
             this.refreshCurrentTab();
+        },
+        selectedOfferingId() {
+            this.refreshCurrentTab();
         }
     },
     mounted() {

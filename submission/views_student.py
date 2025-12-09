@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from submission.models import UserProfile, Submission, Schedule
+from submission.models import UserProfile, Submission, Schedule, Enrollment
 import json
 from submission.decorators import role_required
 from django.contrib.auth.decorators import login_required
@@ -12,9 +12,41 @@ import os
 
 @role_required('student')
 def student_dashboard(request):
-    # ユーザ自身の提出物一覧を抽出
+    user_profile = request.user.userprofile
+    enrollments = list(
+        request.user.enrollment_set.filter(role='student').select_related('course_offering__course')
+    )
+    offerings_data = []
+    for enr in enrollments:
+        offerings_data.append({
+            'id': enr.course_offering_id,
+            'course_id': enr.course_offering.course_id,
+            'course_code': enr.course_offering.course.code,
+            'course_name': enr.course_offering.course.name,
+            'year': enr.course_offering.year,
+            'experiment_day': enr.experiment_day or user_profile.experiment_day,
+            'experiment_group': enr.experiment_group or user_profile.experiment_group,
+        })
+    default_offering_id = None
+    if offerings_data:
+        latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
+        default_offering_id = latest['id']
+
+    selected_offering_id = default_offering_id
+    if request.GET.get('offering_id'):
+        try:
+            cand = int(request.GET.get('offering_id'))
+            if any(o['id'] == cand for o in offerings_data):
+                selected_offering_id = cand
+        except (TypeError, ValueError):
+            pass
+
+    selected_offering = next((o for o in offerings_data if o['id'] == selected_offering_id), None)
+    student_day = selected_offering['experiment_day'] if selected_offering else user_profile.experiment_day
+    student_group = selected_offering['experiment_group'] if selected_offering else user_profile.experiment_group
+
+    # ユーザ自身の提出物一覧を抽出（科目/年度でフィルタ）
     submissions = Submission.objects.filter(student=request.user).order_by('-submitted_at')
-    # ここで必要な項目だけリスト化
     status_list = []
     for sub in submissions:
         if sub.graded and sub.accepted:
@@ -35,29 +67,29 @@ def student_dashboard(request):
                 sum(item.get("value", 0) * item.get("weight", 1) for item in sub.score_details)
                 if sub.score_details else "0"
             ), #採点結果
-            "score_details":sub.score_details if sub.score_details else ""
+            "score_details":sub.score_details if sub.score_details else "",
+            "course_offering_id": sub.course_offering_id,
         })
-
-    user_profile = request.user.userprofile
-    student_day = user_profile.experiment_day   # "火" or "木"
 
     schedule_qs = Schedule.objects.values('id', 'date')
     schedule_list = []
     for s in schedule_qs:
         dt = s['date'] if isinstance(s['date'], datetime.date) else datetime.datetime.strptime(s['date'], "%Y-%m-%d").date()
         day_of_week = get_japanese_weekday(dt)
-        # 火曜or木曜のみ抽出
-        if day_of_week == student_day:
-            schedule_list.append({
-                'id': s['id'],
-                'date': dt.strftime('%Y-%m-%d'),
-                'day_of_week': day_of_week,
-            })
+        schedule_list.append({
+            'id': s['id'],
+            'date': dt.strftime('%Y-%m-%d'),
+            'day_of_week': day_of_week,
+        })
 
     context = {
         'status_list': status_list,
         'schedule_list': schedule_list,
-        "experiment_day": request.user.userprofile.experiment_day,
+        "experiment_day": student_day,
+        "experiment_group": student_group,
+        "offerings_json": json.dumps(offerings_data, ensure_ascii=False),
+        "default_offering_id": default_offering_id,
+        "allow_offering_switch": len(offerings_data) > 1,
         "csrf_token": get_token(request),
     }
     return render(request, 'submission/student_dashboard.html', context)

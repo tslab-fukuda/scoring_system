@@ -2,13 +2,21 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from .forms import SubmissionForm
-from .models import Submission
+from .models import Submission, Enrollment
 from django.http import JsonResponse 
 from django.utils import timezone
 
 @login_required
 def submit_assignment(request):
     student_id = request.user.userprofile.student_id
+    offering_id = request.GET.get('offering_id') or request.POST.get('offering_id')
+
+    # 学生のEnrollmentから科目/年度を決定
+    def resolve_offering(user, offering_candidate):
+        qs = Enrollment.objects.filter(user=user, role='student')
+        if offering_candidate:
+            return qs.filter(course_offering_id=offering_candidate).select_related('course_offering').first()
+        return qs.select_related('course_offering').order_by('-course_offering__year', '-course_offering__id').first()
 
     if request.method == "POST" and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = SubmissionForm(request.POST, request.FILES)
@@ -26,7 +34,12 @@ def submit_assignment(request):
             submission = form.save(commit=False)
             submission.student = request.user
             submission.date = request.POST.get('date')
-            submission.experiment_group = request.user.userprofile.experiment_group
+            enrollment = resolve_offering(request.user, offering_id)
+            if enrollment:
+                submission.course_offering = enrollment.course_offering
+                submission.experiment_group = enrollment.experiment_group or request.user.userprofile.experiment_group
+            else:
+                submission.experiment_group = request.user.userprofile.experiment_group
             # report_type, experiment_numberはformで自動セット
             submission.save()
             # 成功時はJsonResponseで"redirect"フラグ
@@ -43,6 +56,7 @@ def submit_assignment(request):
             'form': form,
             'date': date,
             'experiment_group': experiment_group,
+            'offering_id': offering_id or "",
         })
 
 @login_required

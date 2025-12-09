@@ -16,6 +16,10 @@ window.app = new Vue({
         showAddModal: false,
         showEditModal: false,
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
+        offerings: ADMIN_OFFERINGS || [],
+        selectedOfferingId: ADMIN_DEFAULT_OFFERING_ID || null,
+        selectedCourseId: null,
+        selectedYear: null,
         form: {
             id: null,
             date: '',
@@ -49,47 +53,77 @@ window.app = new Vue({
         },
         is_admin() {
             return typeof window.isAdmin !== 'undefined' && window.isAdmin === true;
-        }
-    },
-    watch: {
-        tab(val) {
-            if (val === 'submissions') {
-                // 「main」のみをitemsに
-                this.fetchList();
-            }
-            if (val === 'accepted') {
-                this.fetchAccepted();
-            }
-            if (val === 'summary' && !this.summaryLoaded) {
-                this.fetchSummary();
-            }
-            if (val === 'student' && !this.studentsLoaded) {
-                this.fetchStudens();
-            }
-            if (val === 'schedule' && !this.scheduleLoaded) {
-                this.fetchSchedule();
-            }
-            // 他タブ時は必要に応じて
+        },
+        courseOptions() {
+            const map = {};
+            this.offerings.forEach(o => {
+                map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
+            });
+            return Object.values(map);
+        },
+        yearOptions() {
+            const years = this.offerings
+                .filter(o => !this.selectedCourseId || String(o.course_id) === String(this.selectedCourseId))
+                .map(o => o.year);
+            return Array.from(new Set(years)).sort((a, b) => a - b);
+        },
+        allowOfferingSwitch() {
+            return this.offerings && this.offerings.length > 0;
         }
     },
     methods: {
+        refreshCurrentTab() {
+            if (this.tab === 'submissions') {
+                this.fetchList();
+            } else if (this.tab === 'accepted') {
+                this.fetchAccepted();
+            } else if (this.tab === 'summary') {
+                this.fetchSummary();
+            } else if (this.tab === 'student') {
+                this.fetchStudens();
+            }
+        },
+        selectCourse(courseId) {
+            this.selectedCourseId = courseId;
+            const years = this.yearOptions;
+            if (years.length && !years.includes(this.selectedYear)) {
+                this.selectedYear = years[years.length - 1];
+            }
+            this.updateOfferingFromSelection();
+        },
+        selectYear(year) {
+            this.selectedYear = year;
+            this.updateOfferingFromSelection();
+        },
+        updateOfferingFromSelection() {
+            if (!this.selectedCourseId || !this.selectedYear) return;
+            const found = this.offerings.find(
+                o => String(o.course_id) === String(this.selectedCourseId) && String(o.year) === String(this.selectedYear)
+            );
+            if (found) {
+                this.selectedOfferingId = found.id;
+                this.refreshCurrentTab();
+            }
+        },
         fetchList() {
             const params = [];
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             let url = '/submission/admin_submissions_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
-                    this.submissions = data.submissions; // ← ここで更新
-                    this.items = this.submissions; // 表示リストも更新
+                    this.submissions = data.submissions;
+                    this.items = this.submissions;
                 });
         },
         fetchStudens() {
             const params = [];
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             let url = '/submission/admin_students_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -103,6 +137,7 @@ window.app = new Vue({
         fetchSummary() {
             const params = [];
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             let url = '/submission/admin_summary_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -125,6 +160,7 @@ window.app = new Vue({
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             let url = '/submission/admin_accepted_submissions_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -188,7 +224,7 @@ window.app = new Vue({
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        // DB登録成功→schedule配列にも追加
+                        // DB登録成功でschedule配列にも追加
                         this.schedule.push(data.schedule);
                         this.closeModal();
                     } else {
@@ -276,7 +312,10 @@ window.app = new Vue({
         openStudentModal(student) {
             this.selectedStudent = student.full_name;
             this.selectedStudentId = student.id;
-            fetch(`/submission/api_student_reports/?student_id=${student.id}`)
+            const params = new URLSearchParams();
+            params.append('student_id', student.id);
+            if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
+            fetch(`/submission/api_student_reports/?${params.toString()}`)
                 .then(res => res.json())
                 .then(data => {
                     this.studentReports = data.reports;
@@ -343,8 +382,42 @@ window.app = new Vue({
             }, 'image/png');
         },
     },
+    watch: {
+        tab(val) {
+            if (val === 'submissions') {
+                this.fetchList();
+            }
+            if (val === 'accepted') {
+                this.fetchAccepted();
+            }
+            if (val === 'summary') {
+                this.fetchSummary();
+            }
+            if (val === 'student') {
+                this.fetchStudens();
+            }
+            if (val === 'schedule' && !this.scheduleLoaded) {
+                this.fetchSchedule();
+            }
+        },
+        selectedOfferingId() {
+            this.refreshCurrentTab();
+        }
+    },
     mounted() {
-        // ページ初期表示時（初回tabがsubmissionsの場合のため）
+        if (this.selectedOfferingId) {
+            const found = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (found) {
+                this.selectedCourseId = found.course_id;
+                this.selectedYear = found.year;
+            }
+        } else if (this.offerings.length) {
+            const latest = this.offerings.slice().sort((a, b) => (b.year - a.year) || (b.id - a.id))[0];
+            this.selectedOfferingId = latest.id;
+            this.selectedCourseId = latest.course_id;
+            this.selectedYear = latest.year;
+        }
+        // ページ初期表示時 (初回tabがsubmissionsの場合のため)
         if (this.tab === 'submissions') {
             this.fetchList();
         }

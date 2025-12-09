@@ -35,6 +35,13 @@ class Submission(models.Model):
     accepted = models.BooleanField(default=False) # 受け取り判定
     final_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     final_evaluated = models.BooleanField(default=False)
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submissions'
+    )
     #student_id = models.CharField(max_length=10, blank=True)
 
     def __str__(self):

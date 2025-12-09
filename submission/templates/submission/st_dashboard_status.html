@@ -13,13 +13,13 @@
                 <th>編集</th>
             </tr>
         </thead>
-        <tbody v-if="!statusList || statusList.length === 0">
+        <tbody v-if="!filteredStatusList || filteredStatusList.length === 0">
             <tr>
                 <td colspan="7" class="text-center text-muted">提出物はまだありません</td>
             </tr>
         </tbody>
         <tbody v-else>
-            <tr v-for="item in statusList" :key="item.id">
+            <tr v-for="item in filteredStatusList" :key="`${item.id}-${item.course_offering_id || 'none'}`">
                 <!-- レポート種別 -->
                 <td>{{ item.report_type === 'main' ? '本レポート' : '予習レポート' }}</td>
                 <!-- 実験番号 -->

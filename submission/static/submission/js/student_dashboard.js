@@ -5,6 +5,7 @@ new Vue({
         statusList: STATUS_LIST,
         scheduleList: SCHEDULE_LIST,
         experimentDay: EXPERIMENT_DAY,
+        experimentGroup: EXPERIMENT_GROUP,
         showScoreModal: false,
         scoreDetails: [],
         showEditModal: false,
@@ -12,8 +13,34 @@ new Vue({
         editReportType: "",
         editExperimentNumber: "",
         editError: "",
+        offerings: OFFERINGS || [],
+        selectedOfferingId: DEFAULT_OFFERING_ID || null,
+        allowOfferingSwitch: ALLOW_OFFERING_SWITCH || false,
+        selectedCourseId: null,
+        selectedYear: null,
     },
     computed: {
+        courseOptions() {
+            const map = {};
+            this.offerings.forEach(o => {
+                map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
+            });
+            return Object.values(map);
+        },
+        yearOptions() {
+            const years = this.offerings
+                .filter(o => !this.selectedCourseId || String(o.course_id) === String(this.selectedCourseId))
+                .map(o => o.year);
+            return Array.from(new Set(years)).sort((a, b) => a - b);
+        },
+        filteredStatusList() {
+            if (this.allowOfferingSwitch && this.selectedOfferingId) {
+                return this.statusList.filter(
+                    s => String(s.course_offering_id) === String(this.selectedOfferingId)
+                );
+            }
+            return this.statusList;
+        },
         filteredScheduleList() {
             // experimentDayが指定されていればその曜日のみ抽出
             return this.scheduleList.filter(item => item.day_of_week === this.experimentDay);
@@ -39,7 +66,10 @@ new Vue({
             return `${m}/${d}`;
         },
         goToSubmit(item) {
-            window.location.href = `/submission/submit/?date=${item.date}`;
+            const params = new URLSearchParams();
+            if (item.date) params.append('date', item.date);
+            if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
+            window.location.href = `/submission/submit/?${params.toString()}`;
         },
         showScoreDetail(item) {
             this.scoreDetail = item.score_details || "詳細情報なし";
@@ -111,6 +141,48 @@ new Vue({
             .catch(() => {
                 this.editError = "更新に失敗しました";
             });
+        },
+        selectOffering(id) {
+            if (!this.allowOfferingSwitch) return;
+            const numericId = Number(id);
+            const found = this.offerings.find(o => Number(o.id) === numericId);
+            if (!found) return;
+            this.selectedOfferingId = numericId;
+            this.experimentDay = found.experiment_day || this.experimentDay;
+            this.experimentGroup = found.experiment_group || this.experimentGroup;
+        },
+        selectCourse(courseId) {
+            if (!this.allowOfferingSwitch) return;
+            this.selectedCourseId = courseId;
+            // course change resets year if not available
+            const years = this.yearOptions;
+            if (!years.includes(this.selectedYear)) {
+                this.selectedYear = years[years.length - 1] || null;
+            }
+            this.updateOfferingFromSelection();
+        },
+        selectYear(year) {
+            if (!this.allowOfferingSwitch) return;
+            this.selectedYear = year;
+            this.updateOfferingFromSelection();
+        },
+        updateOfferingFromSelection() {
+            if (!this.selectedCourseId || !this.selectedYear) return;
+            const found = this.offerings.find(
+                o => String(o.course_id) === String(this.selectedCourseId) && String(o.year) === String(this.selectedYear)
+            );
+            if (found) {
+                this.selectOffering(found.id);
+            }
+        }
+    },
+    mounted() {
+        if (this.selectedOfferingId) {
+            const found = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (found) {
+                this.selectedCourseId = found.course_id;
+                this.selectedYear = found.year;
+            }
         }
     }
 });

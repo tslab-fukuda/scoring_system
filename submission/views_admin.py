@@ -30,8 +30,36 @@ def admin_dashboard(request):
     is_admin = False
     if hasattr(request.user, "userprofile") and request.user.userprofile.role == "admin":
         is_admin = True
+    enrollments = list(
+        Enrollment.objects.filter(user=request.user).select_related('course_offering__course')
+    )
+    offerings_data = []
+    for enr in enrollments:
+        offerings_data.append({
+            'id': enr.course_offering_id,
+            'course_id': enr.course_offering.course_id,
+            'course_code': enr.course_offering.course.code,
+            'course_name': enr.course_offering.course.name,
+            'year': enr.course_offering.year,
+        })
+    if not offerings_data and is_admin:
+        # 管理者がEnrollment未設定の場合は全開講を選択肢に入れる
+        for off in CourseOffering.objects.select_related('course'):
+            offerings_data.append({
+                'id': off.id,
+                'course_id': off.course_id,
+                'course_code': off.course.code,
+                'course_name': off.course.name,
+                'year': off.year,
+            })
+    default_offering_id = None
+    if offerings_data:
+        latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
+        default_offering_id = latest['id']
     return render(request, 'submission/admin_dashboard.html', {
         'is_admin': 'true' if is_admin else 'false',
+        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+        'default_offering_id': default_offering_id,
     })
 
 
@@ -45,7 +73,10 @@ def admin_get_submissions_api(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    offering_id = request.GET.get('offering_id')
     qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
+    if offering_id:
+        qs = qs.filter(course_offering_id=offering_id)
 
     # (student_id, experiment_number)で未受付レポートをカウント
     count_map = Counter((sub.student_id, sub.experiment_number) for sub in qs)
@@ -101,7 +132,10 @@ def admin_get_accepted_submissions_api(request):
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
     student_id = request.GET.get('student_id')
+    offering_id = request.GET.get('offering_id')
     qs = Submission.objects.filter(report_type='main', accepted=True).select_related('student', 'student__userprofile')
+    if offering_id:
+        qs = qs.filter(course_offering_id=offering_id)
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
@@ -309,7 +343,11 @@ def admin_delete_enrollment(request, enrollment_id):
 
 def get_students_api(request):
     student_id = request.GET.get('student_id')
+    offering_id = request.GET.get('offering_id')
     qs = UserProfile.objects.filter(role='student')
+    if offering_id:
+        user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', flat=True)
+        qs = qs.filter(user_id__in=user_ids)
     if student_id:
         qs = qs.filter(student_id__icontains=student_id)
     students = []
@@ -328,7 +366,11 @@ def get_students_api(request):
 def get_summary_api(request):
     experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
     student_id = request.GET.get('student_id')
+    offering_id = request.GET.get('offering_id')
     students = UserProfile.objects.filter(role='student')
+    if offering_id:
+        user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', flat=True)
+        students = students.filter(user_id__in=user_ids)
     if student_id:
         students = students.filter(student_id__icontains=student_id)
     results = []
@@ -480,7 +522,11 @@ def accept_submission(request):
 @role_required('admin')
 def api_student_reports(request):
     student_id = request.GET.get('student_id')
-    qs = Submission.objects.filter(student__userprofile__id=student_id).order_by('-submitted_at')
+    offering_id = request.GET.get('offering_id')
+    qs = Submission.objects.filter(student__userprofile__id=student_id)
+    if offering_id:
+        qs = qs.filter(course_offering_id=offering_id)
+    qs = qs.order_by('-submitted_at')
     profile = UserProfile.objects.get(id=student_id)
     full_name = profile.full_name
     data = []
@@ -515,40 +561,57 @@ def user_list_view(request):
     for user in User.objects.all():
         try:
             profile = user.userprofile
-            role = profile.role
-            if profile.experiment_day and profile.experiment_group:
-                group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
-            else:
-                group = ""
-            enrollment = (
-                Enrollment.objects
-                .filter(user=user, role=role)
-                .select_related('course_offering__course')
-                .first()
-            ) or (
+            enrollments = list(
                 Enrollment.objects
                 .filter(user=user)
                 .select_related('course_offering__course')
-                .first()
             )
-            course_offering = enrollment.course_offering if enrollment else None
             last_login = (
                 timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
                 if user.last_login else "未ログイン"
             )
-            user_data.append({
-                'id': user.id,
-                'name': profile.full_name,
-                'email': user.email,
-                'student_id': profile.student_id,
-                'role': role,
-                'group': group,
-                'offering_id': course_offering.id if course_offering else None,
-                'course_id': course_offering.course_id if course_offering else None,
-                'year': course_offering.year if course_offering else None,
-                'last_login': last_login,
-                'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
-            })
+
+            # Enrollmentごとに行を作成。紐付けが無い場合は空で1行表示。
+            if enrollments:
+                for enrollment in enrollments:
+                    course_offering = enrollment.course_offering
+                    group = ""
+                    exp_day = enrollment.experiment_day or profile.experiment_day
+                    exp_group = enrollment.experiment_group or profile.experiment_group
+                    if exp_day and exp_group:
+                        group = f"{exp_day}-{str(exp_group).zfill(2)}"
+                    user_data.append({
+                        'id': user.id,
+                        'row_key': f"{user.id}-enr-{enrollment.id}",
+                        'name': profile.full_name,
+                        'email': user.email,
+                        'student_id': profile.student_id,
+                        'role': enrollment.role,
+                        'group': group,
+                        'offering_id': course_offering.id if course_offering else None,
+                        'course_id': course_offering.course_id if course_offering else None,
+                        'year': course_offering.year if course_offering else None,
+                        'last_login': last_login,
+                        'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
+                    })
+            else:
+                group = ""
+                if profile.experiment_day and profile.experiment_group:
+                    group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
+                user_data.append({
+                    'id': user.id,
+                    'row_key': f"{user.id}-no-enrollment",
+                    'name': profile.full_name,
+                    'email': user.email,
+                    'student_id': profile.student_id,
+                    'role': profile.role,
+                    'group': group,
+                    'offering_id': None,
+                    'course_id': None,
+                    'year': None,
+                    'last_login': last_login,
+                    'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
+                })
         except UserProfile.DoesNotExist:
             continue
 
@@ -628,10 +691,6 @@ def create_user_view(request):
         try:
             data = json.loads(request.body)
 
-            # バリデーション: username（email）が既に存在していないか
-            if User.objects.filter(username=data['email']).exists():
-                return JsonResponse({'status': 'error', 'message': 'このメールアドレスは既に登録されています。'}, status=400)
-
             offering_id = data.get('offering_id')
             if not offering_id:
                 return JsonResponse({'status': 'error', 'message': 'offering_id is required'}, status=400)
@@ -640,29 +699,45 @@ def create_user_view(request):
             except CourseOffering.DoesNotExist:
                 return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=400)
 
-            user = User.objects.create_user(
-                username=data['email'],
-                email=data['email'],
-                password=data['password']
-            )
-            profile = UserProfile.objects.create(
-                user=user,
-                full_name=data['full_name'],
-                email=data['email'],
-                student_id=data['student_id'],
-                experiment_day=data['experiment_day'],
-                experiment_group=data['experiment_group'],
-                role='student'
-            )
-            Enrollment.objects.get_or_create(
+            user = User.objects.filter(username=data['email']).first()
+            if not user:
+                user = User.objects.create_user(
+                    username=data['email'],
+                    email=data['email'],
+                    password=data['password']
+                )
+                profile = UserProfile.objects.create(
+                    user=user,
+                    full_name=data['full_name'],
+                    email=data['email'],
+                    student_id=data['student_id'],
+                    experiment_day=data['experiment_day'],
+                    experiment_group=data['experiment_group'],
+                    role='student'
+                )
+            else:
+                profile = getattr(user, 'userprofile', None)
+                if not profile:
+                    profile = UserProfile.objects.create(
+                        user=user,
+                        full_name=data.get('full_name', user.username),
+                        email=user.email,
+                        student_id=data.get('student_id', ''),
+                        experiment_day=data.get('experiment_day', ''),
+                        experiment_group=data.get('experiment_group', ''),
+                        role='student'
+                    )
+            enr, created = Enrollment.objects.get_or_create(
                 user=user,
                 course_offering=offering,
                 role='student',
                 defaults={
-                    'experiment_day': profile.experiment_day,
-                    'experiment_group': profile.experiment_group,
+                    'experiment_day': data.get('experiment_day', profile.experiment_day),
+                    'experiment_group': data.get('experiment_group', profile.experiment_group),
                 }
             )
+            if not created:
+                return JsonResponse({'status': 'error', 'message': 'このユーザは既に当該科目/年度に登録されています。'}, status=400)
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
@@ -769,7 +844,18 @@ def bulk_create_users(request):
                 skipped += 1
                 continue
             if User.objects.filter(username=email).exists():
-                skipped += 1
+                if offering and not Enrollment.objects.filter(user__username=email, course_offering=offering, role='student').exists():
+                    user = User.objects.get(username=email)
+                    Enrollment.objects.create(
+                        user=user,
+                        course_offering=offering,
+                        role='student',
+                        experiment_day=row.get('曜日', ''),
+                        experiment_group=row.get('班番号', ''),
+                    )
+                    created += 1
+                else:
+                    skipped += 1
                 continue
             user = User.objects.create_user(
                 username=email,

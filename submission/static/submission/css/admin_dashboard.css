@@ -121,3 +121,29 @@ tr.clickable-row:hover {
 .student-modal {
     z-index: 1050;
 }
+
+.step-arrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+.step-arrow-btn {
+    border: none;
+    background: #e9f2ff;
+    color: #0d47a1;
+    padding: 10px 18px 10px 22px;
+    border-radius: 4px;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%);
+    box-shadow: 0 2px 6px rgba(13, 71, 161, 0.12);
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+.step-arrow-btn:hover {
+    box-shadow: 0 4px 12px rgba(13, 71, 161, 0.2);
+}
+.step-arrow-btn.active {
+    background: #0d47a1;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(13, 71, 161, 0.24);
+}
