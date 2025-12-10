@@ -21,13 +21,12 @@
 
 ## 必要環境
 - Python 3.11以降
-- Django 4.2
+- Django 5.2.1 など、`requirements.txt` に記載のパッケージ
 
-依存パッケージのインストール例：
+依存パッケージのインストール（推奨）：
 ```bash
-pip install django
+pip install -r requirements.txt
 ```
-（`requirements.txt` がある場合は `pip install -r requirements.txt` を利用してください）
 
 ## セットアップ手順
 1. 仮想環境を作成し有効化する

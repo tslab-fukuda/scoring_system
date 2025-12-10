@@ -42,10 +42,20 @@ new Vue({
             return list;
         },
         csvUrl() {
-            if (this.selectedOfferingId) {
-                return `/submission/final_score_list/csv/?offering_id=${encodeURIComponent(this.selectedOfferingId)}`;
-            }
-            return '/submission/final_score_list/csv/';
+            const params = [];
+            if (this.selectedOfferingId) params.push(`offering_id=${encodeURIComponent(this.selectedOfferingId)}`);
+            if (this.filters.day) params.push(`day=${encodeURIComponent(this.filters.day)}`);
+            if (this.filters.group) params.push(`group=${encodeURIComponent(this.filters.group)}`);
+            const query = params.length ? `?${params.join('&')}` : '';
+            return `/submission/final_score_list/csv/${query}`;
+        },
+        acceptedUrl() {
+            const params = [];
+            if (this.selectedOfferingId) params.push(`offering_id=${encodeURIComponent(this.selectedOfferingId)}`);
+            if (this.filters.day) params.push(`day=${encodeURIComponent(this.filters.day)}`);
+            if (this.filters.group) params.push(`group=${encodeURIComponent(this.filters.group)}`);
+            const query = params.length ? `?${params.join('&')}` : '';
+            return `/submission/final_score_list/download_accepted/${query}`;
         }
     },
     methods: {

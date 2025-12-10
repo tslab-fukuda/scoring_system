@@ -1007,10 +1007,12 @@ def final_score_list_view(request):
 
 @role_required('admin')
 def final_score_list_csv(request):
-    """Download final scores as CSV."""
+    """Download final scores as CSV (現在の表示条件に合わせる)."""
     experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
     offering_id = request.GET.get('offering_id')
-    student_data = _build_final_score_rows(experiment_numbers, offering_id)
+    day = request.GET.get('day') or None
+    group = request.GET.get('group') or None
+    student_data = _build_final_score_rows(experiment_numbers, offering_id, day=day, group=group)
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="final_scores.csv"'
@@ -1035,7 +1037,7 @@ def final_score_list_csv(request):
     return response
 
 
-def _build_final_score_rows(experiment_numbers, offering_id):
+def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=None):
     students_qs = UserProfile.objects.filter(role='student').select_related('user')
     if offering_id:
         student_ids = Enrollment.objects.filter(
@@ -1043,6 +1045,10 @@ def _build_final_score_rows(experiment_numbers, offering_id):
             course_offering_id=offering_id,
         ).values_list('user_id', flat=True)
         students_qs = students_qs.filter(user_id__in=student_ids)
+    if day:
+        students_qs = students_qs.filter(experiment_day=day)
+    if group:
+        students_qs = students_qs.filter(experiment_group=group)
     student_data = []
     for up in students_qs:
         record = {
@@ -1079,14 +1085,23 @@ def final_score_data_api(request):
 def download_accepted_reports(request):
     """Download all accepted reports grouped by experiment number as a zip."""
     experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    offering_id = request.GET.get('offering_id')
+    day = request.GET.get('day') or None
+    group = request.GET.get('group') or None
 
     memfile = io.BytesIO()
     with zipfile.ZipFile(memfile, 'w') as zf:
         for ex in experiment_numbers:
             submissions = Submission.objects.filter(experiment_number=ex, accepted=True)
+            if offering_id:
+                submissions = submissions.filter(course_offering_id=offering_id)
+            if day:
+                submissions = submissions.filter(student__userprofile__experiment_day=day)
+            if group:
+                submissions = submissions.filter(student__userprofile__experiment_group=group)
             for sub in submissions:
                 if sub.file and default_storage.exists(sub.file.name):
-                    filename_row = os.path.basename(sub.file.name)
+                    filename_raw = os.path.basename(sub.file.name)
                     filename = unquote(filename_raw)
                     student_id = getattr(sub.student.userprofile, 'student_id', sub.student.username)
                     arcname = f"{ex}/{student_id}_{filename}"
