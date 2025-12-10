@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import AttendanceRecord
-from submission.models import UserProfile, Submission, ScoringItem
+from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment
 
 JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 20)
@@ -98,17 +98,57 @@ def attendance_list(request):
     _finalize_previous_day()
     if not request.user.has_perm('attendance.view_attendancerecord'):
         return HttpResponseForbidden()
+    # 科目/年度の選択肢と選択状態
+    offerings = list(CourseOffering.objects.select_related('course'))
+    offerings_data = [
+        {
+            'id': off.id,
+            'course_code': off.course.code,
+            'course_name': off.course.name,
+            'year': off.year,
+        }
+        for off in offerings
+    ]
+    selected_offering_id = None
+    if offerings_data:
+        latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
+        selected_offering_id = latest['id']
+    if request.GET.get('offering_id'):
+        try:
+            cand = int(request.GET.get('offering_id'))
+            if any(o['id'] == cand for o in offerings_data):
+                selected_offering_id = cand
+        except (TypeError, ValueError):
+            pass
+
     today_records = AttendanceRecord.objects.filter(date=date.today())
+    student_ids = None
+    if selected_offering_id:
+        student_ids = list(
+            Enrollment.objects.filter(course_offering_id=selected_offering_id, role='student')
+            .values_list('user_id', flat=True)
+        )
+        today_records = today_records.filter(user_id__in=student_ids)
+
     in_room = today_records.filter(check_out__isnull=True)
     out_room = today_records.filter(check_out__isnull=False)
-    students = UserProfile.objects.filter(role='student').values(
-        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id'
+    students_qs = UserProfile.objects.filter(role='student').select_related('user')
+    if student_ids is not None:
+        students_qs = students_qs.filter(user_id__in=student_ids)
+    students = students_qs.values(
+        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email'
     )
-    students_json = json.dumps(list(students), ensure_ascii=False)
+    students_list = list(students)
+    # emailフィールドをフラットに
+    for s in students_list:
+        s['email'] = s.pop('user__email', '')
+    students_json = json.dumps(students_list, ensure_ascii=False)
     context = {
         'in_records': in_room,
         'out_records': out_room,
         'students_json': students_json,
+        'offerings': offerings_data,
+        'selected_offering_id': selected_offering_id,
     }
     return render(request, 'attendance/attendance_list.html', context)
 

@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', function () {
     new Vue({
         el: '#nfc-app',
         data: {
-            showModal: false,
+            showPanel: false,
             students: window.STUDENTS || [],
             selectedId: '',
             nfcId: '',
@@ -10,14 +10,21 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         methods: {
             open() {
-                this.showModal = true;
+                this.showPanel = true;
                 this.nfcId = '';
                 this.$nextTick(() => {
                     if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
                 });
             },
             close() {
-                this.showModal = false;
+                this.showPanel = false;
+            },
+            selectStudent(stu) {
+                this.selectedId = stu.student_id;
+                this.selectedUser = stu;
+                this.$nextTick(() => {
+                    if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
+                });
             },
             registerNfc() {
                 const sid = this.selectedId;
@@ -45,26 +52,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     })
                     .catch(() => alert('通信エラー'));
-            }
-        },
-        watch: {
-            selectedId(newId) {
-                if (!newId) {
-                    this.selectedUser = {};
-                } else {
-                    fetch(`/attendance/user_info/${newId}/`)
-                        .then(r => r.json())
-                        .then(d => {
-                            if (d.status === 'success') {
-                                this.selectedUser = d.user;
-                            } else {
-                                this.selectedUser = {};
-                            }
-                        });
-                }
-                this.$nextTick(() => {
-                    if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
-                });
             }
         }
     });
