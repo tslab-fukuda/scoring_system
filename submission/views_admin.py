@@ -78,12 +78,12 @@ def admin_get_submissions_api(request):
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
     offering_id = request.GET.get('offering_id')
-    qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
+    base_qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
     if offering_id:
-        qs = qs.filter(course_offering_id=offering_id)
+        base_qs = base_qs.filter(course_offering_id=offering_id)
 
     # (student_id, experiment_number)で未受付レポートをカウント
-    count_map = Counter((sub.student_id, sub.experiment_number) for sub in qs)
+    count_map = Counter((sub.student_id, sub.experiment_number) for sub in base_qs)
 
     # 3回提出されているものを自動で受付
     for (student_id, experiment_number), cnt in count_map.items():
@@ -95,7 +95,7 @@ def admin_get_submissions_api(request):
                 student_id=student_id, experiment_number=experiment_number
             ).update(graded=True,accepted=True)
     
-    qs = Submission.objects.filter(report_type='main', graded=False, accepted=False).select_related('student', 'student__userprofile')
+    qs = base_qs.filter(graded=False, accepted=False)
     if day:
         qs = qs.filter(student__userprofile__experiment_day=day)
     if group:
