@@ -3,6 +3,7 @@ from django.db import models
 # Create your models here.
 from django.contrib.auth.models import User
 from django.utils import timezone
+from submission import models as submission_models  # type: ignore
 
 class Submission(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE)  # 提出者（学生）
@@ -74,6 +75,13 @@ class Schedule(models.Model):
     date = models.DateField()
     topic = models.CharField(max_length=100)
     teacher = models.CharField(max_length=100, blank=True)
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='schedules'
+    )
 
 class GradingChecklist(models.Model):
     submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name='checklist')
@@ -111,6 +119,7 @@ class ExperimentCompletion(models.Model):
 class Course(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50, unique=True)
+    meeting_days = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"{self.code} - {self.name}"

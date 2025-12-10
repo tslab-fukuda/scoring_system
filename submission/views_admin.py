@@ -41,6 +41,7 @@ def admin_dashboard(request):
             'course_code': enr.course_offering.course.code,
             'course_name': enr.course_offering.course.name,
             'year': enr.course_offering.year,
+            'meeting_days': enr.course_offering.course.meeting_days,
         })
     if not offerings_data and is_admin:
         # 管理者がEnrollment未設定の場合は全開講を選択肢に入れる
@@ -51,6 +52,7 @@ def admin_dashboard(request):
                 'course_code': off.course.code,
                 'course_name': off.course.name,
                 'year': off.year,
+                'meeting_days': off.course.meeting_days,
             })
     default_offering_id = None
     if offerings_data:
@@ -192,7 +194,7 @@ def admin_return_submission(request):
 # ---------------------------
 @role_required('admin')
 def admin_course_data_api(request):
-    courses = list(Course.objects.all().values('id', 'name', 'code'))
+    courses = list(Course.objects.all().values('id', 'name', 'code', 'meeting_days'))
     offerings = []
     for off in CourseOffering.objects.select_related('course'):
         offerings.append({
@@ -201,6 +203,7 @@ def admin_course_data_api(request):
             'course_code': off.course.code,
             'course_name': off.course.name,
             'year': off.year,
+            'meeting_days': off.course.meeting_days,
         })
     enrollments = []
     for enr in Enrollment.objects.exclude(role='student').select_related('user', 'course_offering', 'course_offering__course'):
@@ -242,12 +245,37 @@ def admin_add_course(request):
     data = json.loads(request.body)
     name = data.get('name')
     code = data.get('code')
+    meeting_days = data.get('meeting_days', [])
     if not name or not code:
         return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
-    course, created = Course.objects.get_or_create(code=code, defaults={'name': name})
+    course, created = Course.objects.get_or_create(code=code, defaults={'name': name, 'meeting_days': meeting_days})
     if not created:
         return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
-    return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code}})
+    return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code, 'meeting_days': course.meeting_days}})
+
+
+@role_required('admin')
+@require_POST
+def admin_update_course(request, course_id):
+    try:
+        data = json.loads(request.body)
+        name = data.get('name')
+        code = data.get('code')
+        meeting_days = data.get('meeting_days', [])
+        if not name or not code:
+            return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
+        if Course.objects.filter(code=code).exclude(id=course_id).exists():
+            return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
+        course = Course.objects.get(id=course_id)
+        course.name = name
+        course.code = code
+        course.meeting_days = meeting_days
+        course.save()
+        return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code, 'meeting_days': course.meeting_days}})
+    except Course.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 
 @role_required('admin')
@@ -395,9 +423,17 @@ def get_summary_api(request):
     return JsonResponse({'submission_summary': results})
 
 def get_schedule_api(request):
-    schedule_qs = Schedule.objects.values('id', 'date')
+    offering_id = request.GET.get('offering_id')
+    schedule_qs = Schedule.objects.all()
+    if offering_id:
+        schedule_qs = schedule_qs.filter(course_offering_id=offering_id)
+    schedule_qs = schedule_qs.values('id', 'date', 'course_offering_id')
     schedule = [
-        {'id': s['id'], 'date': s['date'].strftime('%Y-%m-%d')}
+        {
+            'id': s['id'],
+            'date': s['date'].strftime('%Y-%m-%d'),
+            'course_offering_id': s.get('course_offering_id'),
+        }
         for s in schedule_qs
     ]
     return JsonResponse({'schedule_json': schedule})
@@ -408,12 +444,16 @@ def add_schedule_api(request):
         try:
             data = json.loads(request.body)
             date = data.get('date')
+            offering_id = data.get('offering_id')
             # バリデーション: 日付必須
             if not date:
                 return JsonResponse({'status': 'error', 'message': '日付は必須です'}, status=400)
-            s = Schedule.objects.create(date=date)
+            course_offering = None
+            if offering_id:
+                course_offering = CourseOffering.objects.filter(id=offering_id).first()
+            s = Schedule.objects.create(date=date, course_offering=course_offering)
             s.refresh_from_db()
-            return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d')}})
+            return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d'), 'course_offering_id': s.course_offering_id}})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
@@ -424,13 +464,17 @@ def update_schedule_api(request, schedule_id):
         try:
             data = json.loads(request.body)
             date = data.get('date')
+            offering_id = data.get('offering_id')
             if not date:
                 return JsonResponse({'status': 'error', 'message': '日付は必須です'}, status=400)
             s = Schedule.objects.get(id=schedule_id)
             s.date = date
+            if offering_id:
+                course_offering = CourseOffering.objects.filter(id=offering_id).first()
+                s.course_offering = course_offering
             s.save()
             s.refresh_from_db()
-            return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d')}})
+            return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d'), 'course_offering_id': s.course_offering_id}})
         except Schedule.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Scheduleが見つかりません'}, status=404)
         except Exception as e:

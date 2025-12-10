@@ -54,6 +54,13 @@ window.app = new Vue({
         is_admin() {
             return typeof window.isAdmin !== 'undefined' && window.isAdmin === true;
         },
+        scheduleDays() {
+            const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (current && current.meeting_days && current.meeting_days.length) {
+                return current.meeting_days;
+            }
+            return ['火', '木'];
+        },
         courseOptions() {
             const map = {};
             this.offerings.forEach(o => {
@@ -81,6 +88,8 @@ window.app = new Vue({
                 this.fetchSummary();
             } else if (this.tab === 'student') {
                 this.fetchStudens();
+            } else if (this.tab === 'schedule') {
+                this.fetchSchedule(true);
             }
         },
         selectCourse(courseId) {
@@ -147,11 +156,19 @@ window.app = new Vue({
                     this.summaryLoaded = true;
                 });
         },
-        fetchSchedule() {
-            fetch('/submission/admin_schedule_api/')
+        fetchSchedule(force = false) {
+            if (!force && this.scheduleLoaded && this.selectedOfferingId === this.scheduleOfferingId) return;
+            this.scheduleLoaded = false;
+            const params = [];
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
+            let url = '/submission/admin_schedule_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     this.schedule = data.schedule_json;
+                    this.scheduleLoaded = true;
+                    this.scheduleOfferingId = this.selectedOfferingId;
                 });
         },
         fetchAccepted() {
@@ -207,26 +224,42 @@ window.app = new Vue({
             d.setHours(0, 0, 0, 0);
             return d < today;
         },
-        // モーダルを閉じる
-        closeModal() {
+        getWeekdayLabel(dateStr) {
+            const date = new Date(dateStr);
+            const labels = ['日', '月', '火', '水', '木', '金', '土'];
+            const idx = date.getDay();
+            return labels[idx] || '';
+        },
+        scheduleByDay(dayLabel) {
+            return this.schedule.filter(item => this.getWeekdayLabel(item.date) === dayLabel);
+        },
+        // スケジュールモーダルを閉じる
+        closeScheduleModal() {
             this.showAddModal = false;
             this.showEditModal = false;
             this.form = { id: null, date: '', topic: '', teacher: '' };
         },
         // 追加処理
         addSchedule() {
+            if (!this.selectedOfferingId) {
+                alert('科目/年度を選択してください');
+                return;
+            }
             // APIへPOSTリクエスト
             fetch('/submission/add_schedule_api/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: this.form.date })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({ date: this.form.date, offering_id: this.selectedOfferingId })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
                         // DB登録成功でschedule配列にも追加
                         this.schedule.push(data.schedule);
-                        this.closeModal();
+                        this.closeScheduleModal();
                     } else {
                         alert('登録失敗: ' + data.message);
                     }
@@ -242,10 +275,17 @@ window.app = new Vue({
         },
         // 編集更新
         updateSchedule() {
+            if (!this.selectedOfferingId) {
+                alert('科目/年度を選択してください');
+                return;
+            }
             fetch('/submission/update_schedule_api/' + this.form.id + '/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: this.form.date })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({ date: this.form.date, offering_id: this.selectedOfferingId })
             })
                 .then(response => response.json())
                 .then(data => {
@@ -255,7 +295,7 @@ window.app = new Vue({
                         if (idx !== -1) {
                             this.schedule.splice(idx, 1, data.schedule);
                         }
-                        this.closeModal();
+                        this.closeScheduleModal();
                     } else {
                         alert('更新失敗: ' + data.message);
                     }
@@ -268,7 +308,10 @@ window.app = new Vue({
         deleteSchedule(id) {
             if (!confirm('本当に削除しますか？')) return;
             fetch('/submission/delete_schedule_api/' + id + '/', {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': window.csrfToken,
+                },
             })
                 .then(response => response.json())
                 .then(data => {
@@ -305,6 +348,7 @@ window.app = new Vue({
             this.modalStudent = student;
             this.showModal = true;
         },
+        // 学生詳細モーダルを閉じる
         closeModal() {
             this.showModal = false;
             this.modalStudent = {};
@@ -396,12 +440,13 @@ window.app = new Vue({
             if (val === 'student') {
                 this.fetchStudens();
             }
-            if (val === 'schedule' && !this.scheduleLoaded) {
-                this.fetchSchedule();
+            if (val === 'schedule') {
+                this.fetchSchedule(true);
             }
         },
         selectedOfferingId() {
             this.refreshCurrentTab();
+            this.scheduleLoaded = false;
         }
     },
     mounted() {

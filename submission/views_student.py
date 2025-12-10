@@ -71,7 +71,10 @@ def student_dashboard(request):
             "course_offering_id": sub.course_offering_id,
         })
 
-    schedule_qs = Schedule.objects.values('id', 'date')
+    schedule_qs = Schedule.objects.all()
+    if selected_offering_id:
+        schedule_qs = schedule_qs.filter(course_offering_id=selected_offering_id)
+    schedule_qs = schedule_qs.values('id', 'date')
     schedule_list = []
     for s in schedule_qs:
         dt = s['date'] if isinstance(s['date'], datetime.date) else datetime.datetime.strptime(s['date'], "%Y-%m-%d").date()

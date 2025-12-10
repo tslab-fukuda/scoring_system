@@ -39,6 +39,7 @@ urlpatterns = [
     path('course_management/', views_admin.course_management, name='course_management'),
     path('admin_course_data_api/', views_admin.admin_course_data_api, name='admin_course_data_api'),
     path('admin_add_course/', views_admin.admin_add_course, name='admin_add_course'),
+    path('admin_update_course/<int:course_id>/', views_admin.admin_update_course, name='admin_update_course'),
     path('admin_delete_course/<int:course_id>/', views_admin.admin_delete_course, name='admin_delete_course'),
     path('admin_add_offering/', views_admin.admin_add_offering, name='admin_add_offering'),
     path('admin_delete_offering/<int:offering_id>/', views_admin.admin_delete_offering, name='admin_delete_offering'),
