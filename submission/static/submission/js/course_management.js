@@ -1,18 +1,23 @@
 new Vue({
-    el: '#course-management',
+    el: '#course-management-app',
     data: {
+        selectedSection: 'course',
         courses: [],
         offerings: [],
         enrollments: [],
         users: [],
-        courseForm: { name: '', code: '', meeting_days: [] },
-        weekDays: ['月', '火', '水', '木', '金', '土', '日'],
+        courseForm: { name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
+        weekDays: ['月', '火', '水', '木', '金'],
         offeringForm: { course_id: '', year: '' },
         enrollmentForm: { user_id: '', offering_id: '', role: 'student', experiment_day: '', experiment_group: '' },
         showCourseEdit: false,
-        editCourseForm: { id: null, name: '', code: '', meeting_days: [] },
+        editCourseForm: { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
     },
     methods: {
+        parseExperimentText(text) {
+            if (!text) return [];
+            return text.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+        },
         fetchAll() {
             fetch('/submission/admin_course_data_api/')
                 .then(r => r.json())
@@ -24,6 +29,7 @@ new Vue({
                 });
         },
         addCourse() {
+            this.courseForm.experiment_numbers = this.parseExperimentText(this.courseForm.experiment_numbers_text);
             fetch('/submission/admin_add_course/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
@@ -33,7 +39,7 @@ new Vue({
             .then(data => {
                 if (data.status === 'success') {
                     this.courses.push(data.course);
-                    this.courseForm = { name: '', code: '', meeting_days: [] };
+                    this.courseForm = { name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' };
                 } else {
                     alert(data.message || '追加に失敗しました');
                 }
@@ -45,15 +51,18 @@ new Vue({
                 name: course.name,
                 code: course.code,
                 meeting_days: [...(course.meeting_days || [])],
+                experiment_numbers: [...(course.experiment_numbers || [])],
+                experiment_numbers_text: (course.experiment_numbers || []).join('\n'),
             };
             this.showCourseEdit = true;
         },
         closeCourseEdit() {
             this.showCourseEdit = false;
-            this.editCourseForm = { id: null, name: '', code: '', meeting_days: [] };
+            this.editCourseForm = { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' };
         },
         updateCourse() {
             if (!this.editCourseForm.id) return;
+            this.editCourseForm.experiment_numbers = this.parseExperimentText(this.editCourseForm.experiment_numbers_text);
             fetch(`/submission/admin_update_course/${this.editCourseForm.id}/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
@@ -67,7 +76,7 @@ new Vue({
                     // offerings の表示情報も更新
                     this.offerings = this.offerings.map(o => {
                         if (o.course_id === data.course.id) {
-                            return { ...o, course_code: data.course.code, course_name: data.course.name, meeting_days: data.course.meeting_days };
+                            return { ...o, course_code: data.course.code, course_name: data.course.name, meeting_days: data.course.meeting_days, experiment_numbers: data.course.experiment_numbers };
                         }
                         return o;
                     });

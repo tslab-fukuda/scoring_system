@@ -23,19 +23,12 @@
           </div>
           <div class="mb-3">
             <label for="id_experiment_number">実験番号</label>
+            {% verbatim %}
             <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required>
               <option value="">選択してください</option>
-              <option value="I-01,02">I-01,02</option>
-              <option value="I-03,04">I-03,04</option>
-              <option value="I-05,06">I-05,06</option>
-              <option value="I-07,08">I-07,08</option>
-              <option value="I-09,10">I-09,10</option>
-              <option value="II-01,02">II-01,02</option>
-              <option value="II-03,04">II-03,04</option>
-              <option value="II-05,06">II-05,06</option>
-              <option value="II-07,08">II-07,08</option>
-              <option value="II-09,10">II-09,10</option>
+              <option v-for="exp in experimentOptions" :value="exp">{{ exp }}</option>
             </select>
+            {% endverbatim %}
           </div>
           <div class="mb-3">
             <label for="file" class="form-label">PDFファイル選択</label>
@@ -64,6 +57,10 @@
 </div>
 
 <!-- PDF.js CDN -->
+<script>
+  window.csrfToken = '{{ csrf_token }}';
+  window.EXPERIMENT_OPTIONS = {{ experiment_options_json|safe }};
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/submit.js' %}"></script>

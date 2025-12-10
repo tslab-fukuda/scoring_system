@@ -194,7 +194,9 @@ def admin_return_submission(request):
 # ---------------------------
 @role_required('admin')
 def admin_course_data_api(request):
-    courses = list(Course.objects.all().values('id', 'name', 'code', 'meeting_days'))
+    courses = list(Course.objects.all().values('id', 'name', 'code', 'meeting_days', 'experiment_numbers'))
+    for c in courses:
+        c['experiment_numbers'] = c.get('experiment_numbers') or []
     offerings = []
     for off in CourseOffering.objects.select_related('course'):
         offerings.append({
@@ -204,6 +206,7 @@ def admin_course_data_api(request):
             'course_name': off.course.name,
             'year': off.year,
             'meeting_days': off.course.meeting_days,
+            'experiment_numbers': off.course.experiment_numbers,
         })
     enrollments = []
     for enr in Enrollment.objects.exclude(role='student').select_related('user', 'course_offering', 'course_offering__course'):
@@ -246,12 +249,22 @@ def admin_add_course(request):
     name = data.get('name')
     code = data.get('code')
     meeting_days = data.get('meeting_days', [])
+    experiment_numbers = data.get('experiment_numbers', [])
     if not name or not code:
         return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
-    course, created = Course.objects.get_or_create(code=code, defaults={'name': name, 'meeting_days': meeting_days})
+    course, created = Course.objects.get_or_create(
+        code=code,
+        defaults={'name': name, 'meeting_days': meeting_days, 'experiment_numbers': experiment_numbers}
+    )
     if not created:
         return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
-    return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code, 'meeting_days': course.meeting_days}})
+    return JsonResponse({'status': 'success', 'course': {
+        'id': course.id,
+        'name': course.name,
+        'code': course.code,
+        'meeting_days': course.meeting_days,
+        'experiment_numbers': course.experiment_numbers,
+    }})
 
 
 @role_required('admin')
@@ -262,6 +275,7 @@ def admin_update_course(request, course_id):
         name = data.get('name')
         code = data.get('code')
         meeting_days = data.get('meeting_days', [])
+        experiment_numbers = data.get('experiment_numbers', [])
         if not name or not code:
             return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
         if Course.objects.filter(code=code).exclude(id=course_id).exists():
@@ -270,8 +284,15 @@ def admin_update_course(request, course_id):
         course.name = name
         course.code = code
         course.meeting_days = meeting_days
+        course.experiment_numbers = experiment_numbers
         course.save()
-        return JsonResponse({'status': 'success', 'course': {'id': course.id, 'name': course.name, 'code': course.code, 'meeting_days': course.meeting_days}})
+        return JsonResponse({'status': 'success', 'course': {
+            'id': course.id,
+            'name': course.name,
+            'code': course.code,
+            'meeting_days': course.meeting_days,
+            'experiment_numbers': course.experiment_numbers,
+        }})
     except Course.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
     except Exception as e:

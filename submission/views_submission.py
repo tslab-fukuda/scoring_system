@@ -17,6 +17,12 @@ def submit_assignment(request):
         if offering_candidate:
             return qs.filter(course_offering_id=offering_candidate).select_related('course_offering').first()
         return qs.select_related('course_offering').order_by('-course_offering__year', '-course_offering__id').first()
+    enrollment = resolve_offering(request.user, offering_id)
+    course = enrollment.course_offering.course if enrollment else None
+    experiment_options = course.experiment_numbers if course and course.experiment_numbers else [
+        'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
+        'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
+    ]
 
     if request.method == "POST" and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = SubmissionForm(request.POST, request.FILES)
@@ -30,6 +36,8 @@ def submit_assignment(request):
             ).exists()
             if already_accepted:
                 return JsonResponse({'status': 'error', 'message': '既に回収されたデータがあります'}, status=400)
+            if exp_no not in experiment_options:
+                return JsonResponse({'status': 'error', 'message': '実験番号が不正です'}, status=400)
 
             submission = form.save(commit=False)
             submission.student = request.user
@@ -57,6 +65,7 @@ def submit_assignment(request):
             'date': date,
             'experiment_group': experiment_group,
             'offering_id': offering_id or "",
+            'experiment_options_json': json.dumps(experiment_options, ensure_ascii=False),
         })
 
 @login_required

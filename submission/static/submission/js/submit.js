@@ -11,6 +11,7 @@ new Vue({
     experimentNumber: "",  // ← 追加
     cmapUrl: "",
     standardFontUrl: "",
+    experimentOptions: (window.EXPERIMENT_OPTIONS || []),
   },
   mounted() {
     // grading_form.js と同様にフォント/CMAPを指定して文字化けを防ぐ
