@@ -42,8 +42,14 @@ new Vue({
             return this.statusList;
         },
         filteredScheduleList() {
-            // experimentDayが指定されていればその曜日のみ抽出
-            return this.scheduleList.filter(item => item.day_of_week === this.experimentDay);
+            let list = this.scheduleList;
+            if (this.allowOfferingSwitch && this.selectedOfferingId) {
+                list = list.filter(item => String(item.course_offering_id) === String(this.selectedOfferingId));
+            }
+            if (this.experimentDay) {
+                list = list.filter(item => item.day_of_week === this.experimentDay);
+            }
+            return list;
         }
     },
     methods: {
@@ -64,6 +70,11 @@ new Vue({
             const m = date.getMonth() + 1;
             const d = date.getDate();
             return `${m}/${d}`;
+        },
+        getWeekdayLabel(dateStr) {
+            const date = new Date(dateStr);
+            const labels = ['日', '月', '火', '水', '木', '金', '土'];
+            return labels[date.getDay()] || '';
         },
         goToSubmit(item) {
             const params = new URLSearchParams();
@@ -150,6 +161,7 @@ new Vue({
             this.selectedOfferingId = numericId;
             this.experimentDay = found.experiment_day || this.experimentDay;
             this.experimentGroup = found.experiment_group || this.experimentGroup;
+            this.fetchSchedule();
         },
         selectCourse(courseId) {
             if (!this.allowOfferingSwitch) return;
@@ -174,6 +186,23 @@ new Vue({
             if (found) {
                 this.selectOffering(found.id);
             }
+        },
+        fetchSchedule() {
+            const params = [];
+            if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
+            let url = '/submission/admin_schedule_api/';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    const schedules = data.schedule_json || [];
+                    this.scheduleList = schedules.map(s => ({
+                        id: s.id,
+                        date: s.date,
+                        course_offering_id: s.course_offering_id,
+                        day_of_week: this.getWeekdayLabel(s.date),
+                    }));
+                });
         }
     },
     mounted() {
@@ -183,6 +212,9 @@ new Vue({
                 this.selectedCourseId = found.course_id;
                 this.selectedYear = found.year;
             }
+        }
+        if (this.allowOfferingSwitch && this.selectedOfferingId) {
+            this.fetchSchedule();
         }
     }
 });

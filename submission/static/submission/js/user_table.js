@@ -5,6 +5,7 @@ new Vue({
             ...user,
             can_view_attendance: user.can_view_attendance
         })),
+        defaultDays: ['火', '木'],
         groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
         )),
@@ -72,6 +73,30 @@ new Vue({
         },
         hasOfferings() {
             return Array.isArray(this.offerings) && this.offerings.length > 0;
+        },
+        currentBulkOffering() {
+            if (!this.bulkCourseId || !this.bulkYear) return null;
+            return this.offerings.find(
+                o => String(o.course_id) === String(this.bulkCourseId) && String(o.year) === String(this.bulkYear)
+            ) || null;
+        },
+        bulkDayOptions() {
+            if (this.currentBulkOffering && Array.isArray(this.currentBulkOffering.meeting_days) && this.currentBulkOffering.meeting_days.length) {
+                return this.currentBulkOffering.meeting_days;
+            }
+            return this.defaultDays;
+        },
+        currentEditOffering() {
+            if (!this.editUser.course_id || !this.editUser.year) return null;
+            return this.offerings.find(
+                o => String(o.course_id) === String(this.editUser.course_id) && String(o.year) === String(this.editUser.year)
+            ) || null;
+        },
+        editDayOptions() {
+            if (this.currentEditOffering && Array.isArray(this.currentEditOffering.meeting_days) && this.currentEditOffering.meeting_days.length) {
+                return this.currentEditOffering.meeting_days;
+            }
+            return this.defaultDays;
         }
     },
     methods: {
@@ -85,6 +110,7 @@ new Vue({
         },
         openCreateModal() {
             if (!this.ensureOfferingSelected()) return;
+            this.syncNewUserDay();
             this.showModal = true;
         },
         openEditModal(user) {
@@ -105,6 +131,7 @@ new Vue({
                 year: user.year || "",
                 offering_id: user.offering_id || ""
             };
+            this.syncEditUserDay();
             this.showEditModal = true;
         },
         toggleAttendance(user) {
@@ -298,6 +325,16 @@ new Vue({
                 o => String(o.course_id) === String(this.editUser.course_id) && String(o.year) === String(this.editUser.year)
             );
             this.editUser.offering_id = found ? found.id : "";
+        },
+        syncNewUserDay() {
+            if (!this.bulkDayOptions.includes(this.newUser.experiment_day)) {
+                this.newUser.experiment_day = this.bulkDayOptions[0] || '';
+            }
+        },
+        syncEditUserDay() {
+            if (!this.editDayOptions.includes(this.editUser.experiment_day)) {
+                this.editUser.experiment_day = this.editDayOptions[0] || '';
+            }
         }
     },
     watch: {
@@ -308,6 +345,16 @@ new Vue({
             if (newVal && this.bulkYear && !yearsForCourse.includes(String(this.bulkYear))) {
                 this.bulkYear = "";
             }
+            this.syncNewUserDay();
+        },
+        bulkYear() {
+            this.syncNewUserDay();
+        },
+        bulkDayOptions() {
+            this.syncNewUserDay();
+        },
+        editDayOptions() {
+            this.syncEditUserDay();
         }
     }
 });

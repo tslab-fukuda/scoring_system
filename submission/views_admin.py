@@ -42,6 +42,7 @@ def admin_dashboard(request):
             'course_name': enr.course_offering.course.name,
             'year': enr.course_offering.year,
             'meeting_days': enr.course_offering.course.meeting_days,
+            'experiment_numbers': enr.course_offering.course.experiment_numbers,
         })
     if not offerings_data and is_admin:
         # 管理者がEnrollment未設定の場合は全開講を選択肢に入れる
@@ -53,6 +54,7 @@ def admin_dashboard(request):
                 'course_name': off.course.name,
                 'year': off.year,
                 'meeting_days': off.course.meeting_days,
+                'experiment_numbers': off.course.experiment_numbers,
             })
     default_offering_id = None
     if offerings_data:
@@ -617,7 +619,8 @@ def user_list_view(request):
             'course_id': o.course_id,
             'course_code': o.course.code,
             'course_name': o.course.name,
-            'year': o.year
+            'year': o.year,
+            'meeting_days': o.course.meeting_days,
         }
         for o in offerings_qs
     ]

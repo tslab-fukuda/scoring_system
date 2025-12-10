@@ -1,6 +1,9 @@
 :root {
     --ts-header-height: 64px;
 }
+body {
+    padding-top: var(--ts-header-height);
+}
 .ts-header {
     /* width: 100%; */
     background: #5f6369;
@@ -11,8 +14,15 @@
     min-height: var(--ts-header-height);
     height: var(--ts-header-height);
     padding: 0 1.5rem;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
     z-index: 1100;
+}
+.ts-header-placeholder {
+    height: var(--ts-header-height);
 }
 .subtitle {
     display: inline-block;

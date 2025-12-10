@@ -67,6 +67,8 @@ def _dashboard_context(user):
             'course_code': off.course.code,
             'course_name': off.course.name,
             'year': off.year,
+            'meeting_days': off.course.meeting_days,
+            'experiment_numbers': off.course.experiment_numbers,
         }
         for off in offerings
     ]

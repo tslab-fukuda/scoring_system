@@ -30,14 +30,15 @@ new Vue({
         items: [],
         offerings: offeringContext.offerings || [],
         selectedOfferingId: offeringContext.defaultOfferingId || null,
+        defaultExperimentNumbers: [
+            'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
+            'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
+        ],
         // ▼実験終了記録タブ用
         students: [],
         showStudentModal: false,
         selectedStudent: {},
-        experimentNumbers: [
-            'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
-            'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
-        ],
+        experimentNumbers: [],
         completeMap: {}, // { [student_id]: { [exp]: true/false } }
         scoreDetail: "",
         showScoreModal: false,
@@ -49,6 +50,16 @@ new Vue({
             return this.tab === 'grading' ? 'grading-list'
                  : this.tab === 'graded' ? 'graded-list'
                  : null;
+        },
+        dayOptions() {
+            const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (current && current.meeting_days && current.meeting_days.length) return current.meeting_days;
+            return ['火', '木'];
+        },
+        experimentOptions() {
+            const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (current && current.experiment_numbers && current.experiment_numbers.length) return current.experiment_numbers;
+            return this.defaultExperimentNumbers;
         }
     },
     methods: {
@@ -69,6 +80,7 @@ new Vue({
             const numericId = Number(id);
             if (this.selectedOfferingId === numericId) return;
             this.selectedOfferingId = numericId;
+            this.experimentNumbers = this.experimentOptions;
             this.refreshCurrentTab();
         },
         fetchList() {
@@ -170,6 +182,7 @@ new Vue({
     },
     mounted() {
         this.ensureOfferingSelected();
+        this.experimentNumbers = this.experimentOptions;
         this.refreshCurrentTab();
     }
 });

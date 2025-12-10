@@ -20,6 +20,10 @@ window.app = new Vue({
         selectedOfferingId: ADMIN_DEFAULT_OFFERING_ID || null,
         selectedCourseId: null,
         selectedYear: null,
+        defaultExperimentNumbers: [
+            'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
+            'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
+        ],
         form: {
             id: null,
             date: '',
@@ -60,6 +64,16 @@ window.app = new Vue({
                 return current.meeting_days;
             }
             return ['火', '木'];
+        },
+        dayOptions() {
+            const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (current && current.meeting_days && current.meeting_days.length) return current.meeting_days;
+            return ['火', '木'];
+        },
+        experimentOptions() {
+            const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            if (current && current.experiment_numbers && current.experiment_numbers.length) return current.experiment_numbers;
+            return this.defaultExperimentNumbers;
         },
         courseOptions() {
             const map = {};

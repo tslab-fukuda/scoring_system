@@ -65,8 +65,7 @@
                 <div class="ts-form-group">
                     <label>実験曜日</label>
                     <select v-model="newUser.experiment_day">
-                        <option value="火">火</option>
-                        <option value="木">木</option>
+                        <option v-for="d in bulkDayOptions" :key="d" :value="d">{{ d }}</option>
                     </select>
                 </div>
                 <div class="ts-form-group">
@@ -106,22 +105,6 @@
                     <input type="text" v-model="editUser.student_id" maxlength="4" required>
                 </div>
                 <div class="ts-form-group">
-                    <label>実験曜日</label>
-                    <select v-model="editUser.experiment_day">
-                        <option value="火">火</option>
-                        <option value="木">木</option>
-                    </select>
-                </div>
-                <div class="ts-form-group">
-                    <label>実験班</label>
-                    <select v-model="editUser.experiment_group">
-                        <option value="">未設定</option>
-                        <option v-for="n in 20" :key="n" :value="('0' + n).slice(-2)">
-                            {{ ('0' + n).slice(-2) }}
-                        </option>
-                    </select>
-                </div>
-                <div class="ts-form-group">
                     <label>科目 / 年度</label>
                     <div v-if="hasOfferings" class="row g-2 align-items-center">
                         <div class="col-md-7">
@@ -138,6 +121,21 @@
                         </div>
                     </div>
                     <p v-else class="text-danger small mb-0">科目と年度の組み合わせが未登録です。先に開講情報を作成してください。</p>
+                </div>
+                <div class="ts-form-group">
+                    <label>実験曜日</label>
+                    <select v-model="editUser.experiment_day">
+                        <option v-for="d in editDayOptions" :key="d" :value="d">{{ d }}</option>
+                    </select>
+                </div>
+                <div class="ts-form-group">
+                    <label>実験班</label>
+                    <select v-model="editUser.experiment_group">
+                        <option value="">未設定</option>
+                        <option v-for="n in 20" :key="n" :value="('0' + n).slice(-2)">
+                            {{ ('0' + n).slice(-2) }}
+                        </option>
+                    </select>
                 </div>
                 <div class="ts-form-group">
                     <label>ロール</label>
