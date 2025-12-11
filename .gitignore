@@ -1,0 +1,16 @@
+# Python 仮想環境
+venv/
+venv_prod/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+
+# Django が作るファイル
+/staticfiles/
+media/
+db.sqlite3
+
+# その他 IDE
+.vscode/
+.idea/
