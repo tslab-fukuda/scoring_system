@@ -77,6 +77,19 @@ def _dashboard_context(user):
         'default_offering_id': default_offering_id,
     }
 
+def _student_enrollment_info(user, offering_id):
+    """
+    指定の科目/年度に紐づくEnrollmentがあれば、そこから曜日・班を取得。
+    なければプロフィールの曜日・班を返す。
+    """
+    up = getattr(user, 'userprofile', None)
+    enr = Enrollment.objects.filter(user=user, course_offering_id=offering_id, role='student').first()
+    experiment_day = enr.experiment_day if enr else (up.experiment_day if up else "")
+    experiment_group = enr.experiment_group if enr else (up.experiment_group if up else "")
+    full_name = up.full_name if up else user.username
+    student_id = up.student_id if up else ""
+    return experiment_day, experiment_group, full_name, student_id
+
 
 @role_required('teacher', 'non-editing teacher', 'admin')
 def teacher_dashboard(request):
@@ -116,13 +129,13 @@ def get_ungraded_submissions(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs.select_related('student', 'student__userprofile'):
-        up = items.student.userprofile
+        exp_day, exp_group, full_name, _ = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': exp_day,
+            'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
-            'full_name': up.full_name,
+            'full_name': full_name,
             'file': items.file.url if items.file else '',
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
@@ -159,13 +172,15 @@ def get_graded_submissions(request):
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
-    for items in qs.select_related('student__userprofile'):
+    for items in qs.select_related('student', 'student__userprofile'):
+        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
-            'experiment_day': items.student.userprofile.experiment_day,
-            'experiment_group': items.student.userprofile.experiment_group,
+            'experiment_day': exp_day,
+            'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
-            'full_name': items.student.userprofile.full_name,
+            'full_name': full_name,
+            'student_id': student_id,
             'file': items.file.url if items.file else '',
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
@@ -204,13 +219,13 @@ def get_ungraded_main_reports(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs:
-        up = items.student.userprofile
+        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': exp_day,
+            'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
-            'full_name': up.full_name,
+            'full_name': full_name,
             'file': items.file.url if items.file else '',
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
@@ -249,7 +264,7 @@ def get_graded_main_reports(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs:
-        up = items.student.userprofile
+        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
         pre_total = 0
         pre_subs = Submission.objects.filter(
             student=items.student,
@@ -270,10 +285,10 @@ def get_graded_main_reports(request):
                 final_value = None
         result.append({
             'id': items.id,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': exp_day,
+            'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
-            'full_name': up.full_name,
+            'full_name': full_name,
             'file': items.file.url if items.file else '',
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',

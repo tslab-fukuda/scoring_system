@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">
+    {% if process == "connect" %}
+      {% blocktrans with provider_name=provider.name %}{{ provider_name }} アカウントを接続{% endblocktrans %}
+    {% else %}
+      {% blocktrans with provider_name=provider.name %}{{ provider_name }} でログイン{% endblocktrans %}
+    {% endif %}
+  </h2>
+  <p class="text-muted">
+    {% if process == "connect" %}
+      {% blocktrans with provider_name=provider.name %}このサイトに {{ provider_name }} アカウントを接続します。{% endblocktrans %}
+    {% else %}
+      {% blocktrans with provider_name=provider.name %}このサイトに {{ provider_name }} でログインします。{% endblocktrans %}
+    {% endif %}
+  </p>
+  <form method="post" class="mt-3">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">{% trans "続ける" %}</button>
+    <a href="{% url 'account_login' %}" class="btn btn-link">{% trans "キャンセル" %}</a>
+  </form>
+</div>
+{% endblock %}

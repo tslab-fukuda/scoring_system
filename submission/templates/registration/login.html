@@ -73,6 +73,11 @@
     </div>
     <button type="submit" class="login">ログイン</button>
   </form>
+  {% if GOOGLE_LOGIN_ENABLED %}
+  <div class="mt-3">
+    <a href="/accounts/google/login/" class="btn btn-outline-secondary w-100">Googleでログイン</a>
+  </div>
+  {% endif %}
   <div class="signup-link">
     まだアカウントを持っていませんか？ <br>
     <a href="{% url 'signup' %}">サインアップはこちら</a>

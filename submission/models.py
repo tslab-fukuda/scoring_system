@@ -32,7 +32,8 @@ class Submission(models.Model):
         ('II-09,10', 'II-09,10'),
     ]
     report_type = models.CharField(max_length=10, choices=REPORT_TYPE_CHOICES, default='main', verbose_name="レポート種別")
-    experiment_number = models.CharField(max_length=10, choices=EXPERIMENT_NUMBER_CHOICES, verbose_name="実験番号")
+    # 実験番号は科目ごとに可変とするためchoicesを外し、長めの長さを許容
+    experiment_number = models.CharField(max_length=32, verbose_name="実験番号")
     accepted = models.BooleanField(default=False) # 受け取り判定
     final_score = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     final_evaluated = models.BooleanField(default=False)

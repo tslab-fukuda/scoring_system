@@ -1,6 +1,11 @@
 asgiref==3.8.1
 Django==5.2.1
 pillow==11.2.1
+pycryptodome==3.23.0
 PyMuPDF==1.26.0
 PyPDF2==3.0.1
 sqlparse==0.5.3
+django-allauth==65.2.0
+requests==2.32.3
+PyJWT==2.9.0
+cryptography==43.0.1

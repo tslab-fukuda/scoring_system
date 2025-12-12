@@ -16,6 +16,14 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# DBを環境ごとに切り替えられるように、環境変数でファイル名を指定可能にする。
+# 例) 本番: export DJANGO_DB_FILE=db_prod.sqlite3
+#     テスト: export DJANGO_DB_FILE=db_test.sqlite3
+DB_FILE = os.environ.get('DJANGO_DB_FILE', 'db.sqlite3')
+
+# Googleログインの有効/無効（本番で上書き）
+GOOGLE_LOGIN_ENABLED = False
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -48,6 +56,7 @@ INSTALLED_APPS = [
     'submission',
     'accounts',
     'attendance',
+    # allauthを使う場合は本番設定で上書き追加する（settings_prodでextend予定）
 ]
 
 MIDDLEWARE = [
@@ -72,10 +81,11 @@ TEMPLATES = [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-            ],
-        },
+            'django.contrib.messages.context_processors.messages',
+            'submission.context_processors.google_login_enabled',
+        ],
     },
+},
 ]
 
 WSGI_APPLICATION = 'scoring_system.wsgi.application'
@@ -87,7 +97,7 @@ WSGI_APPLICATION = 'scoring_system.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / DB_FILE,
     }
 }
 
