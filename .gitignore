@@ -10,6 +10,7 @@ __pycache__/
 /staticfiles/
 media/
 db.sqlite3
+db_prod.sqlite3
 
 # その他 IDE
 .vscode/
