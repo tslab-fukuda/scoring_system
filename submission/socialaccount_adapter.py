@@ -19,7 +19,8 @@ class EmailOnlySocialAccountAdapter(DefaultSocialAccountAdapter):
         qs = SocialApp.objects.filter(provider=provider_id)
         if client_id:
             qs = qs.filter(client_id=client_id)
-        return qs.order_by("id").first()
+        app = qs.order_by("id").first()
+        return app
 
     def pre_social_login(self, request, sociallogin):
         # Googleから受け取ったメール
@@ -40,6 +41,11 @@ class EmailOnlySocialAccountAdapter(DefaultSocialAccountAdapter):
         if not user:
             logger.error("Google login rejected: email not found [%s]", email)
             raise PermissionDenied("登録されていないメールです")
+
+        # SocialApp 未設定なら拒否
+        if not self.get_app(request, sociallogin.account.provider):
+            logger.error("Google login rejected: SocialApp not configured")
+            raise PermissionDenied("Googleログインが未設定です")
 
         # 既存ユーザとしてそのままログインさせる（接続ではなくログイン）
         sociallogin.state["process"] = "login"

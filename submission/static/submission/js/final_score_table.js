@@ -10,6 +10,12 @@ new Vue({
         selectedOfferingId: (FINAL_SCORE_META && FINAL_SCORE_META.defaultOfferingId) || null,
         selectedCourseId: '',
         selectedYear: '',
+        showScoreDetailModal: false,
+        scoreDetailLoading: false,
+        scoreDetailStudent: { name: '', student_id: '' },
+        scoreDetailCourse: { course_code: '', course_name: '', year: '' },
+        scoreDetailExperiment: '',
+        scoreDetailSubmissions: [],
     },
     computed: {
         courseOptions() {
@@ -85,6 +91,55 @@ new Vue({
                     this.students = data.students || [];
                     this.experimentNumbers = data.experiment_numbers || this.experimentNumbers;
                 });
+        },
+        openScoreDetail(stu, experimentNumber) {
+            if (!this.selectedOfferingId) {
+                alert('科目/年度を選択してください');
+                return;
+            }
+            if (!stu || !stu.user_profile_id) {
+                alert('対象学生の識別情報が取得できません');
+                return;
+            }
+            this.showScoreDetailModal = true;
+            this.scoreDetailLoading = true;
+            this.scoreDetailStudent = { name: stu.name, student_id: stu.student_id };
+            this.scoreDetailCourse = { course_code: '', course_name: '', year: '' };
+            this.scoreDetailExperiment = experimentNumber;
+            this.scoreDetailSubmissions = [];
+            const params = new URLSearchParams();
+            params.append('offering_id', this.selectedOfferingId);
+            params.append('user_profile_id', stu.user_profile_id);
+            params.append('experiment_number', experimentNumber);
+            fetch(`/submission/final_score_list/detail/?${params.toString()}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        alert(data.message || '採点詳細の取得に失敗しました');
+                        this.closeScoreDetailModal();
+                        return;
+                    }
+                    this.scoreDetailStudent = data.student || this.scoreDetailStudent;
+                    this.scoreDetailCourse = data.course || this.scoreDetailCourse;
+                    this.scoreDetailExperiment = data.experiment_number || this.scoreDetailExperiment;
+                    this.scoreDetailSubmissions = data.submissions || [];
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('採点詳細の取得に失敗しました');
+                    this.closeScoreDetailModal();
+                })
+                .finally(() => {
+                    this.scoreDetailLoading = false;
+                });
+        },
+        closeScoreDetailModal() {
+            this.showScoreDetailModal = false;
+            this.scoreDetailLoading = false;
+            this.scoreDetailStudent = { name: '', student_id: '' };
+            this.scoreDetailCourse = { course_code: '', course_name: '', year: '' };
+            this.scoreDetailExperiment = '';
+            this.scoreDetailSubmissions = [];
         },
         toggleSort(field) {
             if (this.sortField === field) {

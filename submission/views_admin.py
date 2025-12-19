@@ -87,12 +87,16 @@ def admin_get_submissions_api(request):
 
     # 3回提出されているものを自動で受付
     for (student_id, experiment_number), cnt in count_map.items():
-        comp_status = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number).values_list('completed', flat=True)
+        comp_qs = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number)
+        if offering_id:
+            comp_qs = comp_qs.filter(course_offering_id=offering_id)
+        comp_status = comp_qs.values_list('completed', flat=True)
         completed = comp_status[0] if comp_status else False
         if cnt >= 3 and completed:
             Submission.objects.filter(
                 report_type='main', graded=False, accepted=False,
-                student_id=student_id, experiment_number=experiment_number
+                student_id=student_id, experiment_number=experiment_number,
+                course_offering_id=offering_id if offering_id else None
             ).update(graded=True,accepted=True)
     
     qs = base_qs.filter(graded=False, accepted=False)
@@ -105,6 +109,8 @@ def admin_get_submissions_api(request):
     
     # 各実験ごとのstudent+experiment_numberで「本レポートの提出回数」を算出
     all_main = Submission.objects.filter(report_type='main')
+    if offering_id:
+        all_main = all_main.filter(course_offering_id=offering_id)
     submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
     
     submissions = []
@@ -256,7 +262,11 @@ def admin_add_course(request):
         return JsonResponse({'status': 'error', 'message': 'name and code are required'}, status=400)
     course, created = Course.objects.get_or_create(
         code=code,
-        defaults={'name': name, 'meeting_days': meeting_days, 'experiment_numbers': experiment_numbers}
+        defaults={
+            'name': name,
+            'meeting_days': meeting_days,
+            'experiment_numbers': experiment_numbers,
+        }
     )
     if not created:
         return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
@@ -327,7 +337,13 @@ def admin_add_offering(request):
     if not created:
         return JsonResponse({'status': 'error', 'message': 'offering already exists'}, status=400)
     return JsonResponse({'status': 'success', 'offering': {
-        'id': off.id, 'course_id': course.id, 'course_code': course.code, 'course_name': course.name, 'year': off.year
+        'id': off.id,
+        'course_id': course.id,
+        'course_code': course.code,
+        'course_name': course.name,
+        'year': off.year,
+        'meeting_days': course.meeting_days,
+        'experiment_numbers': course.experiment_numbers,
     }})
 
 
@@ -396,43 +412,58 @@ def get_students_api(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
     qs = UserProfile.objects.filter(role='student')
+    enr_map = {}
     if offering_id:
-        user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', flat=True)
-        qs = qs.filter(user_id__in=user_ids)
+        user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', 'experiment_day', 'experiment_group')
+        enr_map = {u: {'experiment_day': d, 'experiment_group': g} for u, d, g in user_ids}
+        qs = qs.filter(user_id__in=enr_map.keys())
     if student_id:
         qs = qs.filter(student_id__icontains=student_id)
     students = []
     for up in qs:
+        override = enr_map.get(up.user_id, {})
         students.append({
             'id': up.id,
             'full_name': up.full_name,
             'student_id': up.student_id,
             'user__email': up.user.email,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': override.get('experiment_day', up.experiment_day),
+            'experiment_group': override.get('experiment_group', up.experiment_group),
             'photo': up.photo.url if up.photo else ''
         })
     return JsonResponse({'students_json': students})
 
 def get_summary_api(request):
-    experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
+    experiment_numbers = []
     students = UserProfile.objects.filter(role='student')
+
+    # 科目/年度を選択している場合、その科目の実験番号とEnrollmentで対象学生を絞る
     if offering_id:
+        try:
+            off = CourseOffering.objects.select_related('course').get(id=offering_id)
+            experiment_numbers = off.course.experiment_numbers or []
+        except CourseOffering.DoesNotExist:
+            experiment_numbers = []
         user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', flat=True)
         students = students.filter(user_id__in=user_ids)
+    if not experiment_numbers:
+        experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
     if student_id:
         students = students.filter(student_id__icontains=student_id)
     results = []
     for item in students:
         user = item.user
         # 受付済みレポートのみ
-        accepted_reports = Submission.objects.filter(
+        accepted_qs = Submission.objects.filter(
             student=user,
             report_type='main',
             accepted=True
-        ).values_list('experiment_number', flat=True)
+        )
+        if offering_id:
+            accepted_qs = accepted_qs.filter(course_offering_id=offering_id)
+        accepted_reports = accepted_qs.values_list('experiment_number', flat=True)
         accepted_set = set(accepted_reports)
         missing_set = set(experiment_numbers) - accepted_set
         results.append({
@@ -474,6 +505,9 @@ def add_schedule_api(request):
             course_offering = None
             if offering_id:
                 course_offering = CourseOffering.objects.filter(id=offering_id).first()
+            # 同一科目/年度で同一日付が既に登録されている場合はエラー
+            if course_offering and Schedule.objects.filter(course_offering=course_offering, date=date).exists():
+                return JsonResponse({'status': 'error', 'message': '同じ日付が既に登録されています'}, status=400)
             s = Schedule.objects.create(date=date, course_offering=course_offering)
             s.refresh_from_db()
             return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d'), 'course_offering_id': s.course_offering_id}})
@@ -495,6 +529,9 @@ def update_schedule_api(request, schedule_id):
             if offering_id:
                 course_offering = CourseOffering.objects.filter(id=offering_id).first()
                 s.course_offering = course_offering
+            # 更新時も重複チェック（自身は除外）
+            if s.course_offering and Schedule.objects.filter(course_offering=s.course_offering, date=date).exclude(id=schedule_id).exists():
+                return JsonResponse({'status': 'error', 'message': '同じ日付が既に登録されています'}, status=400)
             s.save()
             s.refresh_from_db()
             return JsonResponse({'status': 'success', 'schedule': {'id': s.id, 'date': s.date.strftime('%Y-%m-%d'), 'course_offering_id': s.course_offering_id}})
@@ -651,6 +688,7 @@ def user_list_view(request):
                     user_data.append({
                         'id': user.id,
                         'row_key': f"{user.id}-enr-{enrollment.id}",
+                        'enrollment_id': enrollment.id,
                         'name': profile.full_name,
                         'email': user.email,
                         'student_id': profile.student_id,
@@ -669,6 +707,7 @@ def user_list_view(request):
                 user_data.append({
                     'id': user.id,
                     'row_key': f"{user.id}-no-enrollment",
+                    'enrollment_id': None,
                     'name': profile.full_name,
                     'email': user.email,
                     'student_id': profile.student_id,
@@ -769,18 +808,19 @@ def create_user_view(request):
 
             user = User.objects.filter(username=data['email']).first()
             if not user:
+                password = data.get('password') or '0000'
                 user = User.objects.create_user(
                     username=data['email'],
                     email=data['email'],
-                    password=data['password']
+                    password=password
                 )
                 profile = UserProfile.objects.create(
                     user=user,
                     full_name=data['full_name'],
                     email=data['email'],
-                    student_id=data['student_id'],
-                    experiment_day=data['experiment_day'],
-                    experiment_group=data['experiment_group'],
+                    student_id=data.get('student_id', '') or '',
+                    experiment_day=data.get('experiment_day', ''),
+                    experiment_group=data.get('experiment_group', ''),
                     role='student'
                 )
             else:
@@ -800,8 +840,8 @@ def create_user_view(request):
                 course_offering=offering,
                 role='student',
                 defaults={
-                    'experiment_day': data.get('experiment_day', profile.experiment_day),
-                    'experiment_group': data.get('experiment_group', profile.experiment_group),
+                    'experiment_day': data.get('experiment_day', '') or profile.experiment_day,
+                    'experiment_group': data.get('experiment_group', '') or profile.experiment_group,
                 }
             )
             if not created:
@@ -846,6 +886,9 @@ def update_user_view(request, user_id):
 
         profile.save()
         user.save()
+
+        # 既存の他ロールのEnrollmentは削除（ロールは単一）
+        Enrollment.objects.filter(user=user).exclude(role=new_role).delete()
 
         offering_id = data.get('offering_id')
         if offering_id:
@@ -903,40 +946,74 @@ def bulk_create_users(request):
 
     created = 0
     skipped = 0
+    duplicates = []
     try:
         decoded = csv_file.read().decode('utf-8-sig').splitlines()
         reader = csv.DictReader(decoded)
+        required_fields = ['名前', 'メールアドレス', '学生番号', '曜日', '班']
+        if not reader.fieldnames or any(f not in reader.fieldnames for f in required_fields):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'CSVのカラムは「名前，メールアドレス，学生番号，曜日，班」にしてください'
+            }, status=400)
+        # 既存の当該科目/年度Enrollmentをキャッシュ（メールで判定／ロール問わず重複禁止）
+        existing_emails = set()
+        if offering:
+            for enr in Enrollment.objects.filter(course_offering=offering).select_related('user__userprofile'):
+                email_val = (enr.user.username or "").lower()
+                if email_val:
+                    existing_emails.add(email_val)
         for row in reader:
-            email = row.get('メールアドレス')
+            email = (row.get('メールアドレス') or '').strip()
             if not email:
                 skipped += 1
                 continue
+            full_name = (row.get('名前', '') or '').strip()
+            student_id_val = (row.get('学生番号', '') or '').strip()
+            day_val = (row.get('曜日', '') or '').strip()
+            group_val = (row.get('班', row.get('班番号', '')) or '').strip()
+            email_lower = email.lower()
+            # まず、選択中科目/年度で同メールのEnrollmentが既にある場合は重複扱い（ロール問わず）
+            if offering and Enrollment.objects.filter(
+                user__username__iexact=email,
+                course_offering=offering,
+            ).exists():
+                duplicates.append({'名前': full_name, 'メールアドレス': email, '学生番号': student_id_val})
+                skipped += 1
+                existing_emails.add(email_lower)
+                continue
+            # 当該科目/年度で既に登録済みなら重複としてスキップ（メールのみ判定）
+            if offering and (email_lower in existing_emails):
+                duplicates.append({'名前': full_name, 'メールアドレス': email, '学生番号': student_id_val})
+                skipped += 1
+                continue
             if User.objects.filter(username=email).exists():
-                if offering and not Enrollment.objects.filter(user__username=email, course_offering=offering, role='student').exists():
+                if offering and not Enrollment.objects.filter(user__username=email, course_offering=offering).exists():
                     user = User.objects.get(username=email)
                     Enrollment.objects.create(
                         user=user,
                         course_offering=offering,
                         role='student',
-                        experiment_day=row.get('曜日', ''),
-                        experiment_group=row.get('班番号', ''),
+                        experiment_day=day_val,
+                        experiment_group=group_val,
                     )
                     created += 1
+                    existing_emails.add(email_lower)
                 else:
                     skipped += 1
                 continue
             user = User.objects.create_user(
                 username=email,
                 email=email,
-                password=row.get('学生番号', '')
+                password=student_id_val
             )
             profile = UserProfile.objects.create(
                 user=user,
-                full_name=row.get('名前', ''),
+                full_name=full_name,
                 email=email,
-                student_id=row.get('学生番号', ''),
-                experiment_day=row.get('曜日', ''),
-                experiment_group=row.get('班番号', ''),
+                student_id=student_id_val,
+                experiment_day=day_val,
+                experiment_group=group_val,
                 role='student'
             )
             if offering:
@@ -950,7 +1027,9 @@ def bulk_create_users(request):
                     }
                 )
             created += 1
-        return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped})
+            # 新規作成分も重複判定セットに追加
+            existing_emails.add(email_lower)
+        return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped, 'duplicates': duplicates})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
@@ -975,8 +1054,6 @@ def upload_student_photo(request, student_id):
 
 @role_required('admin')
 def final_score_list_view(request):
-    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
-
     offerings = list(CourseOffering.objects.select_related('course'))
     offering_options = [
         {
@@ -994,6 +1071,13 @@ def final_score_list_view(request):
         default_offering_id = latest.id
 
     offering_id = request.GET.get('offering_id') or default_offering_id
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    if offering_id:
+        try:
+            off = CourseOffering.objects.select_related('course').get(id=offering_id)
+            experiment_numbers = off.course.experiment_numbers or experiment_numbers
+        except CourseOffering.DoesNotExist:
+            pass
     student_data = _build_final_score_rows(experiment_numbers, offering_id)
     context = {
         'students_json': json.dumps(student_data, ensure_ascii=False),
@@ -1008,10 +1092,16 @@ def final_score_list_view(request):
 @role_required('admin')
 def final_score_list_csv(request):
     """Download final scores as CSV (現在の表示条件に合わせる)."""
-    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
     offering_id = request.GET.get('offering_id')
     day = request.GET.get('day') or None
     group = request.GET.get('group') or None
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    if offering_id:
+        try:
+            off = CourseOffering.objects.select_related('course').get(id=offering_id)
+            experiment_numbers = off.course.experiment_numbers or experiment_numbers
+        except CourseOffering.DoesNotExist:
+            pass
     student_data = _build_final_score_rows(experiment_numbers, offering_id, day=day, group=group)
 
     response = HttpResponse(content_type='text/csv')
@@ -1039,35 +1129,47 @@ def final_score_list_csv(request):
 
 def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=None):
     students_qs = UserProfile.objects.filter(role='student').select_related('user')
+    enrollment_map = {}
     if offering_id:
-        student_ids = Enrollment.objects.filter(
-            role='student',
+        enr_qs = Enrollment.objects.filter(
             course_offering_id=offering_id,
-        ).values_list('user_id', flat=True)
-        students_qs = students_qs.filter(user_id__in=student_ids)
-    if day:
-        students_qs = students_qs.filter(experiment_day=day)
-    if group:
-        students_qs = students_qs.filter(experiment_group=group)
+            role='student',
+        )
+        if day:
+            enr_qs = enr_qs.filter(experiment_day=day)
+        if group:
+            enr_qs = enr_qs.filter(experiment_group=group)
+        enrollment_map = {
+            e.user_id: e
+            for e in enr_qs.only('user_id', 'experiment_day', 'experiment_group')
+        }
+        students_qs = students_qs.filter(user_id__in=enrollment_map.keys())
+    else:
+        if day:
+            students_qs = students_qs.filter(experiment_day=day)
+        if group:
+            students_qs = students_qs.filter(experiment_group=group)
     student_data = []
     for up in students_qs:
+        enr = enrollment_map.get(up.user_id)
         record = {
+            'user_profile_id': up.id,
+            'user_id': up.user_id,
             'name': up.full_name,
             'student_id': up.student_id,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': enr.experiment_day if enr else up.experiment_day,
+            'experiment_group': enr.experiment_group if enr else up.experiment_group,
         }
         for ex in experiment_numbers:
-            sub = (
-                Submission.objects.filter(
-                    student=up.user,
-                    experiment_number=ex,
-                    report_type='main',
-                    final_evaluated=True,
-                )
-                .order_by('-submitted_at')
-                .first()
+            sub_qs = Submission.objects.filter(
+                student=up.user,
+                experiment_number=ex,
+                report_type='main',
+                final_evaluated=True,
             )
+            if offering_id:
+                sub_qs = sub_qs.filter(course_offering_id=offering_id)
+            sub = sub_qs.order_by('-submitted_at').first()
             record[ex] = float(sub.final_score) if sub and sub.final_score is not None else ''
         student_data.append(record)
     return student_data
@@ -1075,10 +1177,93 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
 
 @role_required('admin')
 def final_score_data_api(request):
-    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
     offering_id = request.GET.get('offering_id')
+    experiment_numbers = [n[0] for n in Submission.EXPERIMENT_NUMBER_CHOICES]
+    if offering_id:
+        try:
+            off = CourseOffering.objects.select_related('course').get(id=offering_id)
+            experiment_numbers = off.course.experiment_numbers or experiment_numbers
+        except CourseOffering.DoesNotExist:
+            pass
     data = _build_final_score_rows(experiment_numbers, offering_id)
     return JsonResponse({'students': data, 'experiment_numbers': experiment_numbers})
+
+
+@role_required('admin')
+def final_score_detail_api(request):
+    offering_id = request.GET.get('offering_id')
+    user_profile_id = request.GET.get('user_profile_id')
+    experiment_number = request.GET.get('experiment_number')
+    if not (offering_id and user_profile_id and experiment_number):
+        return JsonResponse({'status': 'error', 'message': 'offering_id, user_profile_id, experiment_number are required'}, status=400)
+    try:
+        offering = CourseOffering.objects.select_related('course').get(id=offering_id)
+        up = UserProfile.objects.select_related('user').get(id=user_profile_id, role='student')
+    except (CourseOffering.DoesNotExist, UserProfile.DoesNotExist):
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+    if not Enrollment.objects.filter(user=up.user, course_offering=offering).exists():
+        return JsonResponse({'status': 'error', 'message': 'not enrolled'}, status=403)
+    enr = Enrollment.objects.filter(user=up.user, course_offering=offering, role='student').first() or Enrollment.objects.filter(user=up.user, course_offering=offering).first()
+
+    subs = (
+        Submission.objects
+        .filter(student=up.user, course_offering=offering, experiment_number=experiment_number)
+        .order_by('submitted_at')
+    )
+
+    def _to_float(x, default=0.0):
+        try:
+            return float(x)
+        except Exception:
+            return default
+
+    submissions = []
+    for s in subs:
+        details = s.score_details or []
+        total = 0.0
+        normalized = []
+        if isinstance(details, list):
+            for item in details:
+                if not isinstance(item, dict):
+                    continue
+                label = item.get('label') or item.get('key') or ''
+                value = _to_float(item.get('value', 0))
+                weight = _to_float(item.get('weight', 1), default=1.0)
+                subtotal = value * weight
+                total += subtotal
+                normalized.append({
+                    'label': label,
+                    'value': value,
+                    'weight': weight,
+                    'subtotal': subtotal,
+                })
+        submissions.append({
+            'id': s.id,
+            'report_type': s.report_type,
+            'submitted_at': timezone.localtime(s.submitted_at).strftime('%Y-%m-%d %H:%M'),
+            'total_score': total,
+            'final_score': float(s.final_score) if s.final_score is not None else None,
+            'final_evaluated': bool(s.final_evaluated),
+            'details': normalized,
+        })
+
+    return JsonResponse({
+        'status': 'success',
+        'student': {
+            'name': up.full_name,
+            'student_id': up.student_id,
+            'experiment_day': enr.experiment_day if enr else getattr(up, 'experiment_day', ''),
+            'experiment_group': enr.experiment_group if enr else getattr(up, 'experiment_group', ''),
+        },
+        'course': {
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+        },
+        'experiment_number': experiment_number,
+        'submissions': submissions,
+    })
 
 
 @role_required('admin')

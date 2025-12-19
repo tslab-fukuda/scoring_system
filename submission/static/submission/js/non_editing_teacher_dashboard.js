@@ -30,6 +30,8 @@ new Vue({
         items: [],
         offerings: offeringContext.offerings || [],
         selectedOfferingId: offeringContext.defaultOfferingId || null,
+        selectedCourseId: null,
+        selectedYear: null,
         defaultExperimentNumbers: [
             'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
             'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
@@ -38,6 +40,7 @@ new Vue({
         students: [],
         showStudentModal: false,
         selectedStudent: {},
+        studentReports: [],
         experimentNumbers: [],
         completeMap: {}, // { [student_id]: { [exp]: true/false } }
         scoreDetail: "",
@@ -46,6 +49,22 @@ new Vue({
         hasScoreSummary: false,
     },
     computed: {
+        courseOptions() {
+            const map = {};
+            this.offerings.forEach(o => {
+                if (!map[o.course_id]) {
+                    map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
+                }
+            });
+            return Object.values(map);
+        },
+        yearOptions() {
+            if (!this.selectedCourseId) return [];
+            const years = this.offerings
+                .filter(o => String(o.course_id) === String(this.selectedCourseId))
+                .map(o => o.year);
+            return [...new Set(years)].sort((a, b) => b - a);
+        },
         currentTabComponent() {
             return this.tab === 'grading' ? 'grading-list'
                  : this.tab === 'graded' ? 'graded-list'
@@ -63,11 +82,31 @@ new Vue({
         }
     },
     methods: {
+        resolveOfferingId(courseId, year) {
+            const candidate = this.offerings
+                .filter(o => String(o.course_id) === String(courseId) && String(o.year) === String(year))
+                .sort((a, b) => (b.year - a.year) || (b.id - a.id));
+            return candidate.length ? candidate[0].id : null;
+        },
         ensureOfferingSelected() {
-            if (this.selectedOfferingId || !this.offerings.length) return;
+            if (this.selectedOfferingId) {
+                const cur = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+                if (cur) {
+                    this.selectedCourseId = cur.course_id;
+                    this.selectedYear = cur.year;
+                }
+                return;
+            }
+            if (!this.offerings.length) return;
             const sorted = [...this.offerings].sort((a, b) => (b.year - a.year) || (b.id - a.id));
             const latest = sorted[0];
-            this.selectedOfferingId = latest ? Number(latest.id) : null;
+            if (latest) {
+                this.selectedCourseId = latest.course_id;
+                this.selectedYear = latest.year;
+                this.selectedOfferingId = Number(latest.id);
+            } else {
+                this.selectedOfferingId = null;
+            }
         },
         refreshCurrentTab() {
             if (this.tab === 'experiment_record') {
@@ -76,10 +115,23 @@ new Vue({
                 this.fetchList();
             }
         },
-        selectOffering(id) {
-            const numericId = Number(id);
-            if (this.selectedOfferingId === numericId) return;
-            this.selectedOfferingId = numericId;
+        selectCourse(courseId) {
+            if (String(this.selectedCourseId) === String(courseId)) return;
+            this.selectedCourseId = courseId;
+            // その科目の最新年度を選択
+            const years = this.offerings
+                .filter(o => String(o.course_id) === String(courseId))
+                .map(o => o.year)
+                .sort((a, b) => b - a);
+            this.selectedYear = years[0] || null;
+            this.selectedOfferingId = this.selectedYear ? this.resolveOfferingId(courseId, this.selectedYear) : null;
+            this.experimentNumbers = this.experimentOptions;
+            this.refreshCurrentTab();
+        },
+        selectYear(year) {
+            if (String(this.selectedYear) === String(year)) return;
+            this.selectedYear = year;
+            this.selectedOfferingId = this.resolveOfferingId(this.selectedCourseId, year);
             this.experimentNumbers = this.experimentOptions;
             this.refreshCurrentTab();
         },
@@ -139,6 +191,14 @@ new Vue({
         openStudentModal(stu) {
             this.selectedStudent = stu;
             this.showStudentModal = true;
+            const params = new URLSearchParams();
+            params.append('student_id', stu.id);
+            if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
+            fetch('/submission/teacher_student_reports/?' + params.toString())
+                .then(res => res.json())
+                .then(data => {
+                    this.studentReports = data.reports || [];
+                });
         },
         isExperimentComplete(exp) {
             if (!this.selectedStudent || !this.selectedStudent.experiment_completion) return false;

@@ -86,7 +86,8 @@
 
 <!-- モーダルウィンドウ -->
 <div class="modal fade" id="pdfPreviewModal" tabindex="-1" aria-labelledby="pdfPreviewLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl" style="max-width: 90vw;">
+    <!-- ヘッダーと被らないよう上に余白を持たせる -->
+    <div class="modal-dialog modal-xl" style="max-width: 90vw; margin-top: 80px;">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="pdfPreviewLabel">添削済みPDFプレビュー</h5>
@@ -109,6 +110,7 @@
     window.reportType = "{{ submission.report_type }}";
     window.userRole = "{{ request.user.userprofile.role }}";
     window.initialScoreDetails = {{ score_details|safe }};
+    window.submissionId = {{ submission.id }};
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>

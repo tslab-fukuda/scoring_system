@@ -24,8 +24,8 @@ new Vue({
             password: '',
             password2: '',
             student_id: '',
-            experiment_day: '火',
-            experiment_group: '01'
+            experiment_day: '',
+            experiment_group: ''
         },
         editUser: {
             id: null,
@@ -108,6 +108,25 @@ new Vue({
                 this.sortAsc = true;
             }
         },
+        saveSelection() {
+            try {
+                localStorage.setItem('userListCourse', this.bulkCourseId || '');
+                localStorage.setItem('userListYear', this.bulkYear || '');
+            } catch (e) {
+                console.warn('localStorage save failed', e);
+            }
+        },
+        restoreSelection() {
+            try {
+                const savedCourse = localStorage.getItem('userListCourse');
+                const savedYear = localStorage.getItem('userListYear');
+                if (savedCourse) this.bulkCourseId = savedCourse;
+                if (savedYear) this.bulkYear = savedYear;
+                this.resolveBulkOffering();
+            } catch (e) {
+                console.warn('localStorage restore failed', e);
+            }
+        },
         openCreateModal() {
             if (!this.ensureOfferingSelected()) return;
             this.syncNewUserDay();
@@ -150,24 +169,50 @@ new Vue({
         },
         deleteUser(user) {
             if (!confirm(`${user.name} を本当に削除しますか？`)) return;
-            fetch(`/users/delete/${user.id}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': CSRF_TOKEN
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    this.users = this.users.filter(u => u.id !== user.id);
-                } else {
-                    alert('削除に失敗しました: ' + data.message);
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert('通信エラーが発生しました');
-            });
+            const doRemoveRow = () => {
+                this.users = this.users.filter(u => u.row_key !== user.row_key);
+            };
+            // Enrollmentがある場合はEnrollmentのみ削除
+            if (user.enrollment_id) {
+                fetch(`/submission/admin_delete_enrollment/${user.enrollment_id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': CSRF_TOKEN
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        doRemoveRow();
+                    } else {
+                        alert('削除に失敗しました: ' + (data.message || ''));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('通信エラーが発生しました');
+                });
+            } else {
+                // Enrollmentなしの場合のみユーザ自体を削除
+                fetch(`/users/delete/${user.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': CSRF_TOKEN
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        this.users = this.users.filter(u => u.id !== user.id);
+                    } else {
+                        alert('削除に失敗しました: ' + (data.message || ''));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('通信エラーが発生しました');
+                });
+            }
         },
         updateUser() {
             if (!this.editUser.id) return;
@@ -232,7 +277,10 @@ new Vue({
                 alert("科目と年度を選択してください");
                 return;
             }
-            if (this.newUser.password !== this.newUser.password2) {
+            // パスワード未入力なら自動設定
+            const password = this.newUser.password || this.newUser.password2 || '0000';
+            const password2 = this.newUser.password2 || this.newUser.password || '0000';
+            if (password !== password2) {
                 alert("パスワードが一致しません");
                 return;
             }
@@ -245,7 +293,7 @@ new Vue({
                 body: JSON.stringify({
                     full_name: this.newUser.full_name,
                     email: this.newUser.email,
-                    password: this.newUser.password,
+                    password: password,
                     student_id: this.newUser.student_id,
                     experiment_day: this.newUser.experiment_day,
                     experiment_group: this.newUser.experiment_group,
@@ -256,6 +304,7 @@ new Vue({
             .then(data => {
                 if (data.status === 'success') {
                     alert("ユーザーを作成しました");
+                    this.saveSelection();
                     location.reload(); // 一覧更新
                 } else {
                     alert("作成失敗: " + data.message);
@@ -270,11 +319,13 @@ new Vue({
             this.$refs.csvInput.click();
         },
         uploadCsv(event) {
-            const file = event.target.files[0];
+            const inputEl = event.target;
+            const file = inputEl.files[0];
             if (!file) return;
             this.resolveBulkOffering();
             if (!this.bulkOfferingId) {
                 alert("科目と年度を選択してください");
+                inputEl.value = "";
                 return;
             }
             const formData = new FormData();
@@ -290,7 +341,13 @@ new Vue({
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert('登録が完了しました');
+                    if (data.duplicates && data.duplicates.length) {
+                        const lines = data.duplicates.map(d => `${d.名前 || ''} / ${d.メールアドレス || ''} / ${d.学生番号 || ''}`);
+                        alert('重複のため登録されなかったデータがあります:\n' + lines.join('\n'));
+                    } else {
+                        alert('登録が完了しました');
+                    }
+                    this.saveSelection();
                     location.reload();
                 } else {
                     alert('登録失敗: ' + data.message);
@@ -298,6 +355,10 @@ new Vue({
             })
             .catch(err => {
                 console.error('通信エラー', err);
+            })
+            .finally(() => {
+                // 同じファイルを再アップロードできるようにリセット
+                inputEl.value = "";
             });
         },
         ensureOfferingSelected() {
@@ -356,5 +417,8 @@ new Vue({
         editDayOptions() {
             this.syncEditUserDay();
         }
+    },
+    mounted() {
+        this.restoreSelection();
     }
 });

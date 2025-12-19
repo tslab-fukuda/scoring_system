@@ -68,17 +68,76 @@
             </thead>
             <tbody>
             {% verbatim %}
-                <tr v-for="stu in processedStudents" :key="stu.student_id">
+                <tr v-for="stu in processedStudents" :key="stu.user_profile_id || stu.student_id">
                     <td>{{ stu.name }}</td>
                     <td>{{ stu.student_id }}</td>
                     <td>{{ stu.experiment_day }}</td>
                     <td>{{ stu.experiment_group }}</td>
-                    <td v-for="ex in experimentNumbers" :key="ex">{{ stu[ex] }}</td>
+                    <td v-for="ex in experimentNumbers" :key="ex">
+                        <a v-if="stu[ex] !== ''" href="#" @click.prevent="openScoreDetail(stu, ex)">{{ stu[ex] }}</a>
+                        <span v-else>-</span>
+                    </td>
                 </tr>
             {% endverbatim %}
             </tbody>
         </table>
     </div>
+
+    {% verbatim %}
+    <div v-if="showScoreDetailModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" style="max-width:95vw; margin-top:80px;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">採点詳細</h5>
+                    <button type="button" class="btn-close" @click="closeScoreDetailModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <div><b>学生:</b> {{ scoreDetailStudent.name }}（{{ scoreDetailStudent.student_id }}）</div>
+                        <div><b>科目:</b> {{ scoreDetailCourse.course_code }} {{ scoreDetailCourse.course_name }}（{{ scoreDetailCourse.year }}）</div>
+                        <div><b>実験番号:</b> {{ scoreDetailExperiment }}</div>
+                    </div>
+                    <div v-if="scoreDetailLoading" class="text-muted">読み込み中...</div>
+                    <div v-else>
+                        <div v-if="!scoreDetailSubmissions.length" class="text-muted">採点詳細がありません</div>
+                        <div v-for="sub in scoreDetailSubmissions" :key="sub.id" class="mb-3">
+                            <div class="fw-semibold">
+                                {{ sub.report_type === 'prep' ? '予習' : '本' }} / 提出日: {{ sub.submitted_at }} /
+                                点数: {{ sub.final_score != null ? sub.final_score : sub.total_score }}
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>項目</th>
+                                            <th>点</th>
+                                            <th>重み</th>
+                                            <th>小計</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="d in sub.details" :key="d.label + d.value + d.weight">
+                                            <td>{{ d.label }}</td>
+                                            <td>{{ d.value }}</td>
+                                            <td>{{ d.weight }}</td>
+                                            <td>{{ d.subtotal }}</td>
+                                        </tr>
+                                        <tr v-if="!sub.details.length">
+                                            <td colspan="4" class="text-muted">詳細がありません</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeScoreDetailModal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endverbatim %}
 </div>
 <script>
 var STUDENTS_DATA = {{ students_json|safe }};

@@ -113,8 +113,15 @@ class ExperimentCompletion(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE)
     experiment_number = models.CharField(max_length=10)
     completed = models.BooleanField(default=False)
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='experiment_completions'
+    )
     class Meta:
-        unique_together = ('student', 'experiment_number')
+        unique_together = ('student', 'experiment_number', 'course_offering')
 
 
 class Course(models.Model):

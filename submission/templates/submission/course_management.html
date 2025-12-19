@@ -90,11 +90,11 @@
               <option value="">選択</option>
               <option v-for="c in courses" :value="c.id">{{ c.code }} - {{ c.name }}</option>
             </select>
-          </div>
-          <div class="mb-2">
-            <label class="form-label">年度</label>
-            <input type="number" v-model.number="offeringForm.year" class="form-control" required>
-          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">年度</label>
+          <input type="number" v-model.number="offeringForm.year" class="form-control" required placeholder="例: 2025" min="2000">
+        </div>
           <button class="btn btn-primary w-100">追加</button>
         </form>
       </div>
@@ -129,8 +129,7 @@
             <label class="form-label">曜日</label>
             <select v-model="enrollmentForm.experiment_day" class="form-select">
               <option value="">-</option>
-              <option value="火">火</option>
-              <option value="木">木</option>
+              <option v-for="d in enrollmentDayOptions" :key="d" :value="d">{{ d }}</option>
             </select>
           </div>
           <div class="mb-2">

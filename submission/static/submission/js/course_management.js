@@ -8,10 +8,22 @@ new Vue({
         users: [],
         courseForm: { name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
         weekDays: ['月', '火', '水', '木', '金'],
+        defaultEnrollmentDays: ['火', '木'],
         offeringForm: { course_id: '', year: '' },
         enrollmentForm: { user_id: '', offering_id: '', role: 'student', experiment_day: '', experiment_group: '' },
         showCourseEdit: false,
         editCourseForm: { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
+    },
+    computed: {
+        selectedEnrollmentOffering() {
+            return this.offerings.find(o => String(o.id) === String(this.enrollmentForm.offering_id)) || null;
+        },
+        enrollmentDayOptions() {
+            if (this.selectedEnrollmentOffering && Array.isArray(this.selectedEnrollmentOffering.meeting_days) && this.selectedEnrollmentOffering.meeting_days.length) {
+                return this.selectedEnrollmentOffering.meeting_days;
+            }
+            return this.defaultEnrollmentDays;
+        }
     },
     methods: {
         parseExperimentText(text) {
@@ -76,7 +88,13 @@ new Vue({
                     // offerings の表示情報も更新
                     this.offerings = this.offerings.map(o => {
                         if (o.course_id === data.course.id) {
-                            return { ...o, course_code: data.course.code, course_name: data.course.name, meeting_days: data.course.meeting_days, experiment_numbers: data.course.experiment_numbers };
+                            return {
+                                ...o,
+                                course_code: data.course.code,
+                                course_name: data.course.name,
+                                meeting_days: data.course.meeting_days,
+                                experiment_numbers: data.course.experiment_numbers
+                            };
                         }
                         return o;
                     });
@@ -165,6 +183,19 @@ new Vue({
                     alert(data.message || '削除に失敗しました');
                 }
             });
+        },
+        syncEnrollmentDay() {
+            if (this.enrollmentForm.experiment_day && !this.enrollmentDayOptions.includes(this.enrollmentForm.experiment_day)) {
+                this.enrollmentForm.experiment_day = '';
+            }
+        }
+    },
+    watch: {
+        'enrollmentForm.offering_id'() {
+            this.syncEnrollmentDay();
+        },
+        enrollmentDayOptions() {
+            this.syncEnrollmentDay();
         }
     },
     mounted() {

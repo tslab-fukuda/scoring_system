@@ -52,19 +52,20 @@
                 </div>
                 <div class="ts-form-group">
                     <label>パスワード</label>
-                    <input type="password" v-model="newUser.password" required>
+                    <input type="password" v-model="newUser.password" placeholder="未入力なら自動設定">
                 </div>
                 <div class="ts-form-group">
                     <label>パスワード（確認）</label>
-                    <input type="password" v-model="newUser.password2" required>
+                    <input type="password" v-model="newUser.password2" placeholder="未入力なら自動設定">
                 </div>
                 <div class="ts-form-group">
                     <label>学籍番号</label>
-                    <input type="text" v-model="newUser.student_id" maxlength="4" required>
+                    <input type="text" v-model="newUser.student_id" maxlength="4">
                 </div>
                 <div class="ts-form-group">
                     <label>実験曜日</label>
                     <select v-model="newUser.experiment_day">
+                        <option value="">未設定</option>
                         <option v-for="d in bulkDayOptions" :key="d" :value="d">{{ d }}</option>
                     </select>
                 </div>
@@ -102,7 +103,7 @@
                 </div>
                 <div class="ts-form-group">
                     <label>学籍番号</label>
-                    <input type="text" v-model="editUser.student_id" maxlength="4" required>
+                    <input type="text" v-model="editUser.student_id" maxlength="4">
                 </div>
                 <div class="ts-form-group">
                     <label>科目 / 年度</label>

@@ -61,18 +61,20 @@
 
 <div class="login-container">
   <h2>ログイン</h2>
+  {% if PASSWORD_LOGIN_ENABLED %}
   <form method="post">
     {% csrf_token %}
     <div class="form-group">
       <label for="id_username">メールアドレス</label>
-      <input type="text" name="username" required id="id_username">
+      <input type="text" name="username" required id="id_username" autocomplete="email">
     </div>
     <div class="form-group">
       <label for="id_password">パスワード</label>
-      <input type="password" name="password" required id="id_password">
+      <input type="password" name="password" required id="id_password" autocomplete="current-password">
     </div>
     <button type="submit" class="login">ログイン</button>
   </form>
+  {% endif %}
   {% if GOOGLE_LOGIN_ENABLED %}
   <div class="mt-3">
     <a href="/accounts/google/login/" class="btn btn-outline-secondary w-100">Googleでログイン</a>

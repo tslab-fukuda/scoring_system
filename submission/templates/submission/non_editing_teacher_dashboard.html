@@ -14,13 +14,29 @@
 <div id="teacher-dashboard" class="container mt-4">
     <h2 class="mb-4">教師ダッシュボード</h2>
     {% verbatim %}
-    <div class="step-arrow mb-3">
-        <button v-for="off in offerings" :key="off.id"
-                class="step-arrow-btn"
-                :class="{ active: Number(selectedOfferingId) === Number(off.id) }"
-                @click.prevent="selectOffering(off.id)">
-            {{ off.year }}
-        </button>
+    <div class="mb-3">
+        <div class="d-flex align-items-center mb-2">
+            <span class="fw-semibold me-2">科目</span>
+            <div class="step-arrow">
+                <button v-for="c in courseOptions" :key="c.course_id"
+                        class="step-arrow-btn"
+                        :class="{ active: String(selectedCourseId) === String(c.course_id) }"
+                        @click.prevent="selectCourse(c.course_id)">
+                    {{ c.course_code }} {{ c.course_name }}
+                </button>
+            </div>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="fw-semibold me-2">年度</span>
+            <div class="step-arrow">
+                <button v-for="y in yearOptions" :key="y"
+                        class="step-arrow-btn"
+                        :class="{ active: String(selectedYear) === String(y) }"
+                        @click.prevent="selectYear(y)">
+                    {{ y }}
+                </button>
+            </div>
+        </div>
         <div v-if="!offerings.length" class="text-muted small ms-2">割り当てられた科目/年度がありません</div>
     </div>
     {% endverbatim %}
@@ -93,26 +109,39 @@
             </div>
             <!-- モーダル: 実験一覧+終了判定 -->
             <div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
-                <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" style="max-width:95vw;">
                     {% verbatim %}
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">{{ selectedStudent.full_name }} の実験終了記録</h5>
+                            <h5 class="modal-title">{{ selectedStudent.full_name }} の提出記録</h5>
                             <button type="button" class="btn-close" @click="showStudentModal=false"></button>
                         </div>
                         <div class="modal-body">
-                            <table class="table">
-                                <tr v-for="exp in experimentNumbers" :key="exp">
-                                    <td>{{ exp }}</td>
-                                    <td>
-                                        <button class="btn"
-                                            :class="isExperimentComplete(exp) ? 'btn-success' : 'btn-outline-secondary'"
-                                            @click="toggleExperimentComplete(selectedStudent.id, exp)">
-                                            {{ isExperimentComplete(exp) ? '終了' : '未了' }}
-                                        </button>
-                                    </td>
-                                </tr>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>実験番号</th>
+                                            <th>ファイル名</th>
+                                            <th>予/本</th>
+                                            <th>点数</th>
+                                            <th>提出日</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="rep in studentReports" :key="rep.experiment_number + rep.submitted_at + rep.file_name">
+                                            <td>{{ rep.experiment_number }}</td>
+                                            <td><a v-if="rep.file" :href="rep.file" target="_blank">{{ rep.file_name }}</a><span v-else>-</span></td>
+                                            <td>{{ rep.report_type }}</td>
+                                            <td>{{ rep.score !== '' ? rep.score : '-' }}</td>
+                                            <td>{{ rep.submitted_at }}</td>
+                                        </tr>
+                                        <tr v-if="!studentReports.length">
+                                            <td colspan="5" class="text-center text-muted">提出記録がありません</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                     {% endverbatim %}

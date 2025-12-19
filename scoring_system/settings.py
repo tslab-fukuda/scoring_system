@@ -21,8 +21,35 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #     テスト: export DJANGO_DB_FILE=db_test.sqlite3
 DB_FILE = os.environ.get('DJANGO_DB_FILE', 'db.sqlite3')
 
-# Googleログインの有効/無効（本番で上書き）
-GOOGLE_LOGIN_ENABLED = False
+# HTTPS を終端するリバースプロキシ環境で実際のスキームを認識させる
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+# allauthのリダイレクトURI生成をHTTPSに揃える
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+
+# ログイン方式フラグ（テスト: 両方許可、本番: settings_prodでGoogleのみ）
+GOOGLE_LOGIN_ENABLED = True
+PASSWORD_LOGIN_ENABLED = True
+
+# PDFプレビュー等で同一オリジン内の iframe 表示を許可
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# allauth を使うための認証バックエンド
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# Google ログイン時はメールアドレス照合のみ許可
+SOCIALACCOUNT_ADAPTER = 'submission.socialaccount_adapter.EmailOnlySocialAccountAdapter'
+
+# Google OAuth 設定（メールアドレス取得を確実にする）
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+    }
+}
 
 
 # Quick-start development settings - unsuitable for production
@@ -53,11 +80,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'submission',
     'accounts',
     'attendance',
-    # allauthを使う場合は本番設定で上書き追加する（settings_prodでextend予定）
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
 ]
+SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -65,6 +97,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -81,11 +114,11 @@ TEMPLATES = [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
-            'django.contrib.messages.context_processors.messages',
-            'submission.context_processors.google_login_enabled',
-        ],
+                'django.contrib.messages.context_processors.messages',
+                'submission.context_processors.login_flags',
+            ],
+        },
     },
-},
 ]
 
 WSGI_APPLICATION = 'scoring_system.wsgi.application'

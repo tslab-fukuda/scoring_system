@@ -5,6 +5,7 @@ from submission.decorators import role_required
 from submission.models import ScoringItem
 from submission.models import Stamp
 from django.http import JsonResponse
+from django.http import FileResponse, Http404
 from django.conf import settings
 from django.utils import timezone
 
@@ -33,7 +34,11 @@ def grading_form(request, submission_id):
             page = doc[page_no]
             header, encoded = img_data.split(",", 1)
             hand_img_bytes = base64.b64decode(encoded)
-            page.insert_image(page.rect, stream=hand_img_bytes, overlay=True)
+            # PNGのアルファを保持したまま挿入する
+            img_doc = fitz.open("png", hand_img_bytes)
+            pix = img_doc[0].get_pixmap(alpha=True)
+            page.insert_image(page.rect, pixmap=pix, overlay=True)
+            img_doc.close()
 
         # 保存名（例: sample_graded.pdf）
         base, ext = os.path.splitext(os.path.basename(pdf_path))
@@ -47,6 +52,8 @@ def grading_form(request, submission_id):
         submission.graded = True
         submission.score_details = data.get('scoreItems')
         submission.save()
+        # デバッグ用にURLをログ出力
+        print(f"[graded_pdf] saved: {submission.file.url}")
         
         # 元のPDFファイルを削除
         if os.path.exists(pdf_path):
@@ -61,6 +68,21 @@ def grading_form(request, submission_id):
         'pdf_url': submission.file.url,
         'score_details': score_json,
     })
+
+
+@login_required
+@role_required('teacher', 'admin', 'non-editing teacher')
+def graded_pdf(request, submission_id):
+    """Ensure graded PDF is served with correct content-type for preview iframe."""
+    submission = get_object_or_404(Submission, pk=submission_id)
+    if not submission.file:
+        raise Http404("file not found")
+    try:
+        resp = FileResponse(submission.file.open('rb'), content_type='application/pdf')
+        resp['Content-Disposition'] = f'inline; filename="{os.path.basename(submission.file.name)}"'
+        return resp
+    except FileNotFoundError:
+        raise Http404("file not found")
 
 @login_required
 def scoring_items_api(request):

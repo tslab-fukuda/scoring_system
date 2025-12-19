@@ -25,8 +25,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('submission/', include('submission.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
-    # allauth（本番）も有効化しておく
-    path('accounts/', include('allauth.urls')),
+    # allauth は本番のみ（GOOGLE_LOGIN_ENABLED=True のとき）有効化
+    *( [path('accounts/', include('allauth.urls'))] if getattr(settings, "GOOGLE_LOGIN_ENABLED", False) else [] ),
     path('users/', include('submission.urls')),
     path('attendance/', include('attendance.urls')),
     path('accounts/redirect-after-login/', redirect_after_login, name='redirect_after_login'),

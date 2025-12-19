@@ -1,16 +1,9 @@
 from .settings import *
 
+from .settings import *
+
 # 本番用にDBファイルだけ分離（他の設定は継承）
 DATABASES['default']['NAME'] = BASE_DIR / 'db_prod.sqlite3'
-
-# allauth を本番でのみ有効化
-INSTALLED_APPS = INSTALLED_APPS + [
-    'django.contrib.sites',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
-]
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
@@ -25,6 +18,7 @@ SITE_ID = 1
 
 # Googleログインを本番で有効化
 GOOGLE_LOGIN_ENABLED = True
+PASSWORD_LOGIN_ENABLED = False
 
 # プロキシ経由でHTTPSを認識させる
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

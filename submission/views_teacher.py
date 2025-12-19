@@ -4,6 +4,7 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from decimal import Decimal
 from django.db.models import Q
+from django.utils import timezone
 
 from submission.decorators import role_required
 from .models import (
@@ -64,6 +65,7 @@ def _dashboard_context(user):
     offerings_data = [
         {
             'id': off.id,
+            'course_id': off.course_id,
             'course_code': off.course.code,
             'course_name': off.course.name,
             'year': off.year,
@@ -308,13 +310,23 @@ def mark_experiment_complete(request):
     experiment_number = request.POST.get('experiment_number')
     user_profile = UserProfile.objects.get(pk=student_id)
     user = user_profile.user
+    offering_id = request.POST.get('offering_id')
+    try:
+        offering_id_int = int(offering_id) if offering_id is not None else None
+    except (TypeError, ValueError):
+        offering_id_int = None
     accessible_offering_ids = list(_get_accessible_offerings(request.user).values_list('id', flat=True))
     if not accessible_offering_ids:
         return JsonResponse({'status': 'error', 'message': 'アクセスできる科目/年度がありません'}, status=403)
-    if not Enrollment.objects.filter(user=user, role='student', course_offering_id__in=accessible_offering_ids).exists():
+    if offering_id_int and offering_id_int not in accessible_offering_ids:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度にはアクセスできません'}, status=403)
+    target_offering_id = offering_id_int or (accessible_offering_ids[0] if accessible_offering_ids else None)
+    if not Enrollment.objects.filter(user=user, role='student', course_offering_id=target_offering_id).exists():
         return JsonResponse({'status': 'error', 'message': '対象学生にアクセスできません'}, status=403)
     ec, created = ExperimentCompletion.objects.get_or_create(
-        student=user, experiment_number=experiment_number
+        student=user,
+        experiment_number=experiment_number,
+        course_offering_id=target_offering_id
     )
     ec.completed = not ec.completed
     ec.save()
@@ -341,15 +353,50 @@ def teacher_students_api(request):
         qs = qs.filter(experiment_group=group)
     for up in  qs:
         # その学生の実験終了リストを作成
-        completions = ExperimentCompletion.objects.filter(student=up.user).values_list('experiment_number', 'completed')
+        completions = ExperimentCompletion.objects.filter(
+            student=up.user,
+            course_offering_id=offering_id
+        ).values_list('experiment_number', 'completed')
         completed = {ex: done for ex, done in completions}
+        enr = Enrollment.objects.filter(user=up.user, course_offering_id=offering_id, role='student').first()
         students.append({
             'id': up.id,
             'full_name': up.full_name,
             'student_id': up.student_id,
-            'experiment_day': up.experiment_day,
-            'experiment_group': up.experiment_group,
+            'experiment_day': enr.experiment_day if enr else up.experiment_day,
+            'experiment_group': enr.experiment_group if enr else up.experiment_group,
             'photo': up.photo.url if up.photo else '',
             'experiment_completion': completed,
         })
     return JsonResponse({'students': students})
+
+
+@role_required('teacher', 'non-editing teacher', 'admin')
+def teacher_student_reports(request):
+    student_id = request.GET.get('student_id')
+    offering_id = request.GET.get('offering_id')
+    if not student_id or not offering_id:
+        return JsonResponse({'reports': []})
+    try:
+        profile = UserProfile.objects.get(id=student_id, role='student')
+    except UserProfile.DoesNotExist:
+        return JsonResponse({'reports': []})
+    # アクセスできる科目/年度かチェック
+    allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
+    if int(offering_id) not in allowed_ids:
+        return JsonResponse({'reports': []}, status=403)
+    qs = Submission.objects.filter(
+        student=profile.user,
+        course_offering_id=offering_id
+    ).order_by('-submitted_at')  # 日付降順で表示
+    data = []
+    for rep in qs:
+        data.append({
+            'experiment_number': rep.experiment_number,
+            'file': rep.file.url if rep.file else '',
+            'file_name': rep.file.name.split('/')[-1] if rep.file else '',
+            'report_type': '予' if rep.report_type == 'prep' else '本',
+            'score': rep.final_score if rep.final_score is not None else '',
+            'submitted_at': timezone.localtime(rep.submitted_at).strftime('%Y-%m-%d %H:%M'),
+        })
+    return JsonResponse({'reports': data})

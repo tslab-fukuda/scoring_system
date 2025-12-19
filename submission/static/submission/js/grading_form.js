@@ -167,7 +167,8 @@ new Vue({
             let images = [];
             this.pdfPages.forEach((_, idx) => {
                 const canvas = this.$refs['drawCanvas' + idx][0];
-                images.push(canvas.toDataURL());
+                const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
+                images.push(hasDraw ? canvas.toDataURL() : null);
             });
             fetch(window.location.pathname, {
                 method: "POST",
@@ -183,17 +184,26 @@ new Vue({
                 .then(res => res.json())
                 .then(res => {
                     if (res.status === "ok" && res.new_file_url) {
+                        console.log("Preview fetch target:", res.new_file_url);
                         const iframe = document.getElementById("pdf-preview-iframe");
                         if (iframe) {
-                            iframe.src = res.new_file_url;
+                            const cacheBust = Date.now();
+                            iframe.src = `/submission/graded_pdf/${window.submissionId}/?t=${cacheBust}`;
                             const modal = new bootstrap.Modal(document.getElementById('pdfPreviewModal'));
+                            const modalEl = document.getElementById('pdfPreviewModal');
+                            if (modalEl) modalEl.removeAttribute('aria-hidden'); // スクリーンリーダー用に表示時は非非表示扱い
                             modal.show();
+                            iframe.onload = function() {
+                                // 読み込み失敗（HTMLや空白）の場合に備えて高さを確保
+                                iframe.style.background = '#fff';
+                            };
                             document.getElementById("pdf-preview-close-btn").onclick = function () {
                                 let redirectUrl = "/submission/teacher_dashboard/";
                                 console.log(window.userRole);
                                 if (window.userRole === "admin") {
                                     redirectUrl = "/submission/admin_dashboard/";
                                 }
+                                if (modalEl) modalEl.setAttribute('aria-hidden', 'true');
                                 window.location.href = redirectUrl;
                             };
                         } else {
