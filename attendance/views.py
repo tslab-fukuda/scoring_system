@@ -54,14 +54,28 @@ def scan_card(request, student_id):
 
     user_profile = get_object_or_404(UserProfile, student_id=student_id)
     user = user_profile.user
-    record, created = AttendanceRecord.objects.get_or_create(user=user, date=date.today())
+    offering_id = request.GET.get('offering_id') or request.POST.get('offering_id')
+    if not offering_id:
+        return JsonResponse({'status': 'error', 'message': '科目/年度を選択してください'}, status=400)
+    course_offering = CourseOffering.objects.filter(id=offering_id).first()
+    if not course_offering:
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+    record, created = AttendanceRecord.objects.get_or_create(
+        user=user,
+        date=date.today(),
+        course_offering=course_offering
+    )
     now = timezone.now()
     local_now = timezone.localtime(now, JST)
 
     if record.check_in is None:
         record.check_in = now
         if local_now.time() > CLASS_START:
-            submissions = Submission.objects.filter(student=user, graded=False)
+            submissions = Submission.objects.filter(
+                student=user,
+                graded=False,
+                course_offering=course_offering
+            )
             _increment_score(submissions, "遅刻", 1)
     else:
         previous_out = record.check_out
@@ -85,6 +99,7 @@ def scan_card(request, student_id):
                 graded=True,
                 report_type='prep',
                 date=date.today(),
+                course_offering=course_offering,
             )
             if extra_after > 0:
                 _increment_score(submissions, "実験時間", extra_after)
@@ -92,6 +107,104 @@ def scan_card(request, student_id):
                 _increment_score(submissions, "実験時間", extra_early)
     record.save()
     return JsonResponse({'status': 'ok'})
+
+@login_required
+@require_POST
+def scan_nfc(request):
+    _finalize_previous_day()
+    if not request.user.has_perm('attendance.change_attendancerecord'):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+    try:
+        data = json.loads(request.body)
+        nfc_id = (data.get('nfc_id') or '').strip()
+        offering_id = data.get('offering_id')
+        if not nfc_id:
+            return JsonResponse({'status': 'error', 'message': 'NFC IDが空です'}, status=400)
+        if not offering_id:
+            return JsonResponse({'status': 'error', 'message': '科目/年度を選択してください'}, status=400)
+        course_offering = CourseOffering.objects.filter(id=offering_id).first()
+        if not course_offering:
+            return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+
+        user_profile = UserProfile.objects.select_related('user').filter(nfc_id__iexact=nfc_id).first()
+        if not user_profile:
+            return JsonResponse({'status': 'error', 'message': '未登録のNFC IDです'}, status=404)
+
+        enrolled = Enrollment.objects.filter(
+            user=user_profile.user,
+            course_offering_id=offering_id,
+            role='student'
+        ).exists()
+        if not enrolled:
+            return JsonResponse({'status': 'error', 'message': '選択中の科目/年度に登録されていません'}, status=403)
+
+        user = user_profile.user
+        record, created = AttendanceRecord.objects.get_or_create(
+            user=user,
+            date=date.today(),
+            course_offering=course_offering
+        )
+        now = timezone.now()
+        local_now = timezone.localtime(now, JST)
+        action = 'check_in' if record.check_in is None else 'check_out'
+
+        if record.check_in is None:
+            record.check_in = now
+            if local_now.time() > CLASS_START:
+                submissions = Submission.objects.filter(
+                    student=user,
+                    graded=False,
+                    course_offering=course_offering
+                )
+                _increment_score(submissions, "遅刻", 1)
+        else:
+            previous_out = record.check_out
+            record.check_out = now
+            prev_after = prev_early = 0
+            if previous_out:
+                prev_local = timezone.localtime(previous_out, JST)
+                prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
+                if prev_diff > 0:
+                    prev_after = math.ceil(prev_diff)
+                elif prev_diff < 0:
+                    prev_early = min(MAX_EARLY_MINUTES, math.ceil(-prev_diff))
+            diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
+            new_after = math.ceil(diff) if diff > 0 else 0
+            new_early = min(MAX_EARLY_MINUTES, math.ceil(-diff)) if diff < 0 else 0
+            extra_after = new_after - prev_after
+            extra_early = new_early - prev_early
+            if extra_after > 0 or extra_early > 0:
+                submissions = Submission.objects.filter(
+                    student=user,
+                    graded=True,
+                    report_type='prep',
+                    date=date.today(),
+                    course_offering=course_offering,
+                )
+                if extra_after > 0:
+                    _increment_score(submissions, "実験時間", extra_after)
+                if extra_early > 0:
+                    _increment_score(submissions, "実験時間", extra_early)
+        record.save()
+        check_in_time = ''
+        check_out_time = ''
+        if record.check_in:
+            check_in_time = timezone.localtime(record.check_in, JST).strftime('%H:%M')
+        if record.check_out:
+            check_out_time = timezone.localtime(record.check_out, JST).strftime('%H:%M')
+        return JsonResponse({
+            'status': 'ok',
+            'action': action,
+            'student_id': user_profile.student_id,
+            'full_name': user_profile.full_name,
+            'experiment_day': user_profile.experiment_day,
+            'experiment_group': user_profile.experiment_group,
+            'user_id': user_profile.user_id,
+            'check_in_time': check_in_time,
+            'check_out_time': check_out_time,
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 @login_required
 def attendance_list(request):
@@ -125,18 +238,21 @@ def attendance_list(request):
     student_ids = None
     if selected_offering_id:
         student_ids = list(
-            Enrollment.objects.filter(course_offering_id=selected_offering_id, role='student')
+            Enrollment.objects.filter(course_offering_id=selected_offering_id)
             .values_list('user_id', flat=True)
         )
-        today_records = today_records.filter(user_id__in=student_ids)
+        today_records = today_records.filter(
+            user_id__in=student_ids,
+            course_offering_id=selected_offering_id
+        )
 
     in_room = today_records.filter(check_out__isnull=True)
     out_room = today_records.filter(check_out__isnull=False)
-    students_qs = UserProfile.objects.filter(role='student').select_related('user')
+    students_qs = UserProfile.objects.select_related('user')
     if student_ids is not None:
         students_qs = students_qs.filter(user_id__in=student_ids)
     students = students_qs.values(
-        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email'
+        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email', 'role', 'user_id'
     )
     students_list = list(students)
     # emailフィールドをフラットに
@@ -182,10 +298,14 @@ def register_nfc(request):
         import json
         data = json.loads(request.body)
         student_id = data.get('student_id')
+        user_id = data.get('user_id')
         nfc_id = data.get('nfc_id')
-        if not student_id or not nfc_id:
+        if not nfc_id or (not student_id and not user_id):
             return JsonResponse({'status': 'error', 'message': 'invalid'}, status=400)
-        profile = UserProfile.objects.get(student_id=student_id)
+        if user_id:
+            profile = UserProfile.objects.get(user_id=user_id)
+        else:
+            profile = UserProfile.objects.get(student_id=student_id)
         profile.nfc_id = nfc_id
         profile.save()
         return JsonResponse({'status': 'success'})

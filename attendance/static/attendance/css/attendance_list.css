@@ -45,3 +45,12 @@
 .ts-table th.sortable {
     cursor: pointer;
 }
+
+.nfc-panel .table-responsive {
+    overflow-x: auto;
+}
+
+.nfc-panel table {
+    white-space: nowrap;
+    width: max-content;
+}

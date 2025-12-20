@@ -20,7 +20,7 @@
   position: fixed;
   right: 0;
   top: var(--ts-header-height, 60px);
-  width: 420px;
+  width: min(80vw, 720px);
   max-width: 100vw;
   height: calc(100vh - var(--ts-header-height, 60px));
   background: #fff;
@@ -65,7 +65,13 @@
     {% verbatim %}
     <div id="nfc-app" v-cloak>
         <div class="nfc-toggle-wrapper">
-            <button class="btn btn-primary nfc-toggle-btn" @click="open" :disabled="showPanel">NFC登録</button>
+            <div class="d-flex flex-column align-items-end gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <button id="nfc-connect-btn" type="button" class="btn btn-outline-primary btn-sm">NFC接続</button>
+                    <button class="btn btn-primary nfc-toggle-btn" @click="open" :disabled="showPanel">NFC登録</button>
+                </div>
+                <div id="nfc-status" class="text-muted small">NFC未接続</div>
+            </div>
         </div>
         <transition name="slide-right">
             <div v-if="showPanel" class="nfc-panel">
@@ -82,18 +88,20 @@
                                 <th>メールアドレス</th>
                                 <th>曜日</th>
                                 <th>班</th>
+                                <th>ロール</th>
                                 <th>NFC_ID</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="s in students" :key="s.student_id"
-                                :class="{'table-active': selectedId === s.student_id}"
+                                :class="{'table-active': selectedKey === studentKey(s)}"
                                 @click="selectStudent(s)" style="cursor:pointer;">
                                 <td>{{ s.full_name }}</td>
                                 <td>{{ s.student_id }}</td>
                                 <td>{{ s.email }}</td>
                                 <td>{{ s.experiment_day }}</td>
                                 <td>{{ s.experiment_group }}</td>
+                                <td>{{ s.role }}</td>
                                 <td>{{ s.nfc_id || '-' }}</td>
                             </tr>
                         </tbody>
@@ -109,6 +117,7 @@
                             <div>メールアドレス: {{ selectedUser.email || '-' }}</div>
                             <div>曜日: {{ selectedUser.experiment_day }}</div>
                             <div>班: {{ selectedUser.experiment_group }}</div>
+                            <div>ロール: {{ selectedUser.role }}</div>
                             <div>NFC_ID: {{ selectedUser.nfc_id || '-' }}</div>
                         </div>
                         <div v-else class="text-muted">未選択</div>
@@ -191,7 +200,9 @@
 <script>
     var STUDENTS = {{ students_json|safe }};
     var CSRF_TOKEN = '{{ csrf_token }}';
+    var SELECTED_OFFERING_ID = '{{ selected_offering_id|default_if_none:"" }}';
 </script>
 <script src="{% static 'attendance/js/nfc_register.js' %}"></script>
+<script type="module" src="{% static 'attendance/js/nfc_reader.js' %}"></script>
 <script src="{% static 'attendance/js/attendance_list_page.js' %}"></script>
 {% endblock %}

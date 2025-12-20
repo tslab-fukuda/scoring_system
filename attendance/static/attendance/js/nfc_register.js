@@ -1,14 +1,22 @@
 document.addEventListener('DOMContentLoaded', function () {
-    new Vue({
+    const nfcApp = new Vue({
         el: '#nfc-app',
         data: {
             showPanel: false,
             students: window.STUDENTS || [],
             selectedId: '',
+            selectedUserId: '',
+            selectedKey: '',
             nfcId: '',
             selectedUser: {}
         },
         methods: {
+            studentKey(stu) {
+                const name = stu && stu.full_name ? stu.full_name : '';
+                const sid = stu && stu.student_id ? stu.student_id : '';
+                const email = stu && stu.email ? stu.email : '';
+                return `${sid}|${name}|${email}`;
+            },
             open() {
                 this.showPanel = true;
                 this.nfcId = '';
@@ -21,16 +29,25 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             selectStudent(stu) {
                 this.selectedId = stu.student_id;
+                this.selectedUserId = String(stu.user_id || '');
+                this.selectedKey = this.studentKey(stu);
                 this.selectedUser = stu;
+                this.$nextTick(() => {
+                    if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
+                });
+            },
+            setNfcId(value) {
+                this.nfcId = value || '';
                 this.$nextTick(() => {
                     if (this.$refs.nfcInput) this.$refs.nfcInput.focus();
                 });
             },
             registerNfc() {
                 const sid = this.selectedId;
+                const uid = this.selectedUserId;
                 const nfc = this.nfcId.trim();
-                if (!sid || !nfc) {
-                    alert('学生とNFCを入力してください');
+                if ((!sid && !uid) || !nfc) {
+                    alert('ユーザとNFCを入力してください');
                     return;
                 }
                 fetch('/attendance/register_nfc/', {
@@ -39,20 +56,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': CSRF_TOKEN
                     },
-                    body: JSON.stringify({ student_id: sid, nfc_id: nfc })
+                    body: JSON.stringify({ student_id: sid, user_id: uid, nfc_id: nfc })
                 })
                     .then(r => r.json())
                     .then(d => {
                         if (d.status === 'success') {
-                            const st = this.students.find(s => s.student_id === sid);
+                            const st = uid
+                                ? this.students.find(s => String(s.user_id || '') === uid)
+                                : this.students.find(s => s.student_id === sid);
                             if (st) st.nfc_id = nfc;
                             alert('登録しました');
                         } else {
                             alert(d.message || 'エラー');
                         }
-                    })
+                })
                     .catch(() => alert('通信エラー'));
             }
         }
     });
+    window.nfcRegisterApp = nfcApp;
 });
