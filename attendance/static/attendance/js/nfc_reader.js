@@ -11,10 +11,22 @@ let lastIdm = '';
 let lastIdmAt = 0;
 let scanInFlight = false;
 let selectedUsbDevice = null;
+let isConnected = false;
 
 function setStatus(message) {
     const el = document.getElementById('nfc-status');
     if (el) el.textContent = message;
+}
+
+function setOverlayVisible(visible) {
+    const overlay = document.getElementById('nfc-connection-overlay');
+    if (!overlay) return;
+    overlay.classList.toggle('is-hidden', !visible);
+}
+
+function updateConnectionState(connected) {
+    isConnected = connected;
+    setOverlayVisible(!connected);
 }
 
 function normalizeIdm(idm) {
@@ -150,6 +162,7 @@ function applyAttendanceUpdate(data) {
 async function requestUsbDevice() {
     if (!navigator.usb) {
         setStatus('WebUSB非対応のブラウザです');
+        updateConnectionState(false);
         return null;
     }
     setStatus('USB選択中...');
@@ -198,6 +211,7 @@ async function connectDevice(options) {
     const deviceOverride = options && options.selectedDevice ? options.selectedDevice : null;
     if (!navigator.usb) {
         setStatus('WebUSB非対応のブラウザです');
+        updateConnectionState(false);
         return;
     }
     if (nfcDevice) {
@@ -214,6 +228,7 @@ async function connectDevice(options) {
             );
             if (matched.length !== 1) {
                 setStatus('NFC未接続（接続ボタンで許可）');
+                updateConnectionState(false);
                 nfcDevice = null;
                 return;
             }
@@ -224,12 +239,14 @@ async function connectDevice(options) {
         await nfcDevice.connectUSBDevice();
         await nfcDevice.openUSBDevice();
         setStatus('NFC接続済み');
+        updateConnectionState(true);
         if (startPollingAfter) {
             startPolling();
         }
     } catch (err) {
         nfcDevice = null;
         setStatus('NFC接続失敗');
+        updateConnectionState(false);
         if (userInitiated) {
             alert('NFCリーダーの接続に失敗しました');
         }
@@ -310,6 +327,7 @@ async function startPolling() {
 
 document.addEventListener('DOMContentLoaded', () => {
     setStatus('NFC未接続');
+    updateConnectionState(false);
     document.addEventListener('click', event => {
         const target = event.target.closest('#nfc-connect-btn');
         if (!target) return;
@@ -320,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await connectDevice({ userInitiated: true, startPolling: true, selectedDevice: device });
             } catch (err) {
                 setStatus('USB選択キャンセル');
+                updateConnectionState(false);
             }
         })();
     });
@@ -328,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus('NFC切断');
             nfcDevice = null;
             polling = false;
+            updateConnectionState(false);
         });
     }
 });
