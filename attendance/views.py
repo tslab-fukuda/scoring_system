@@ -32,19 +32,60 @@ def _finalize_previous_day():
     aware_dt = timezone.make_aware(default_dt, JST)
     incomplete.update(check_out=aware_dt)
 
-def _increment_score(submissions, label, minutes):
-    item = ScoringItem.objects.filter(label=label).first()
-    if not item or minutes <= 0:
+def _resolve_scoring_item(course_offering, category, code):
+    if not course_offering or not code:
+        return None
+    item = ScoringItem.objects.filter(
+        category=category,
+        course_offering=course_offering,
+        code=code
+    ).order_by('order').first()
+    if item:
+        return item
+    return ScoringItem.objects.filter(
+        category=category,
+        course=course_offering.course,
+        course_offering__isnull=True,
+        code=code
+    ).order_by('order').first()
+
+
+def _increment_score(submissions, code, points, course_offering):
+    if points == 0:
         return
     for sub in submissions:
+        category = 'pre' if sub.report_type == 'prep' else 'main'
+        item = _resolve_scoring_item(course_offering, category, code)
+        if not item:
+            continue
         details = sub.score_details or []
-        found = next((d for d in details if d.get("label") == label), None)
+        found = next((d for d in details if d.get("code") == code), None)
+        if not found:
+            found = next((d for d in details if d.get("label") == item.label), None)
         if found:
-            found["value"] = found.get("value", 0) + minutes
+            found["value"] = found.get("value", 0) + points
+            found["weight"] = float(item.weight)
+            found["label"] = item.label
+            found["code"] = code
         else:
-            details.append({"label": label, "weight": float(item.weight), "value": minutes})
+            details.append({
+                "label": item.label,
+                "code": code,
+                "weight": float(item.weight),
+                "value": points
+            })
         sub.score_details = details
         sub.save()
+
+
+def _calc_lab_time_points(diff_minutes):
+    if diff_minutes > 0:
+        late_minutes = math.ceil(diff_minutes)
+        return -min(30, math.ceil(late_minutes / 5))
+    if diff_minutes < 0:
+        early_minutes = min(MAX_EARLY_MINUTES, math.ceil(-diff_minutes))
+        return early_minutes
+    return 0
 
 @login_required
 def scan_card(request, student_id):
@@ -76,24 +117,19 @@ def scan_card(request, student_id):
                 graded=False,
                 course_offering=course_offering
             )
-            _increment_score(submissions, "遅刻", 1)
+            _increment_score(submissions, "late", 1, course_offering)
     else:
         previous_out = record.check_out
         record.check_out = now
-        prev_after = prev_early = 0
+        prev_points = 0
         if previous_out:
             prev_local = timezone.localtime(previous_out, JST)
             prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-            if prev_diff > 0:
-                prev_after = math.ceil(prev_diff)
-            elif prev_diff < 0:
-                prev_early = min(MAX_EARLY_MINUTES, math.ceil(-prev_diff))
+            prev_points = _calc_lab_time_points(prev_diff)
         diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-        new_after = math.ceil(diff) if diff > 0 else 0
-        new_early = min(MAX_EARLY_MINUTES, math.ceil(-diff)) if diff < 0 else 0
-        extra_after = new_after - prev_after
-        extra_early = new_early - prev_early
-        if extra_after > 0 or extra_early > 0:
+        new_points = _calc_lab_time_points(diff)
+        delta_points = new_points - prev_points
+        if delta_points != 0:
             submissions = Submission.objects.filter(
                 student=user,
                 graded=True,
@@ -101,10 +137,7 @@ def scan_card(request, student_id):
                 date=date.today(),
                 course_offering=course_offering,
             )
-            if extra_after > 0:
-                _increment_score(submissions, "実験時間", extra_after)
-            if extra_early > 0:
-                _increment_score(submissions, "実験時間", extra_early)
+            _increment_score(submissions, "lab_time", delta_points, course_offering)
     record.save()
     return JsonResponse({'status': 'ok'})
 
@@ -156,35 +189,27 @@ def scan_nfc(request):
                     graded=False,
                     course_offering=course_offering
                 )
-                _increment_score(submissions, "遅刻", 1)
+                _increment_score(submissions, "late", 1, course_offering)
         else:
             previous_out = record.check_out
             record.check_out = now
-            prev_after = prev_early = 0
-            if previous_out:
-                prev_local = timezone.localtime(previous_out, JST)
-                prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-                if prev_diff > 0:
-                    prev_after = math.ceil(prev_diff)
-                elif prev_diff < 0:
-                    prev_early = min(MAX_EARLY_MINUTES, math.ceil(-prev_diff))
-            diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-            new_after = math.ceil(diff) if diff > 0 else 0
-            new_early = min(MAX_EARLY_MINUTES, math.ceil(-diff)) if diff < 0 else 0
-            extra_after = new_after - prev_after
-            extra_early = new_early - prev_early
-            if extra_after > 0 or extra_early > 0:
-                submissions = Submission.objects.filter(
-                    student=user,
-                    graded=True,
-                    report_type='prep',
-                    date=date.today(),
-                    course_offering=course_offering,
-                )
-                if extra_after > 0:
-                    _increment_score(submissions, "実験時間", extra_after)
-                if extra_early > 0:
-                    _increment_score(submissions, "実験時間", extra_early)
+        prev_points = 0
+        if previous_out:
+            prev_local = timezone.localtime(previous_out, JST)
+            prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
+            prev_points = _calc_lab_time_points(prev_diff)
+        diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
+        new_points = _calc_lab_time_points(diff)
+        delta_points = new_points - prev_points
+        if delta_points != 0:
+            submissions = Submission.objects.filter(
+                student=user,
+                graded=True,
+                report_type='prep',
+                date=date.today(),
+                course_offering=course_offering,
+            )
+            _increment_score(submissions, "lab_time", delta_points, course_offering)
         record.save()
         check_in_time = ''
         check_out_time = ''

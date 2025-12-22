@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
-from submission.models import ScoringItem
+from submission.models import ScoringItem, CourseOffering
 from submission.models import Stamp
 from django.http import JsonResponse
 from django.http import FileResponse, Http404
@@ -93,48 +93,55 @@ def scoring_items_api(request):
             offering_id_int = int(offering_id)
         except (TypeError, ValueError):
             offering_id_int = None
+    if not offering_id_int:
+        return JsonResponse({'pre': [], 'main': []})
+
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id_int).first()
+    if not offering:
+        return JsonResponse({'pre': [], 'main': []})
 
     def _merge_items(common_items, specific_items):
         merged = []
         index_by_label = {}
         for item in common_items:
-            label = item.get('label') or ''
-            if not label or label in index_by_label:
+            key = item.get('code') or item.get('label') or ''
+            if not key or key in index_by_label:
                 continue
-            index_by_label[label] = len(merged)
+            index_by_label[key] = len(merged)
             merged.append(item)
         for item in specific_items:
-            label = item.get('label') or ''
-            if not label:
+            key = item.get('code') or item.get('label') or ''
+            if not key:
                 continue
-            if label in index_by_label:
-                merged[index_by_label[label]] = item
+            if key in index_by_label:
+                merged[index_by_label[key]] = item
             else:
-                index_by_label[label] = len(merged)
+                index_by_label[key] = len(merged)
                 merged.append(item)
         return merged
 
     def _items(category):
         common_qs = ScoringItem.objects.filter(
             category=category,
+            course_id=offering.course_id,
             course_offering__isnull=True
         ).order_by('order')
-        common_items = list(common_qs.values('label', 'weight'))
-        specific_items = []
-        if offering_id_int:
-            specific_qs = ScoringItem.objects.filter(
-                category=category,
-                course_offering_id=offering_id_int
-            ).order_by('order')
-            specific_items = list(specific_qs.values('label', 'weight'))
+        common_items = list(common_qs.values('label', 'weight', 'code', 'show_in_grading_form'))
+        specific_qs = ScoringItem.objects.filter(
+            category=category,
+            course_offering_id=offering_id_int
+        ).order_by('order')
+        specific_items = list(specific_qs.values('label', 'weight', 'code', 'show_in_grading_form'))
         return _merge_items(common_items, specific_items)
 
     pre = _items('pre')
     main = _items('main')
     for x in pre:
         x['weight'] = int(x['weight'])
+        x['code'] = x.get('code') or ''
     for x in main:
         x['weight'] = int(x['weight'])
+        x['code'] = x.get('code') or ''
     return JsonResponse({'pre': pre, 'main': main})
 
 @login_required
@@ -170,37 +177,39 @@ def final_grading_form(request, submission_id):
     # 得点項目マスターを取得
     def _merge_items(common_items, specific_items):
         merged = []
-        index_by_label = {}
+        index_by_key = {}
         for item in common_items:
-            label = item.get('label') or ''
-            if not label or label in index_by_label:
+            key = item.get('code') or item.get('label') or ''
+            if not key or key in index_by_key:
                 continue
-            index_by_label[label] = len(merged)
+            index_by_key[key] = len(merged)
             merged.append(item)
         for item in specific_items:
-            label = item.get('label') or ''
-            if not label:
+            key = item.get('code') or item.get('label') or ''
+            if not key:
                 continue
-            if label in index_by_label:
-                merged[index_by_label[label]] = item
+            if key in index_by_key:
+                merged[index_by_key[key]] = item
             else:
-                index_by_label[label] = len(merged)
+                index_by_key[key] = len(merged)
                 merged.append(item)
         return merged
 
     def _master_items(category):
-        common_qs = ScoringItem.objects.filter(
-            category=category,
-            course_offering__isnull=True
-        ).order_by('order')
-        common_items = list(common_qs.values('label', 'weight'))
+        common_items = []
         specific_items = []
         if submission.course_offering:
+            common_qs = ScoringItem.objects.filter(
+                category=category,
+                course_id=submission.course_offering.course_id,
+                course_offering__isnull=True
+            ).order_by('order')
+            common_items = list(common_qs.values('label', 'weight', 'code'))
             specific_qs = ScoringItem.objects.filter(
                 category=category,
                 course_offering=submission.course_offering
             ).order_by('order')
-            specific_items = list(specific_qs.values('label', 'weight'))
+            specific_items = list(specific_qs.values('label', 'weight', 'code'))
         return _merge_items(common_items, specific_items)
 
     pre_master = _master_items('pre')
@@ -213,10 +222,18 @@ def final_grading_form(request, submission_id):
             if detail_lists:
                 for details in detail_lists:
                     for d in details:
-                        if d.get('label') == m['label']:
+                        if d.get('code') and m.get('code') and d.get('code') == m.get('code'):
                             val += d.get('value', 0)
                             break
-            result.append({'label': m['label'], 'weight': int(m['weight']), 'value': val})
+                        if d.get('label') == m.get('label'):
+                            val += d.get('value', 0)
+                            break
+            result.append({
+                'label': m['label'],
+                'weight': int(m['weight']),
+                'value': val,
+                'code': m.get('code') or '',
+            })
         return result
 
     pre_details_list = [s.score_details for s in prep_subs if s.score_details]

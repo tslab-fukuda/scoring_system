@@ -4,6 +4,7 @@ new Vue({
         tool: 'pen',
         showScore: false,
         scoreItems: [],
+        hiddenScoreItems: [],
         pdfPages: [],
         loadedPages: {},
         drawing: false,
@@ -170,6 +171,7 @@ new Vue({
                 const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
                 images.push(hasDraw ? canvas.toDataURL() : null);
             });
+            const mergedScoreItems = this.scoreItems.concat(this.hiddenScoreItems);
             fetch(window.location.pathname, {
                 method: "POST",
                 headers: {
@@ -178,7 +180,7 @@ new Vue({
                 },
                 body: JSON.stringify({
                     drawImages: images,
-                    scoreItems: this.scoreItems
+                    scoreItems: mergedScoreItems
                 })
             })
                 .then(res => res.json())
@@ -250,26 +252,57 @@ new Vue({
         fetch(scoringUrl)
             .then(res => res.json())
             .then(items => {
+                const saved = window.initialScoreDetails || [];
+                const applySavedValues = (list) => {
+                    list.forEach(item => {
+                        const found = saved.find(s => {
+                            if (s.code && item.code && s.code === item.code) return true;
+                            return s.label === item.label;
+                        });
+                        if (found) {
+                            item.value = found.value || 0;
+                        }
+                    });
+                };
                 if (window.reportType === "prep") {
-                    this.scoreItems = (items.pre || []).map(lab => ({
+                    const allItems = items.pre || [];
+                    const visible = allItems.filter(i => i.show_in_grading_form !== false);
+                    const hidden = allItems.filter(i => i.show_in_grading_form === false);
+                    this.scoreItems = visible.map(lab => ({
                         label: lab.label,
                         weight: lab.weight,
                         value: 0,
-                        key: lab.label
+                        key: lab.code || lab.label,
+                        code: lab.code || ""
+                    }));
+                    this.hiddenScoreItems = hidden.map(lab => ({
+                        label: lab.label,
+                        weight: lab.weight,
+                        value: 0,
+                        key: lab.code || lab.label,
+                        code: lab.code || ""
                     }));
                 } else {
-                    this.scoreItems = (items.main || []).map(lab => ({
+                    const allItems = items.main || [];
+                    const visible = allItems.filter(i => i.show_in_grading_form !== false);
+                    const hidden = allItems.filter(i => i.show_in_grading_form === false);
+                    this.scoreItems = visible.map(lab => ({
                         label: lab.label,
                         weight: lab.weight,
                         value: 0,
-                        key: lab.label
+                        key: lab.code || lab.label,
+                        code: lab.code || ""
+                    }));
+                    this.hiddenScoreItems = hidden.map(lab => ({
+                        label: lab.label,
+                        weight: lab.weight,
+                        value: 0,
+                        key: lab.code || lab.label,
+                        code: lab.code || ""
                     }));
                 }
-                const saved = window.initialScoreDetails || [];
-                this.scoreItems.forEach(item => {
-                    const found = saved.find(s => s.label === item.label);
-                    if (found) item.value = found.value || 0;
-                });
+                applySavedValues(this.scoreItems);
+                applySavedValues(this.hiddenScoreItems);
             });
         // PDF.js lazy load
         const url = window.pdf_url;

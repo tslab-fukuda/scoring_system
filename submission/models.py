@@ -99,6 +99,13 @@ class ScoringItem(models.Model):
         ('pre', '予習レポート'),
         ('main', '本レポート'),
     )
+    course = models.ForeignKey(
+        'submission.Course',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='scoring_items_common'
+    )
     course_offering = models.ForeignKey(
         'submission.CourseOffering',
         on_delete=models.SET_NULL,
@@ -108,6 +115,9 @@ class ScoringItem(models.Model):
     )
     category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
     label = models.CharField(max_length=32)
+    code = models.CharField(max_length=32, null=True, blank=True)
+    is_system = models.BooleanField(default=False)
+    show_in_grading_form = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
     weight = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)  # 係数（得点換算用、マイナス値も可）
 

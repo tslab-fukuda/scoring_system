@@ -30,6 +30,12 @@ from django.views.decorators.csrf import csrf_exempt
 
 JST = ZoneInfo("Asia/Tokyo")
 ABSENCE_CUTOFF_TIME = time(21, 0)
+SYSTEM_SCORING_DEFS = [
+    {'code': 'late', 'label': '遅刻', 'category': 'pre'},
+    {'code': 'late', 'label': '遅刻', 'category': 'main'},
+    {'code': 'absence', 'label': '欠席', 'category': 'main'},
+    {'code': 'lab_time', 'label': '実験時間', 'category': 'pre'},
+]
 
 
 def _weekday_label(dt):
@@ -40,22 +46,52 @@ def _weekday_label(dt):
 def _absence_penalty_weight(offering_id):
     if not offering_id:
         return 0.0
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return 0.0
     for category in ('pre', 'main'):
         specific = ScoringItem.objects.filter(
             category=category,
             course_offering_id=offering_id,
-            label='欠席'
+            code='absence'
         ).order_by('order').first()
         if specific:
             return float(specific.weight)
         common = ScoringItem.objects.filter(
             category=category,
+            course_id=offering.course_id,
             course_offering__isnull=True,
-            label='欠席'
+            code='absence'
         ).order_by('order').first()
         if common:
             return float(common.weight)
     return 0.0
+
+
+def _ensure_course_system_items(course):
+    for definition in SYSTEM_SCORING_DEFS:
+        code = definition['code']
+        category = definition['category']
+        label = definition['label']
+        item = ScoringItem.objects.filter(
+            course=course,
+            course_offering__isnull=True,
+            category=category,
+            code=code
+        ).first()
+        if item:
+            continue
+        ScoringItem.objects.create(
+            course=course,
+            course_offering=None,
+            category=category,
+            label=label,
+            code=code,
+            is_system=True,
+            show_in_grading_form=False,
+            order=0,
+            weight=0,
+        )
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -302,6 +338,7 @@ def admin_add_course(request):
     )
     if not created:
         return JsonResponse({'status': 'error', 'message': 'code already exists'}, status=400)
+    _ensure_course_system_items(course)
     return JsonResponse({'status': 'success', 'course': {
         'id': course.id,
         'name': course.name,
@@ -588,30 +625,47 @@ def delete_schedule_api(request, schedule_id):
 
 @role_required('admin')
 def scoring_items(request):
-    offerings = list(CourseOffering.objects.select_related('course'))
-    offerings_data = [
-        {
-            'id': off.id,
-            'course_code': off.course.code,
-            'course_name': off.course.name,
-            'year': off.year,
-        }
-        for off in offerings
-    ]
+    system_codes = {'late', 'absence', 'lab_time'}
+    courses_data = []
+    for course in Course.objects.prefetch_related('offerings').all():
+        offerings = list(course.offerings.all().order_by('-year', '-id'))
+        courses_data.append({
+            'id': course.id,
+            'course_code': course.code,
+            'course_name': course.name,
+            'offerings': [
+                {'id': off.id, 'year': off.year}
+                for off in offerings
+            ],
+        })
+
+    selected_course = None
     selected_offering_id = None
+    course_param = request.GET.get('course_id')
     offering_param = request.GET.get('offering_id')
-    if offering_param == 'common':
-        selected_offering_id = None
-    elif offering_param:
+
+    if course_param:
         try:
-            cand = int(offering_param)
-            if any(o['id'] == cand for o in offerings_data):
-                selected_offering_id = cand
-        except (TypeError, ValueError):
-            selected_offering_id = None
-    elif offerings_data:
-        latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
-        selected_offering_id = latest['id']
+            selected_course = Course.objects.get(id=int(course_param))
+        except (Course.DoesNotExist, TypeError, ValueError):
+            selected_course = None
+
+    if offering_param and offering_param != 'common':
+        try:
+            candidate = CourseOffering.objects.select_related('course').get(id=int(offering_param))
+        except (CourseOffering.DoesNotExist, TypeError, ValueError):
+            candidate = None
+        if candidate and (selected_course is None or candidate.course_id == selected_course.id):
+            selected_course = candidate.course
+            selected_offering_id = candidate.id
+
+    if selected_course is None and courses_data:
+        latest_offering = CourseOffering.objects.select_related('course').order_by('-year', '-id').first()
+        if latest_offering:
+            selected_course = latest_offering.course
+            selected_offering_id = latest_offering.id
+    elif selected_course and offering_param == 'common':
+        selected_offering_id = None
 
     course_offering = None
     if selected_offering_id:
@@ -619,24 +673,39 @@ def scoring_items(request):
 
     if request.method == 'POST':
         data = json.loads(request.body)
+        course_id = data.get('course_id')
         offering_id = data.get('offering_id')
+        course = None
         course_offering = None
+        if course_id:
+            course = Course.objects.filter(id=course_id).first()
         if offering_id and offering_id != 'common':
-            course_offering = CourseOffering.objects.filter(id=offering_id).first()
+            course_offering = CourseOffering.objects.filter(id=offering_id, course=course).first()
+            if not course_offering:
+                return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+        if not course:
+            return JsonResponse({'status': 'error', 'message': '科目が不正です'}, status=400)
 
         def _normalize(items):
             normalized = []
             labels = []
+            codes = []
             for item in items:
                 label = (item.get('label') or '').strip()
                 if not label:
                     continue
+                code = (item.get('code') or '').strip() or None
                 labels.append(label)
+                if code:
+                    codes.append(code)
                 normalized.append({
                     'label': label,
                     'weight': item.get('weight', 1),
+                    'code': code,
+                    'is_system': bool(item.get('is_system')),
+                    'show_in_grading_form': bool(item.get('show_in_grading_form', True)),
                 })
-            return normalized, labels
+            return normalized, labels, codes
 
         def _dup_labels(labels):
             seen = set()
@@ -647,8 +716,8 @@ def scoring_items(request):
                 seen.add(label)
             return dupes
 
-        pre_items, pre_labels = _normalize(data.get('pre', []))
-        main_items, main_labels = _normalize(data.get('main', []))
+        pre_items, pre_labels, pre_codes = _normalize(data.get('pre', []))
+        main_items, main_labels, main_codes = _normalize(data.get('main', []))
 
         dup_pre = _dup_labels(pre_labels)
         if dup_pre:
@@ -663,85 +732,117 @@ def scoring_items(request):
                 status=400
             )
 
-        if course_offering is None:
-            conflict_pre = set(
-                ScoringItem.objects.filter(
-                    category='pre',
-                    course_offering__isnull=False,
-                    label__in=pre_labels
-                ).values_list('label', flat=True)
-            )
-            conflict_main = set(
-                ScoringItem.objects.filter(
-                    category='main',
-                    course_offering__isnull=False,
-                    label__in=main_labels
-                ).values_list('label', flat=True)
-            )
-        else:
-            conflict_pre = set(
-                ScoringItem.objects.filter(
-                    category='pre',
-                    course_offering__isnull=True,
-                    label__in=pre_labels
-                ).values_list('label', flat=True)
-            )
-            conflict_main = set(
-                ScoringItem.objects.filter(
-                    category='main',
-                    course_offering__isnull=True,
-                    label__in=main_labels
-                ).values_list('label', flat=True)
-            )
-
-        if conflict_pre:
+        if len(pre_codes) != len(set(pre_codes)):
             return JsonResponse(
-                {'status': 'error', 'message': f'共通と重複する予習レポート項目があります: {", ".join(sorted(conflict_pre))}'},
+                {'status': 'error', 'message': '予習レポートに重複コードがあります'},
                 status=400
             )
-        if conflict_main:
+        if len(main_codes) != len(set(main_codes)):
             return JsonResponse(
-                {'status': 'error', 'message': f'共通と重複する本レポート項目があります: {", ".join(sorted(conflict_main))}'},
+                {'status': 'error', 'message': '本レポートに重複コードがあります'},
                 status=400
             )
 
-        ScoringItem.objects.filter(category='pre', course_offering=course_offering).delete()
-        ScoringItem.objects.filter(category='main', course_offering=course_offering).delete()
+        existing_system_pre = list(
+            ScoringItem.objects.filter(
+                category='pre',
+                course=course,
+                course_offering=course_offering,
+                is_system=True,
+            )
+        )
+        existing_system_main = list(
+            ScoringItem.objects.filter(
+                category='main',
+                course=course,
+                course_offering=course_offering,
+                is_system=True,
+            )
+        )
+        payload_pre_codes = {item.get('code') for item in pre_items if item.get('code')}
+        payload_main_codes = {item.get('code') for item in main_items if item.get('code')}
+        for item in existing_system_pre:
+            if item.code and item.code not in payload_pre_codes:
+                pre_items.append({
+                    'label': item.label,
+                    'weight': item.weight,
+                    'code': item.code,
+                    'is_system': True,
+                    'show_in_grading_form': item.show_in_grading_form,
+                })
+        for item in existing_system_main:
+            if item.code and item.code not in payload_main_codes:
+                main_items.append({
+                    'label': item.label,
+                    'weight': item.weight,
+                    'code': item.code,
+                    'is_system': True,
+                    'show_in_grading_form': item.show_in_grading_form,
+                })
+
+        ScoringItem.objects.filter(
+            category='pre', course=course, course_offering=course_offering
+        ).delete()
+        ScoringItem.objects.filter(
+            category='main', course=course, course_offering=course_offering
+        ).delete()
         for idx, item in enumerate(pre_items):
+            code = item.get('code') or None
+            is_system = bool(item.get('is_system')) or (code in system_codes)
             ScoringItem.objects.create(
                 category='pre',
                 label=item.get('label', ''),
                 weight=item.get('weight', 1),  # ← getでデフォルト値
                 order=idx,
-                course_offering=course_offering
+                course_offering=course_offering,
+                course=course,
+                code=code,
+                is_system=is_system,
+                show_in_grading_form=bool(item.get('show_in_grading_form', True)),
             )
         for idx, item in enumerate(main_items):
+            code = item.get('code') or None
+            is_system = bool(item.get('is_system')) or (code in system_codes)
             ScoringItem.objects.create(
                 category='main',
                 label=item.get('label', ''),
                 weight=item.get('weight', 1),  # ← getでデフォルト値
                 order=idx,
-                course_offering=course_offering
+                course_offering=course_offering,
+                course=course,
+                code=code,
+                is_system=is_system,
+                show_in_grading_form=bool(item.get('show_in_grading_form', True)),
             )
         return JsonResponse({'status': 'ok'})
 
-    if course_offering:
-        pre_qs = ScoringItem.objects.filter(category='pre', course_offering=course_offering).order_by('order')
-        main_qs = ScoringItem.objects.filter(category='main', course_offering=course_offering).order_by('order')
-    else:
-        pre_qs = ScoringItem.objects.filter(category='pre', course_offering__isnull=True).order_by('order')
-        main_qs = ScoringItem.objects.filter(category='main', course_offering__isnull=True).order_by('order')
+    pre_qs = ScoringItem.objects.none()
+    main_qs = ScoringItem.objects.none()
+    if selected_course:
+        if course_offering:
+            pre_qs = ScoringItem.objects.filter(category='pre', course_offering=course_offering).order_by('order')
+            main_qs = ScoringItem.objects.filter(category='main', course_offering=course_offering).order_by('order')
+        else:
+            pre_qs = ScoringItem.objects.filter(
+                category='pre', course=selected_course, course_offering__isnull=True
+            ).order_by('order')
+            main_qs = ScoringItem.objects.filter(
+                category='main', course=selected_course, course_offering__isnull=True
+            ).order_by('order')
 
-    pre = list(pre_qs.values('label', 'weight'))
-    main = list(main_qs.values('label', 'weight'))
+    pre = list(pre_qs.values('label', 'weight', 'code', 'is_system', 'show_in_grading_form'))
+    main = list(main_qs.values('label', 'weight', 'code', 'is_system', 'show_in_grading_form'))
     for x in pre:
         x['weight'] = int(x['weight'])
+        x['code'] = x.get('code') or ''
     for x in main:
         x['weight'] = int(x['weight'])
+        x['code'] = x.get('code') or ''
     return render(request, 'submission/scoring_items.html', {
         'pre': json.dumps(pre, ensure_ascii=False),
         'main': json.dumps(main, ensure_ascii=False),
-        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+        'courses_json': json.dumps(courses_data, ensure_ascii=False),
+        'selected_course_id': selected_course.id if selected_course else '',
         'selected_offering_id': selected_offering_id if selected_offering_id else 'common',
     })
 
