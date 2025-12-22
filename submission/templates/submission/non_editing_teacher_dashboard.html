@@ -117,30 +117,61 @@
                             <button type="button" class="btn-close" @click="showStudentModal=false"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>実験番号</th>
-                                            <th>ファイル名</th>
-                                            <th>予/本</th>
-                                            <th>点数</th>
-                                            <th>提出日</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="rep in studentReports" :key="rep.experiment_number + rep.submitted_at + rep.file_name">
-                                            <td>{{ rep.experiment_number }}</td>
-                                            <td><a v-if="rep.file" :href="rep.file" target="_blank">{{ rep.file_name }}</a><span v-else>-</span></td>
-                                            <td>{{ rep.report_type }}</td>
-                                            <td>{{ rep.score !== '' ? rep.score : '-' }}</td>
-                                            <td>{{ rep.submitted_at }}</td>
-                                        </tr>
-                                        <tr v-if="!studentReports.length">
-                                            <td colspan="5" class="text-center text-muted">提出記録がありません</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div class="mb-3">
+                                <div class="fw-semibold mb-1">欠席回数</div>
+                                <div>{{ absenceCount }} 回</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="fw-semibold mb-1">出席ログ</div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>日付</th>
+                                                <th>状態</th>
+                                                <th>時間</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="log in attendanceLogs" :key="log.date + log.status + log.time">
+                                                <td>{{ log.date }}</td>
+                                                <td>{{ log.status }}</td>
+                                                <td>{{ log.time }}</td>
+                                            </tr>
+                                            <tr v-if="!attendanceLogs.length">
+                                                <td colspan="3" class="text-center text-muted">出席ログがありません</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="fw-semibold mb-1">提出レポートログ</div>
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>実験番号</th>
+                                                <th>ファイル名</th>
+                                                <th>予/本</th>
+                                                <th>点数</th>
+                                                <th>提出日</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="rep in studentReports" :key="rep.experiment_number + rep.submitted_at + rep.file_name">
+                                                <td>{{ rep.experiment_number }}</td>
+                                                <td><a v-if="rep.file" :href="rep.file" target="_blank">{{ rep.file_name }}</a><span v-else>-</span></td>
+                                                <td>{{ rep.report_type }}</td>
+                                                <td>{{ rep.score !== '' ? rep.score : '-' }}</td>
+                                                <td>{{ rep.submitted_at }}</td>
+                                            </tr>
+                                            <tr v-if="!studentReports.length">
+                                                <td colspan="5" class="text-center text-muted">提出記録がありません</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

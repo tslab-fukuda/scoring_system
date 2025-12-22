@@ -5,17 +5,27 @@ from django.http import JsonResponse
 from decimal import Decimal
 from django.db.models import Q
 from django.utils import timezone
+from datetime import time, timedelta
+from zoneinfo import ZoneInfo
 
 from submission.decorators import role_required
 from .models import (
     CourseOffering,
     Enrollment,
     ExperimentCompletion,
+    Schedule,
     Submission,
     UserProfile,
 )
+from attendance.models import AttendanceRecord
 
 TEACHER_ROLES = ['teacher', 'non-editing teacher']
+JST = ZoneInfo("Asia/Tokyo")
+ABSENCE_CUTOFF_TIME = time(21, 0)
+
+
+def _weekday_label(dt):
+    return ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
 
 
 def _get_accessible_offerings(user):
@@ -376,15 +386,63 @@ def teacher_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
     if not student_id or not offering_id:
-        return JsonResponse({'reports': []})
+        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0})
     try:
         profile = UserProfile.objects.get(id=student_id, role='student')
     except UserProfile.DoesNotExist:
-        return JsonResponse({'reports': []})
+        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0})
     # アクセスできる科目/年度かチェック
     allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
     if int(offering_id) not in allowed_ids:
-        return JsonResponse({'reports': []}, status=403)
+        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0}, status=403)
+    enrollment = Enrollment.objects.filter(
+        user=profile.user,
+        course_offering_id=offering_id,
+        role='student'
+    ).first()
+    student_day = enrollment.experiment_day if enrollment else profile.experiment_day
+
+    now_local = timezone.localtime(timezone.now(), JST)
+    cutoff_date = now_local.date()
+    if now_local.time() < ABSENCE_CUTOFF_TIME:
+        cutoff_date = cutoff_date - timedelta(days=1)
+    schedule_dates = set()
+    if student_day:
+        for sched in Schedule.objects.filter(
+            course_offering_id=offering_id,
+            date__lte=cutoff_date
+        ):
+            if _weekday_label(sched.date) == student_day:
+                schedule_dates.add(sched.date)
+
+    attendance_dates = set(
+        AttendanceRecord.objects.filter(
+            user=profile.user,
+            course_offering_id=offering_id,
+            date__in=schedule_dates
+        ).values_list('date', flat=True)
+    )
+    absence_count = len(schedule_dates - attendance_dates)
+
+    attendance_logs = []
+    records = AttendanceRecord.objects.filter(
+        user=profile.user,
+        course_offering_id=offering_id
+    ).order_by('-date')
+    for record in records:
+        date_str = record.date.strftime('%Y-%m-%d')
+        if record.check_in:
+            attendance_logs.append({
+                'date': date_str,
+                'status': '入室',
+                'time': timezone.localtime(record.check_in, JST).strftime('%H:%M')
+            })
+        if record.check_out:
+            attendance_logs.append({
+                'date': date_str,
+                'status': '退室',
+                'time': timezone.localtime(record.check_out, JST).strftime('%H:%M')
+            })
     qs = Submission.objects.filter(
         student=profile.user,
         course_offering_id=offering_id
@@ -399,4 +457,8 @@ def teacher_student_reports(request):
             'score': rep.final_score if rep.final_score is not None else '',
             'submitted_at': timezone.localtime(rep.submitted_at).strftime('%Y-%m-%d %H:%M'),
         })
-    return JsonResponse({'reports': data})
+    return JsonResponse({
+        'reports': data,
+        'attendance_logs': attendance_logs,
+        'absence_count': absence_count,
+    })

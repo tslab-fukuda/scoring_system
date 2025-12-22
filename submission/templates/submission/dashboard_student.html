@@ -38,15 +38,46 @@
         <button type="button" class="btn-close" @click="closeStudentModal"></button>
       </div>
       <div class="modal-body">
-        <ul>
-          <li v-for="report in studentReports">
-            <a :href="report.file" target="_blank">{{ report.experiment_number }}（{{ report.report_type }}）</a>
-            <span>提出日: {{ report.submitted_at }}</span>
-          </li>
-        </ul>
-        <div v-if="studentReports.length === 0">レポート提出なし</div>
-        <div class="text-end mt-2">
-            <button class="btn btn-secondary" @click="openPhotoModal">顔写真</button>
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">欠席回数</div>
+          <div>{{ absenceCount }} 回</div>
+        </div>
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">出席ログ</div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>状態</th>
+                  <th>時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="log in attendanceLogs" :key="log.date + log.status + log.time">
+                  <td>{{ log.date }}</td>
+                  <td>{{ log.status }}</td>
+                  <td>{{ log.time }}</td>
+                </tr>
+                <tr v-if="!attendanceLogs.length">
+                  <td colspan="3" class="text-center text-muted">出席ログがありません</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="fw-semibold mb-1">提出レポートログ</div>
+          <ul>
+            <li v-for="report in studentReports" :key="report.experiment_number + report.submitted_at + report.file">
+              <a :href="report.file" target="_blank">{{ report.experiment_number }}（{{ report.report_type }}）</a>
+              <span>提出日: {{ report.submitted_at }}</span>
+            </li>
+          </ul>
+          <div v-if="studentReports.length === 0">レポート提出なし</div>
+          <div class="text-end mt-2">
+              <button class="btn btn-secondary" @click="openPhotoModal">顔写真</button>
+          </div>
         </div>
         {% endverbatim %}
       </div>

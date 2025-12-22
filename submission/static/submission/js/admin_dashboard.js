@@ -33,6 +33,8 @@ window.app = new Vue({
         selectedStudent: null,
         showStudentModal: false,
         studentReports: [],
+        attendanceLogs: [],
+        absenceCount: 0,
         showPhotoModal: false,
         videoStream: null,
     },
@@ -370,6 +372,8 @@ window.app = new Vue({
         openStudentModal(student) {
             this.selectedStudent = student.full_name;
             this.selectedStudentId = student.id;
+            this.attendanceLogs = [];
+            this.absenceCount = 0;
             const params = new URLSearchParams();
             params.append('student_id', student.id);
             if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
@@ -378,12 +382,16 @@ window.app = new Vue({
                 .then(data => {
                     this.studentReports = data.reports;
                     this.selectedStudent = data.full_name;
+                    this.attendanceLogs = data.attendance_logs || [];
+                    this.absenceCount = Number.isFinite(data.absence_count) ? data.absence_count : 0;
                     this.showStudentModal = true;
                 });
         },
         closeStudentModal() {
             this.showStudentModal = false;
             this.studentReports = [];
+            this.attendanceLogs = [];
+            this.absenceCount = 0;
         },
         openPhotoModal() {
             this.showPhotoModal = true;

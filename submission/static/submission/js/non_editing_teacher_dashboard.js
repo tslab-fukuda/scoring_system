@@ -41,6 +41,8 @@ new Vue({
         showStudentModal: false,
         selectedStudent: {},
         studentReports: [],
+        attendanceLogs: [],
+        absenceCount: 0,
         experimentNumbers: [],
         completeMap: {}, // { [student_id]: { [exp]: true/false } }
         scoreDetail: "",
@@ -191,6 +193,8 @@ new Vue({
         openStudentModal(stu) {
             this.selectedStudent = stu;
             this.showStudentModal = true;
+            this.attendanceLogs = [];
+            this.absenceCount = 0;
             const params = new URLSearchParams();
             params.append('student_id', stu.id);
             if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
@@ -198,6 +202,8 @@ new Vue({
                 .then(res => res.json())
                 .then(data => {
                     this.studentReports = data.reports || [];
+                    this.attendanceLogs = data.attendance_logs || [];
+                    this.absenceCount = Number.isFinite(data.absence_count) ? data.absence_count : 0;
                 });
         },
         isExperimentComplete(exp) {

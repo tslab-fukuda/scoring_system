@@ -786,12 +786,69 @@ def accept_submission(request):
 def api_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
+    if not student_id:
+        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0})
+    try:
+        profile = UserProfile.objects.get(id=student_id)
+    except UserProfile.DoesNotExist:
+        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0})
+    full_name = profile.full_name
+
+    attendance_logs = []
+    absence_count = 0
+    if offering_id:
+        enrollment = Enrollment.objects.filter(
+            user=profile.user,
+            course_offering_id=offering_id,
+            role='student'
+        ).first()
+        student_day = enrollment.experiment_day if enrollment else profile.experiment_day
+
+        now_local = timezone.localtime(timezone.now(), JST)
+        cutoff_date = now_local.date()
+        if now_local.time() < ABSENCE_CUTOFF_TIME:
+            cutoff_date = cutoff_date - timedelta(days=1)
+        schedule_dates = set()
+        if student_day:
+            for sched in Schedule.objects.filter(
+                course_offering_id=offering_id,
+                date__lte=cutoff_date
+            ):
+                if _weekday_label(sched.date) == student_day:
+                    schedule_dates.add(sched.date)
+
+        attendance_dates = set(
+            AttendanceRecord.objects.filter(
+                user=profile.user,
+                course_offering_id=offering_id,
+                date__in=schedule_dates
+            ).values_list('date', flat=True)
+        )
+        absence_count = len(schedule_dates - attendance_dates)
+
+        records = AttendanceRecord.objects.filter(
+            user=profile.user,
+            course_offering_id=offering_id
+        ).order_by('-date')
+        for record in records:
+            date_str = record.date.strftime('%Y-%m-%d')
+            if record.check_in:
+                attendance_logs.append({
+                    'date': date_str,
+                    'status': '入室',
+                    'time': timezone.localtime(record.check_in, JST).strftime('%H:%M')
+                })
+            if record.check_out:
+                attendance_logs.append({
+                    'date': date_str,
+                    'status': '退室',
+                    'time': timezone.localtime(record.check_out, JST).strftime('%H:%M')
+                })
+
     qs = Submission.objects.filter(student__userprofile__id=student_id)
     if offering_id:
         qs = qs.filter(course_offering_id=offering_id)
     qs = qs.order_by('-submitted_at')
-    profile = UserProfile.objects.get(id=student_id)
-    full_name = profile.full_name
     data = []
     for items in qs:
         data.append({
@@ -800,7 +857,12 @@ def api_student_reports(request):
             "report_type": '予' if items.report_type == 'prep' else '本' ,
             "submitted_at": timezone.localtime(items.submitted_at).strftime('%Y-%m-%d %H:%M'),
         })
-    return JsonResponse({'reports': data,'full_name': full_name})
+    return JsonResponse({
+        'reports': data,
+        'full_name': full_name,
+        'attendance_logs': attendance_logs,
+        'absence_count': absence_count,
+    })
 
 @role_required('admin')
 def user_list_view(request):
