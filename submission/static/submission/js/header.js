@@ -10,12 +10,13 @@ new Vue({
     },
     computed: {
         overrideActive() {
-            return this.actualRole === 'admin' && this.viewRole !== this.actualRole;
+            return ['admin', 'course-teacher'].includes(this.actualRole) && this.viewRole !== this.actualRole;
         },
         viewRoleLabel() {
             const labels = {
                 'admin': 'admin',
                 'teacher': 'teacher',
+                'course-teacher': 'course-teacher',
                 'non-editing teacher': 'non-editing teacher',
                 'student': 'student'
             };
@@ -35,7 +36,7 @@ new Vue({
             localStorage.setItem('dark-mode', this.isDark);
         },
         applyViewRole() {
-            if (this.actualRole !== 'admin') return;
+            if (!['admin', 'course-teacher'].includes(this.actualRole)) return;
             fetch('/submission/set_view_role/', {
                 method: 'POST',
                 headers: {

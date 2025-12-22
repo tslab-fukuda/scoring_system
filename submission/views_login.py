@@ -12,6 +12,8 @@ def redirect_after_login(request):
         return redirect('/submission/admin_dashboard')
     elif role == 'teacher':
         return redirect('/submission/teacher_dashboard')
+    elif role == 'course-teacher':
+        return redirect('/submission/course_teacher_dashboard')
     elif role == 'non-editing teacher':
         return redirect('/submission/non_editing_teacher_dashboard')
     else:

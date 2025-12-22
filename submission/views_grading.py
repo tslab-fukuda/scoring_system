@@ -18,7 +18,7 @@ from decimal import Decimal
 from PIL import Image
 
 @login_required
-@role_required('teacher','admin','non-editing teacher')
+@role_required('teacher','admin','course-teacher','non-editing teacher')
 def grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
     if request.method == 'POST':
@@ -71,7 +71,7 @@ def grading_form(request, submission_id):
 
 
 @login_required
-@role_required('teacher', 'admin', 'non-editing teacher')
+@role_required('teacher', 'admin', 'course-teacher', 'non-editing teacher')
 def graded_pdf(request, submission_id):
     """Ensure graded PDF is served with correct content-type for preview iframe."""
     submission = get_object_or_404(Submission, pk=submission_id)

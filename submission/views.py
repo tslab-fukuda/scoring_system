@@ -55,6 +55,8 @@ def index_redirect(request):
         return redirect('admin_dashboard')
     elif role == "teacher":
         return redirect('teacher_dashboard')
+    elif role == "course-teacher":
+        return redirect('course_teacher_dashboard')
     elif role == "non-editing teacher":
         return redirect('non_editing_teacher_dashboard')
     elif role == "student":
@@ -66,21 +68,32 @@ def index_redirect(request):
 @login_required
 @require_POST
 def set_view_role(request):
-    if get_actual_role(request) != 'admin':
-        return JsonResponse({'status': 'error', 'message': 'admin only'}, status=403)
+    actual_role = get_actual_role(request)
+    if actual_role not in ('admin', 'course-teacher'):
+        return JsonResponse({'status': 'error', 'message': 'permission denied'}, status=403)
     try:
         data = json.loads(request.body or '{}')
     except Exception:
         data = {}
     role = (data.get('role') or '').strip()
-    if role == '' or role == 'admin':
-        request.session.pop('role_override', None)
-        effective = 'admin'
-    elif role in ROLE_OPTIONS:
-        request.session['role_override'] = role
-        effective = role
+    if actual_role == 'admin':
+        if role == '' or role == 'admin':
+            request.session.pop('role_override', None)
+            effective = 'admin'
+        elif role in ROLE_OPTIONS:
+            request.session['role_override'] = role
+            effective = role
+        else:
+            return JsonResponse({'status': 'error', 'message': 'invalid role'}, status=400)
     else:
-        return JsonResponse({'status': 'error', 'message': 'invalid role'}, status=400)
+        if role == '' or role == 'course-teacher':
+            request.session.pop('role_override', None)
+            effective = 'course-teacher'
+        elif role == 'non-editing teacher':
+            request.session['role_override'] = role
+            effective = role
+        else:
+            return JsonResponse({'status': 'error', 'message': 'invalid role'}, status=400)
     return JsonResponse({'status': 'ok', 'role': effective})
 
 @login_required

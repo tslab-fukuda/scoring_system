@@ -26,7 +26,7 @@
             <li><a href="{% url 'course_management' %}" class="menu-link"><span class="menu-ico">📚</span> 科目/年度管理</a></li>
             <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
           </template>
-          <template v-else-if="role === 'teacher' || role === 'non-editing teacher'">
+          <template v-else-if="role === 'teacher' || role === 'course-teacher' || role === 'non-editing teacher'">
             <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
           </template>
           <!-- <template v-else>
@@ -44,8 +44,20 @@
               <select v-model="viewRole" class="form-select form-select-sm">
                 <option value="admin">admin</option>
                 <option value="teacher">teacher</option>
+                <option value="course-teacher">course-teacher</option>
                 <option value="non-editing teacher">non-editing teacher</option>
                 <option value="student">student</option>
+              </select>
+              <button class="btn btn-sm btn-outline-primary" @click="applyViewRole">切替</button>
+            </div>
+            <div v-if="overrideActive" class="view-as-note">現在: {{ viewRoleLabel }}</div>
+          </li>
+          <li v-else-if="actualRole === 'course-teacher'" class="view-as-section">
+            <div class="view-as-label">閲覧ロール切替</div>
+            <div class="view-as-controls">
+              <select v-model="viewRole" class="form-select form-select-sm">
+                <option value="course-teacher">course-teacher</option>
+                <option value="non-editing teacher">non-editing teacher</option>
               </select>
               <button class="btn btn-sm btn-outline-primary" @click="applyViewRole">切替</button>
             </div>

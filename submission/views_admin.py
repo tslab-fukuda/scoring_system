@@ -266,7 +266,7 @@ def admin_course_data_api(request):
             'experiment_group': enr.experiment_group,
         })
     users = []
-    for u in User.objects.filter(userprofile__role__in=['admin', 'teacher', 'non-editing teacher']):
+    for u in User.objects.filter(userprofile__role__in=['admin', 'teacher', 'course-teacher', 'non-editing teacher']):
         up = getattr(u, 'userprofile', None)
         users.append({
             'id': u.id,
@@ -964,7 +964,7 @@ def update_user_role(request, user_id):
 
             profile.role = new_role
             user.is_superuser = new_role == 'admin'
-            user.is_staff = new_role in ['teacher', 'admin']
+            user.is_staff = new_role in ['teacher', 'course-teacher', 'admin']
 
             profile.save()
             user.save()
@@ -1096,7 +1096,7 @@ def update_user_view(request, user_id):
         user.username = new_email
         user.email = new_email
         user.is_superuser = new_role == 'admin'
-        user.is_staff = new_role in ['teacher', 'admin']
+        user.is_staff = new_role in ['teacher', 'course-teacher', 'admin']
 
         profile.email = new_email
         profile.full_name = data.get('full_name', profile.full_name)

@@ -19,7 +19,7 @@ from .models import (
 )
 from attendance.models import AttendanceRecord
 
-TEACHER_ROLES = ['teacher', 'non-editing teacher']
+TEACHER_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 JST = ZoneInfo("Asia/Tokyo")
 ABSENCE_CUTOFF_TIME = time(21, 0)
 
@@ -114,6 +114,13 @@ def non_editing_teacher_dashboard(request):
     context = _dashboard_context(request.user)
     return render(request, 'submission/non_editing_teacher_dashboard.html', context)
 
+
+@role_required('course-teacher', 'admin')
+def course_teacher_dashboard(request):
+    context = _dashboard_context(request.user)
+    return render(request, 'submission/course_teacher_dashboard.html', context)
+
+
 @role_required('teacher', 'non-editing teacher', 'admin')
 def get_ungraded_submissions(request):
     # サーチ条件
@@ -204,7 +211,7 @@ def get_graded_submissions(request):
         })
     return JsonResponse(result, safe=False)
 
-@role_required('teacher', 'non-editing teacher', 'admin')
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def get_ungraded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
@@ -249,7 +256,7 @@ def get_ungraded_main_reports(request):
         })
     return JsonResponse(result, safe=False)
 
-@role_required('teacher', 'non-editing teacher', 'admin')
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def get_graded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
@@ -342,7 +349,7 @@ def mark_experiment_complete(request):
     ec.save()
     return JsonResponse({'status': 'ok'})
 
-@role_required('teacher', 'non-editing teacher', 'admin')
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def teacher_students_api(request):
     students = []
     day = request.GET.get('experiment_day')
@@ -381,7 +388,7 @@ def teacher_students_api(request):
     return JsonResponse({'students': students})
 
 
-@role_required('teacher', 'non-editing teacher', 'admin')
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def teacher_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')

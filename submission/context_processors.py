@@ -19,7 +19,7 @@ def login_flags(request):
 def role_context(request):
     actual_role = get_actual_role(request)
     effective_role = get_effective_role(request)
-    role_override = request.session.get('role_override') if actual_role == 'admin' else ''
+    role_override = request.session.get('role_override') if actual_role in ('admin', 'course-teacher') else ''
     return {
         'actual_role': actual_role,
         'effective_role': effective_role,

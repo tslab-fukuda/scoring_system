@@ -202,6 +202,8 @@ new Vue({
                                 console.log(window.userRole);
                                 if (window.userRole === "admin") {
                                     redirectUrl = "/submission/admin_dashboard/";
+                                } else if (window.userRole === "course-teacher") {
+                                    redirectUrl = "/submission/course_teacher_dashboard/";
                                 }
                                 if (modalEl) modalEl.setAttribute('aria-hidden', 'true');
                                 window.location.href = redirectUrl;
@@ -211,6 +213,8 @@ new Vue({
                             console.log(window.userRole);
                             if (window.userRole === "admin") {
                                 redirectUrl = "/submission/admin_dashboard/";
+                            } else if (window.userRole === "course-teacher") {
+                                redirectUrl = "/submission/course_teacher_dashboard/";
                             }
                             window.open(res.new_file_url, "_blank");
                             window.location.href = redirectUrl;

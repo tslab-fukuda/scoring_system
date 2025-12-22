@@ -70,6 +70,7 @@ urlpatterns = [
     
     # TA系
     path('teacher_dashboard/', views_teacher.teacher_dashboard, name='teacher_dashboard'),
+    path('course_teacher_dashboard/', views_teacher.course_teacher_dashboard, name='course_teacher_dashboard'),
     path('non_editing_teacher_dashboard/', views_teacher.non_editing_teacher_dashboard, name='non_editing_teacher_dashboard'),
     path('get_ungraded_submissions/', views_teacher.get_ungraded_submissions, name='get_ungraded_submissions'),
     path('get_graded_submissions/', views_teacher.get_graded_submissions, name='get_graded_submissions'),

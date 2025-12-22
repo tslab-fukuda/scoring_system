@@ -54,6 +54,7 @@ class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('student', 'Student'),
         ('teacher', 'Teacher'),
+        ('course-teacher', 'Course Teacher'),
         ('admin', 'Admin'),
         ('non-editing teacher', 'Non-editing Teacher'),
     ]
@@ -156,6 +157,7 @@ class Enrollment(models.Model):
     ROLE_CHOICES = [
         ('student', 'student'),
         ('teacher', 'teacher'),
+        ('course-teacher', 'course-teacher'),
         ('non-editing teacher', 'non-editing teacher'),
         ('admin', 'admin'),
     ]
