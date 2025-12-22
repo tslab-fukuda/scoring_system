@@ -16,6 +16,18 @@ new Vue({
         scoreDetailCourse: { course_code: '', course_name: '', year: '' },
         scoreDetailExperiment: '',
         scoreDetailSubmissions: [],
+        showFinalGradeModal: false,
+        finalGradeDetail: {
+            name: '',
+            student_id: '',
+            final_score_total: '',
+            score_details_total: '',
+            score_details_avg: '',
+            absence_count: 0,
+            absence_penalty: '',
+            experiment_count: '',
+            final_grade: ''
+        },
     },
     computed: {
         courseOptions() {
@@ -140,6 +152,38 @@ new Vue({
             this.scoreDetailCourse = { course_code: '', course_name: '', year: '' };
             this.scoreDetailExperiment = '';
             this.scoreDetailSubmissions = [];
+        },
+        openFinalGrade(stu) {
+            if (!stu || stu.final_grade === '' || stu.final_grade === null || stu.final_grade === undefined) {
+                alert('最終成績が計算されていません');
+                return;
+            }
+            this.showFinalGradeModal = true;
+            this.finalGradeDetail = {
+                name: stu.name,
+                student_id: stu.student_id,
+                final_score_total: stu.final_score_total ?? 0,
+                score_details_total: stu.score_details_total ?? 0,
+                score_details_avg: stu.score_details_avg ?? 0,
+                absence_count: stu.absence_count ?? 0,
+                absence_penalty: stu.absence_penalty ?? 0,
+                experiment_count: stu.experiment_count ?? '',
+                final_grade: stu.final_grade
+            };
+        },
+        closeFinalGradeModal() {
+            this.showFinalGradeModal = false;
+            this.finalGradeDetail = {
+                name: '',
+                student_id: '',
+                final_score_total: '',
+                score_details_total: '',
+                score_details_avg: '',
+                absence_count: 0,
+                absence_penalty: '',
+                experiment_count: '',
+                final_grade: ''
+            };
         },
         toggleSort(field) {
             if (this.sortField === field) {

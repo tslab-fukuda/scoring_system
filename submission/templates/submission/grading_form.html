@@ -111,6 +111,7 @@
     window.userRole = "{{ request.user.userprofile.role }}";
     window.initialScoreDetails = {{ score_details|safe }};
     window.submissionId = {{ submission.id }};
+    window.courseOfferingId = "{{ submission.course_offering_id|default_if_none:'' }}";
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>

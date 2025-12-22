@@ -239,7 +239,11 @@ new Vue({
         pdfjsLib.GlobalWorkerOptions.workerSrc =
             "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js";
         // 採点項目の動的反映
-        fetch("/submission/scoring_items_api/")
+        const offeringId = window.courseOfferingId || "";
+        const scoringUrl = offeringId
+            ? `/submission/scoring_items_api/?offering_id=${encodeURIComponent(offeringId)}`
+            : "/submission/scoring_items_api/";
+        fetch(scoringUrl)
             .then(res => res.json())
             .then(items => {
                 if (window.reportType === "prep") {

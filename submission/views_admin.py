@@ -10,6 +10,9 @@ from submission.models import (
     CourseOffering,
     Enrollment,
 )
+from attendance.models import AttendanceRecord
+from datetime import time, timedelta
+from zoneinfo import ZoneInfo
 from django.core.files.storage import default_storage
 import json
 import csv
@@ -24,6 +27,35 @@ from django.contrib.auth.models import User, Permission
 from django.utils import timezone
 from urllib.parse import unquote
 from django.views.decorators.csrf import csrf_exempt
+
+JST = ZoneInfo("Asia/Tokyo")
+ABSENCE_CUTOFF_TIME = time(21, 0)
+
+
+def _weekday_label(dt):
+    # 0=Mon ... 6=Sun
+    return ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
+
+
+def _absence_penalty_weight(offering_id):
+    if not offering_id:
+        return 0.0
+    for category in ('pre', 'main'):
+        specific = ScoringItem.objects.filter(
+            category=category,
+            course_offering_id=offering_id,
+            label='欠席'
+        ).order_by('order').first()
+        if specific:
+            return float(specific.weight)
+        common = ScoringItem.objects.filter(
+            category=category,
+            course_offering__isnull=True,
+            label='欠席'
+        ).order_by('order').first()
+        if common:
+            return float(common.weight)
+    return 0.0
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -556,27 +588,152 @@ def delete_schedule_api(request, schedule_id):
 
 @role_required('admin')
 def scoring_items(request):
+    offerings = list(CourseOffering.objects.select_related('course'))
+    offerings_data = [
+        {
+            'id': off.id,
+            'course_code': off.course.code,
+            'course_name': off.course.name,
+            'year': off.year,
+        }
+        for off in offerings
+    ]
+    selected_offering_id = None
+    offering_param = request.GET.get('offering_id')
+    if offering_param == 'common':
+        selected_offering_id = None
+    elif offering_param:
+        try:
+            cand = int(offering_param)
+            if any(o['id'] == cand for o in offerings_data):
+                selected_offering_id = cand
+        except (TypeError, ValueError):
+            selected_offering_id = None
+    elif offerings_data:
+        latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
+        selected_offering_id = latest['id']
+
+    course_offering = None
+    if selected_offering_id:
+        course_offering = CourseOffering.objects.filter(id=selected_offering_id).first()
+
     if request.method == 'POST':
         data = json.loads(request.body)
-        ScoringItem.objects.filter(category='pre').delete()
-        ScoringItem.objects.filter(category='main').delete()
-        for idx, item in enumerate(data.get('pre', [])):
+        offering_id = data.get('offering_id')
+        course_offering = None
+        if offering_id and offering_id != 'common':
+            course_offering = CourseOffering.objects.filter(id=offering_id).first()
+
+        def _normalize(items):
+            normalized = []
+            labels = []
+            for item in items:
+                label = (item.get('label') or '').strip()
+                if not label:
+                    continue
+                labels.append(label)
+                normalized.append({
+                    'label': label,
+                    'weight': item.get('weight', 1),
+                })
+            return normalized, labels
+
+        def _dup_labels(labels):
+            seen = set()
+            dupes = []
+            for label in labels:
+                if label in seen and label not in dupes:
+                    dupes.append(label)
+                seen.add(label)
+            return dupes
+
+        pre_items, pre_labels = _normalize(data.get('pre', []))
+        main_items, main_labels = _normalize(data.get('main', []))
+
+        dup_pre = _dup_labels(pre_labels)
+        if dup_pre:
+            return JsonResponse(
+                {'status': 'error', 'message': f'予習レポートに重複ラベルがあります: {", ".join(dup_pre)}'},
+                status=400
+            )
+        dup_main = _dup_labels(main_labels)
+        if dup_main:
+            return JsonResponse(
+                {'status': 'error', 'message': f'本レポートに重複ラベルがあります: {", ".join(dup_main)}'},
+                status=400
+            )
+
+        if course_offering is None:
+            conflict_pre = set(
+                ScoringItem.objects.filter(
+                    category='pre',
+                    course_offering__isnull=False,
+                    label__in=pre_labels
+                ).values_list('label', flat=True)
+            )
+            conflict_main = set(
+                ScoringItem.objects.filter(
+                    category='main',
+                    course_offering__isnull=False,
+                    label__in=main_labels
+                ).values_list('label', flat=True)
+            )
+        else:
+            conflict_pre = set(
+                ScoringItem.objects.filter(
+                    category='pre',
+                    course_offering__isnull=True,
+                    label__in=pre_labels
+                ).values_list('label', flat=True)
+            )
+            conflict_main = set(
+                ScoringItem.objects.filter(
+                    category='main',
+                    course_offering__isnull=True,
+                    label__in=main_labels
+                ).values_list('label', flat=True)
+            )
+
+        if conflict_pre:
+            return JsonResponse(
+                {'status': 'error', 'message': f'共通と重複する予習レポート項目があります: {", ".join(sorted(conflict_pre))}'},
+                status=400
+            )
+        if conflict_main:
+            return JsonResponse(
+                {'status': 'error', 'message': f'共通と重複する本レポート項目があります: {", ".join(sorted(conflict_main))}'},
+                status=400
+            )
+
+        ScoringItem.objects.filter(category='pre', course_offering=course_offering).delete()
+        ScoringItem.objects.filter(category='main', course_offering=course_offering).delete()
+        for idx, item in enumerate(pre_items):
             ScoringItem.objects.create(
                 category='pre',
                 label=item.get('label', ''),
                 weight=item.get('weight', 1),  # ← getでデフォルト値
-                order=idx
+                order=idx,
+                course_offering=course_offering
             )
-        for idx, item in enumerate(data.get('main', [])):
+        for idx, item in enumerate(main_items):
             ScoringItem.objects.create(
                 category='main',
                 label=item.get('label', ''),
                 weight=item.get('weight', 1),  # ← getでデフォルト値
-                order=idx
+                order=idx,
+                course_offering=course_offering
             )
         return JsonResponse({'status': 'ok'})
-    pre = list(ScoringItem.objects.filter(category='pre').order_by('order').values('label','weight'))
-    main = list(ScoringItem.objects.filter(category='main').order_by('order').values('label','weight'))
+
+    if course_offering:
+        pre_qs = ScoringItem.objects.filter(category='pre', course_offering=course_offering).order_by('order')
+        main_qs = ScoringItem.objects.filter(category='main', course_offering=course_offering).order_by('order')
+    else:
+        pre_qs = ScoringItem.objects.filter(category='pre', course_offering__isnull=True).order_by('order')
+        main_qs = ScoringItem.objects.filter(category='main', course_offering__isnull=True).order_by('order')
+
+    pre = list(pre_qs.values('label', 'weight'))
+    main = list(main_qs.values('label', 'weight'))
     for x in pre:
         x['weight'] = int(x['weight'])
     for x in main:
@@ -584,6 +741,8 @@ def scoring_items(request):
     return render(request, 'submission/scoring_items.html', {
         'pre': json.dumps(pre, ensure_ascii=False),
         'main': json.dumps(main, ensure_ascii=False),
+        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+        'selected_offering_id': selected_offering_id if selected_offering_id else 'common',
     })
 
 @role_required('admin')
@@ -1110,7 +1269,7 @@ def final_score_list_csv(request):
     # Add BOM for Excel compatibility
     response.write('\ufeff')
     writer = csv.writer(response)
-    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', '最終成績']
     writer.writerow(header)
 
     for row_data in student_data:
@@ -1122,6 +1281,9 @@ def final_score_list_csv(request):
         ]
         for ex in experiment_numbers:
             row.append(row_data.get(ex, ''))
+        row.append(row_data.get('absence_count', 0))
+        row.append(row_data.get('score_details_total', ''))
+        row.append(row_data.get('final_grade', ''))
         writer.writerow(row)
 
     return response
@@ -1149,7 +1311,35 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             students_qs = students_qs.filter(experiment_day=day)
         if group:
             students_qs = students_qs.filter(experiment_group=group)
+
+    absence_penalty_weight = _absence_penalty_weight(offering_id)
+    schedule_by_day = {}
+    attendance_map = {}
+    if offering_id and students_qs.exists():
+        now_local = timezone.localtime(timezone.now(), JST)
+        cutoff_date = now_local.date()
+        if now_local.time() < ABSENCE_CUTOFF_TIME:
+            cutoff_date = cutoff_date - timedelta(days=1)
+        schedule_qs = Schedule.objects.filter(
+            course_offering_id=offering_id,
+            date__lte=cutoff_date
+        )
+        schedule_dates_all = set()
+        for sched in schedule_qs:
+            label = _weekday_label(sched.date)
+            schedule_by_day.setdefault(label, set()).add(sched.date)
+            schedule_dates_all.add(sched.date)
+
+        if schedule_dates_all:
+            attendance_qs = AttendanceRecord.objects.filter(
+                course_offering_id=offering_id,
+                date__in=schedule_dates_all,
+                user_id__in=list(enrollment_map.keys()) if enrollment_map else list(students_qs.values_list('user_id', flat=True))
+            ).values_list('user_id', 'date')
+            for user_id, att_date in attendance_qs:
+                attendance_map.setdefault(user_id, set()).add(att_date)
     student_data = []
+    experiment_count = len(experiment_numbers) if experiment_numbers else 0
     for up in students_qs:
         enr = enrollment_map.get(up.user_id)
         record = {
@@ -1160,17 +1350,71 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             'experiment_day': enr.experiment_day if enr else up.experiment_day,
             'experiment_group': enr.experiment_group if enr else up.experiment_group,
         }
+        total_final_score = 0.0
+        score_details_total = 0.0
         for ex in experiment_numbers:
             sub_qs = Submission.objects.filter(
                 student=up.user,
                 experiment_number=ex,
                 report_type='main',
                 final_evaluated=True,
+                accepted=True,
             )
             if offering_id:
                 sub_qs = sub_qs.filter(course_offering_id=offering_id)
             sub = sub_qs.order_by('-submitted_at').first()
             record[ex] = float(sub.final_score) if sub and sub.final_score is not None else ''
+            if sub and sub.final_score is not None:
+                try:
+                    total_final_score += float(sub.final_score)
+                except Exception:
+                    pass
+
+            details_qs = Submission.objects.filter(
+                student=up.user,
+                experiment_number=ex,
+                score_details__isnull=False,
+            )
+            if offering_id:
+                details_qs = details_qs.filter(course_offering_id=offering_id)
+            for s in details_qs:
+                for item in (s.score_details or []):
+                    if not isinstance(item, dict):
+                        continue
+                    value = item.get('value', 0)
+                    weight = item.get('weight', 1)
+                    try:
+                        score_details_total += float(value) * float(weight)
+                    except Exception:
+                        continue
+
+        absence_count = 0
+        if offering_id:
+            day_label = record['experiment_day']
+            target_dates = schedule_by_day.get(day_label, set())
+            if target_dates:
+                attended_dates = attendance_map.get(up.user_id, set())
+                absence_count = len(target_dates - attended_dates)
+        absence_penalty = absence_count * absence_penalty_weight
+        score_details_total = round(score_details_total, 2)
+        absence_penalty = round(absence_penalty, 2)
+        total_final_score = round(total_final_score, 2)
+
+        final_grade = ''
+        score_details_avg = 0.0
+        if experiment_count:
+            score_details_avg = score_details_total / experiment_count
+            final_grade = (total_final_score + score_details_avg + absence_penalty) / experiment_count
+            final_grade = round(final_grade, 2)
+            score_details_avg = round(score_details_avg, 2)
+
+        record['absence_count'] = absence_count
+        record['score_details_total'] = score_details_total
+        record['absence_penalty'] = absence_penalty
+        record['final_score_total'] = total_final_score
+        record['score_details_avg'] = score_details_avg
+        record['experiment_count'] = experiment_count
+        record['final_grade'] = final_grade
         student_data.append(record)
     return student_data
 

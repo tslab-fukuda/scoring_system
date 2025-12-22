@@ -13,6 +13,17 @@
 
 <h2 class="mb-4">評価項目編集画面</h2>
 <div id="scoring-items-app">
+  <div class="mb-3">
+    <label class="form-label">科目/年度</label>
+    <select class="form-select" v-model="offeringId" @change="changeOffering">
+      <option value="common">共通</option>
+      {% verbatim %}
+      <option v-for="off in offerings" :key="off.id" :value="String(off.id)">
+        {{ off.course_code }} {{ off.course_name }} ({{ off.year }})
+      </option>
+      {% endverbatim %}
+    </select>
+  </div>
   <div class="score-board">
     <div class="score-column">
       <h5>予習レポート</h5>
@@ -47,6 +58,8 @@
   window.csrfToken = '{{ csrf_token }}';
   window.initialPre = {{ pre | safe }};
   window.initialMain = {{ main | safe }};
+  window.offerings = {{ offerings_json | safe }};
+  window.selectedOfferingId = '{{ selected_offering_id }}';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/scoring_items.js' %}"></script>

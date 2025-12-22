@@ -86,8 +86,51 @@ def graded_pdf(request, submission_id):
 
 @login_required
 def scoring_items_api(request):
-    pre = list(ScoringItem.objects.filter(category='pre').order_by('order').values('label', 'weight'))
-    main = list(ScoringItem.objects.filter(category='main').order_by('order').values('label', 'weight'))
+    offering_id = request.GET.get('offering_id')
+    offering_id_int = None
+    if offering_id:
+        try:
+            offering_id_int = int(offering_id)
+        except (TypeError, ValueError):
+            offering_id_int = None
+
+    def _merge_items(common_items, specific_items):
+        merged = []
+        index_by_label = {}
+        for item in common_items:
+            label = item.get('label') or ''
+            if not label or label in index_by_label:
+                continue
+            index_by_label[label] = len(merged)
+            merged.append(item)
+        for item in specific_items:
+            label = item.get('label') or ''
+            if not label:
+                continue
+            if label in index_by_label:
+                merged[index_by_label[label]] = item
+            else:
+                index_by_label[label] = len(merged)
+                merged.append(item)
+        return merged
+
+    def _items(category):
+        common_qs = ScoringItem.objects.filter(
+            category=category,
+            course_offering__isnull=True
+        ).order_by('order')
+        common_items = list(common_qs.values('label', 'weight'))
+        specific_items = []
+        if offering_id_int:
+            specific_qs = ScoringItem.objects.filter(
+                category=category,
+                course_offering_id=offering_id_int
+            ).order_by('order')
+            specific_items = list(specific_qs.values('label', 'weight'))
+        return _merge_items(common_items, specific_items)
+
+    pre = _items('pre')
+    main = _items('main')
     for x in pre:
         x['weight'] = int(x['weight'])
     for x in main:
@@ -113,22 +156,55 @@ def final_grading_form(request, submission_id):
     prep_subs = Submission.objects.filter(
         student=submission.student,
         experiment_number=submission.experiment_number,
-        report_type='prep'
+        report_type='prep',
+        course_offering=submission.course_offering
     )
 
     main_subs = Submission.objects.filter(
         student=submission.student,
         experiment_number=submission.experiment_number,
-        report_type='main'
+        report_type='main',
+        course_offering=submission.course_offering
     )
 
     # 得点項目マスターを取得
-    pre_master = list(
-        ScoringItem.objects.filter(category='pre').order_by('order').values('label', 'weight')
-    )
-    main_master = list(
-        ScoringItem.objects.filter(category='main').order_by('order').values('label', 'weight')
-    )
+    def _merge_items(common_items, specific_items):
+        merged = []
+        index_by_label = {}
+        for item in common_items:
+            label = item.get('label') or ''
+            if not label or label in index_by_label:
+                continue
+            index_by_label[label] = len(merged)
+            merged.append(item)
+        for item in specific_items:
+            label = item.get('label') or ''
+            if not label:
+                continue
+            if label in index_by_label:
+                merged[index_by_label[label]] = item
+            else:
+                index_by_label[label] = len(merged)
+                merged.append(item)
+        return merged
+
+    def _master_items(category):
+        common_qs = ScoringItem.objects.filter(
+            category=category,
+            course_offering__isnull=True
+        ).order_by('order')
+        common_items = list(common_qs.values('label', 'weight'))
+        specific_items = []
+        if submission.course_offering:
+            specific_qs = ScoringItem.objects.filter(
+                category=category,
+                course_offering=submission.course_offering
+            ).order_by('order')
+            specific_items = list(specific_qs.values('label', 'weight'))
+        return _merge_items(common_items, specific_items)
+
+    pre_master = _master_items('pre')
+    main_master = _master_items('main')
 
     def attach_values(master, detail_lists):
         result = []

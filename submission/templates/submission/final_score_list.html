@@ -63,6 +63,9 @@
                         </div>
                     </th>
                     <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
+                    <th @click="toggleSort('absence_count')" style="cursor:pointer">欠席回数</th>
+                    <th @click="toggleSort('score_details_total')" style="cursor:pointer">減点</th>
+                    <th @click="toggleSort('final_grade')" style="cursor:pointer">最終成績</th>
                     {% endverbatim %}
                 </tr>
             </thead>
@@ -75,6 +78,12 @@
                     <td>{{ stu.experiment_group }}</td>
                     <td v-for="ex in experimentNumbers" :key="ex">
                         <a v-if="stu[ex] !== ''" href="#" @click.prevent="openScoreDetail(stu, ex)">{{ stu[ex] }}</a>
+                        <span v-else>-</span>
+                    </td>
+                    <td>{{ stu.absence_count }}</td>
+                    <td>{{ stu.score_details_total !== '' ? stu.score_details_total : '-' }}</td>
+                    <td>
+                        <a v-if="stu.final_grade !== ''" href="#" @click.prevent="openFinalGrade(stu)">{{ stu.final_grade }}</a>
                         <span v-else>-</span>
                     </td>
                 </tr>
@@ -133,6 +142,69 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @click="closeScoreDetailModal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endverbatim %}
+
+    {% verbatim %}
+    <div v-if="showFinalGradeModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" style="max-width:90vw; margin-top:80px;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">最終成績の計算式</h5>
+                    <button type="button" class="btn-close" @click="closeFinalGradeModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <div><b>学生:</b> {{ finalGradeDetail.name }}（{{ finalGradeDetail.student_id }}）</div>
+                        <div><b>科目:</b> {{ scoreDetailCourse.course_code }} {{ scoreDetailCourse.course_name }}（{{ scoreDetailCourse.year }}）</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold">式</div>
+                        <div>
+                            ({{ finalGradeDetail.final_score_total }} + {{ finalGradeDetail.score_details_avg }} + {{ finalGradeDetail.absence_penalty }})
+                            / {{ finalGradeDetail.experiment_count }}
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <th>final_score合計</th>
+                                    <td>{{ finalGradeDetail.final_score_total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>score_details合計</th>
+                                    <td>{{ finalGradeDetail.score_details_total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>score_details平均</th>
+                                    <td>{{ finalGradeDetail.score_details_avg }}</td>
+                                </tr>
+                                <tr>
+                                    <th>欠席回数</th>
+                                    <td>{{ finalGradeDetail.absence_count }}</td>
+                                </tr>
+                                <tr>
+                                    <th>欠席減点</th>
+                                    <td>{{ finalGradeDetail.absence_penalty }}</td>
+                                </tr>
+                                <tr>
+                                    <th>実験項目数</th>
+                                    <td>{{ finalGradeDetail.experiment_count }}</td>
+                                </tr>
+                                <tr>
+                                    <th>最終成績</th>
+                                    <td>{{ finalGradeDetail.final_grade }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeFinalGradeModal">閉じる</button>
                 </div>
             </div>
         </div>

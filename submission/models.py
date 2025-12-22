@@ -98,6 +98,13 @@ class ScoringItem(models.Model):
         ('pre', '予習レポート'),
         ('main', '本レポート'),
     )
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='scoring_items'
+    )
     category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
     label = models.CharField(max_length=32)
     order = models.PositiveIntegerField(default=0)
