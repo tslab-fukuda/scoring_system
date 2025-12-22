@@ -23,7 +23,11 @@
     <script>
         // Djangoのユーザー情報をグローバルJS変数にしてheader.jsで参照
         var USER_NAME = "{{ request.user.get_full_name|default:request.user.username }}";
-        var USER_ROLE = "{{ request.user.userprofile.role }}";
+        var USER_ROLE = "{{ effective_role }}";
+        var ACTUAL_ROLE = "{{ actual_role }}";
+        var ROLE_OVERRIDE = "{{ role_override }}";
+        var CSRF_TOKEN = "{{ csrf_token }}";
+        var INDEX_URL = "{% url 'index_redirect' %}";
     </script>
     <script src="{% static 'submission/js/header.js' %}"></script>
     {% block extra_js %}{% endblock %}

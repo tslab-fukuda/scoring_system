@@ -1,6 +1,7 @@
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
+from .roles import get_effective_role
 
 def role_required(*allowed_roles):
     def decorator(view_func):
@@ -9,7 +10,7 @@ def role_required(*allowed_roles):
                 raise PermissionDenied("ログインが必要です")
             if not hasattr(request.user, 'userprofile'):
                 raise PermissionDenied("プロフィール情報がありません")
-            if request.user.userprofile.role not in allowed_roles:
+            if get_effective_role(request) not in allowed_roles:
                 raise PermissionDenied("この操作は許可されていません")
             return view_func(request, *args, **kwargs)
         return _wrapped_view

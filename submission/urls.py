@@ -16,6 +16,7 @@ urlpatterns = [
     # 全員共通
     path('api_user_profile/', views.api_user_profile, name='api_user_profile'),
     path('api_change_password/', views.api_change_password, name='api_change_password'),
+    path('set_view_role/', views.set_view_role, name='set_view_role'),
     path('user_profile/', views.user_profile_view, name='user_profile'),
     
     # admin系

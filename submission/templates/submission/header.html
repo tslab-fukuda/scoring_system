@@ -5,6 +5,7 @@
     <span :class="{ open: showMenu }"></span>
   </button>
   <span class="ts-header-title">情報工学実験　管理システム</span>
+  <span v-if="overrideActive" class="view-as-indicator">閲覧ロール: {{ viewRoleLabel }}</span>
   <!-- <sub class="subtitle">presented by TSlab</sub> -->
   <button class="dark-toggle" type="button" @click="toggleDark">
     <span v-if="isDark">🌞</span>
@@ -36,6 +37,19 @@
             <a href="/submission/user_profile/" class="menu-link">
               <span class="menu-ico">🙍</span> プロフィール
             </a>
+          </li>
+          <li v-if="actualRole === 'admin'" class="view-as-section">
+            <div class="view-as-label">閲覧ロール切替</div>
+            <div class="view-as-controls">
+              <select v-model="viewRole" class="form-select form-select-sm">
+                <option value="admin">admin</option>
+                <option value="teacher">teacher</option>
+                <option value="non-editing teacher">non-editing teacher</option>
+                <option value="student">student</option>
+              </select>
+              <button class="btn btn-sm btn-outline-primary" @click="applyViewRole">切替</button>
+            </div>
+            <div v-if="overrideActive" class="view-as-note">現在: {{ viewRoleLabel }}</div>
           </li>
           <li>
             <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">

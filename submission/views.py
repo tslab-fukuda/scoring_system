@@ -17,6 +17,7 @@ from .models import UserProfile, Submission, Schedule
 from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
 from django.http import HttpResponse
+from .roles import ROLE_OPTIONS, get_actual_role, get_effective_role
 
 def signup_view(request):
     if request.method == 'POST':
@@ -49,7 +50,7 @@ def index_redirect(request):
     if not hasattr(request.user, "userprofile"):
         # プロフィール未登録ユーザならログアウトかエラーページ
         return redirect('login')
-    role = request.user.userprofile.role
+    role = get_effective_role(request)
     if role == "admin":
         return redirect('admin_dashboard')
     elif role == "teacher":
@@ -60,6 +61,27 @@ def index_redirect(request):
         return redirect('student_dashboard')
     else:
         return redirect('login')  # 万一ロール不明ならloginへ
+
+
+@login_required
+@require_POST
+def set_view_role(request):
+    if get_actual_role(request) != 'admin':
+        return JsonResponse({'status': 'error', 'message': 'admin only'}, status=403)
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+    role = (data.get('role') or '').strip()
+    if role == '' or role == 'admin':
+        request.session.pop('role_override', None)
+        effective = 'admin'
+    elif role in ROLE_OPTIONS:
+        request.session['role_override'] = role
+        effective = role
+    else:
+        return JsonResponse({'status': 'error', 'message': 'invalid role'}, status=400)
+    return JsonResponse({'status': 'ok', 'role': effective})
 
 @login_required
 def api_user_profile(request):

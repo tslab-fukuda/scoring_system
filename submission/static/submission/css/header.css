@@ -72,6 +72,14 @@ body {
     letter-spacing: 1.5px;
     color: #fff;
 }
+.view-as-indicator {
+    margin-left: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
 .dark-toggle {
     position: absolute;
     right: 1.3rem;
@@ -141,6 +149,27 @@ body {
     pointer-events: none;
     color: #bbb;
     background: #f6f6f6;
+}
+.view-as-section {
+    margin: 0.6rem 0 0.4rem 0;
+    padding: 0.4rem 0.2rem;
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+}
+.view-as-label {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 0.4rem;
+}
+.view-as-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.view-as-note {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    color: #5b3cc4;
 }
 .divider {
     border-top: 1px solid #eee;

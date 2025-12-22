@@ -116,6 +116,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'submission.context_processors.login_flags',
+                'submission.context_processors.role_context',
             ],
         },
     },
