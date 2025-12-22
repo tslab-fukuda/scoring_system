@@ -103,7 +103,7 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <div><b>学生:</b> {{ scoreDetailStudent.name }}（{{ scoreDetailStudent.student_id }}）</div>
-                        <div><b>科目:</b> {{ scoreDetailCourse.course_code }} {{ scoreDetailCourse.course_name }}（{{ scoreDetailCourse.year }}）</div>
+                        <div><b>科目:</b> {{ finalGradeCourse.course_code }} {{ finalGradeCourse.course_name }}（{{ finalGradeCourse.year }}）</div>
                         <div><b>実験番号:</b> {{ scoreDetailExperiment }}</div>
                     </div>
                     <div v-if="scoreDetailLoading" class="text-muted">読み込み中...</div>

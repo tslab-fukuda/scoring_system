@@ -17,6 +17,7 @@ new Vue({
         scoreDetailExperiment: '',
         scoreDetailSubmissions: [],
         showFinalGradeModal: false,
+        finalGradeCourse: { course_code: '', course_name: '', year: '' },
         finalGradeDetail: {
             name: '',
             student_id: '',
@@ -158,6 +159,11 @@ new Vue({
                 alert('最終成績が計算されていません');
                 return;
             }
+            const offeringId = this.selectedOfferingId || this.resolveOfferingId();
+            const offering = this.offerings.find(o => Number(o.id) === Number(offeringId));
+            this.finalGradeCourse = offering
+                ? { course_code: offering.course_code, course_name: offering.course_name, year: offering.year }
+                : { course_code: '', course_name: '', year: '' };
             this.showFinalGradeModal = true;
             this.finalGradeDetail = {
                 name: stu.name,
@@ -173,6 +179,7 @@ new Vue({
         },
         closeFinalGradeModal() {
             this.showFinalGradeModal = false;
+            this.finalGradeCourse = { course_code: '', course_name: '', year: '' };
             this.finalGradeDetail = {
                 name: '',
                 student_id: '',
