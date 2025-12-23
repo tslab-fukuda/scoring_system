@@ -276,3 +276,30 @@ body.dark-mode .board-divider {
 body.dark-mode .delete-btn {
     color: #ff6b6b;
 }
+body.dark-mode .profile-container {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.45);
+}
+body.dark-mode .profile-container h2 {
+    color: #e0e0e0;
+}
+body.dark-mode .profile-info p {
+    color: #e0e0e0;
+    border-left-color: #5b5b5b;
+}
+body.dark-mode .profile-info strong {
+    color: #cfcfcf;
+}
+body.dark-mode .profile-submissions h4 {
+    color: #e0e0e0;
+}
+body.dark-mode .profile-submissions li {
+    color: #d0d0d0;
+}
+body.dark-mode .profile-submissions a {
+    color: #7db5ff;
+}
+body.dark-mode .profile-submissions a:hover {
+    color: #9ad0ff;
+}

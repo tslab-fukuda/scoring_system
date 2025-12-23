@@ -4,10 +4,6 @@ new Vue({
       userProfile: {},
       submissions: [],
       scoreSummary: [],
-      showPwChange: false,
-      password1: "",
-      password2: "",
-      passwordMessage: "",
     },
     methods: {
       fetchProfile() {
@@ -21,29 +17,8 @@ new Vue({
             }
           });
       },
-      changePassword() {
-        if (this.password1 !== this.password2) {
-          this.passwordMessage = "パスワードが一致しません";
-          return;
-        }
-        fetch("/submission/api_change_password/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken },
-          body: JSON.stringify({ password: this.password1 })
-        })
-          .then(r => r.json())
-          .then(res => {
-            if (res.status === "ok") {
-              this.passwordMessage = "パスワードを変更しました";
-              this.password1 = this.password2 = "";
-            } else {
-              this.passwordMessage = res.message || "エラーが発生しました";
-            }
-          });
-      }
     },
     mounted() {
       this.fetchProfile();
     }
   });
-  
