@@ -28,7 +28,12 @@
     }
 
     .st-status-table td:nth-child(3) a {
-        word-break: break-all;
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: top;
     }
 
     .st-status-table th:nth-child(4),

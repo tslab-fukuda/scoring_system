@@ -96,13 +96,15 @@
             <div v-if="showScore" class="score-modal-float">
                 <h5>採点エリア</h5>
                 {% verbatim %}
-                <table class="table">
+                <table class="table score-table">
                     <tr v-for="item in scoreItems" :key="item.key">
-                        <td>{{ item.label }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-secondary" @click="dec(item)">-</button>
-                            <span class="mx-2">{{ item.value }}</span>
-                            <button class="btn btn-sm btn-outline-secondary" @click="inc(item)">+</button>
+                        <td class="score-label">{{ item.label }}</td>
+                        <td class="score-control-cell">
+                            <div class="score-controls">
+                                <button class="btn btn-sm btn-outline-secondary" @click="dec(item)">-</button>
+                                <span class="score-value">{{ item.value }}</span>
+                                <button class="btn btn-sm btn-outline-secondary" @click="inc(item)">+</button>
+                            </div>
                         </td>
                     </tr>
                 </table>

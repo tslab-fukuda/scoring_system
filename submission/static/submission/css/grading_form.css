@@ -114,3 +114,29 @@
     display: block;
     margin: 0 auto 16px;
 }
+
+.score-modal-float .score-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.score-modal-float .score-label {
+    width: calc(100% - 120px);
+    word-break: break-word;
+}
+
+.score-modal-float .score-control-cell {
+    width: 120px;
+}
+
+.score-modal-float .score-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.score-modal-float .score-controls .btn {
+    min-width: 32px;
+}

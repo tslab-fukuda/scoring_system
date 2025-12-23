@@ -119,6 +119,14 @@
   box-shadow: 0 4px 20px #7863fd33;
   background: #f3f2fb;
 }
+
+.st-schedule-card {
+  cursor: pointer;
+}
+.st-schedule-card.past-card {
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .card.past-card {
   background: #c7c7c7 !important;
   color: #555 !important;
