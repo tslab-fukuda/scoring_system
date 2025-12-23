@@ -1,6 +1,7 @@
 {% verbatim %}
 <div>
-    <table class="table table-bordered align-middle">
+    <div class="teacher-table-scroll">
+        <table class="table table-bordered align-middle">
         <thead>
             <tr>
                 <th style="max-width:120px;">曜日</th>
@@ -43,6 +44,7 @@
             </tr>
         </tbody>
     </table>
+    </div>
     <!-- 得点詳細のポップアップ -->
     <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
         <div class="modal-dialog modal-dialog-centered">

@@ -1,7 +1,7 @@
 {% verbatim %}
 <div>
     <h4>あなたの提出状況</h4>
-    <table class="table table-bordered">
+    <table class="table table-bordered st-status-table">
         <thead>
             <tr>
                 <th>レポート種類</th>
@@ -21,36 +21,48 @@
         <tbody v-else>
             <tr v-for="item in filteredStatusList" :key="`${item.id}-${item.course_offering_id || 'none'}`">
                 <!-- レポート種別 -->
-                <td>{{ item.report_type === 'main' ? '本レポート' : '予習レポート' }}</td>
+                <td data-label="レポート種類">
+                    <span class="cell-value">{{ item.report_type === 'main' ? '本レポート' : '予習レポート' }}</span>
+                </td>
                 <!-- 実験番号 -->
-                <td>{{ item.experiment_number }}</td>
+                <td data-label="実験番号">
+                    <span class="cell-value">{{ item.experiment_number }}</span>
+                </td>
                 <!-- 提出ファイル名 -->
-                <td>
-                    <a :href="item.file_url" target="_blank" v-if="item.file_url">{{ item.file_name }}</a>
-                    <span v-else>-</span>
+                <td data-label="提出ファイル名">
+                    <span class="cell-value">
+                        <a :href="item.file_url" target="_blank" v-if="item.file_url">{{ item.file_name }}</a>
+                        <span v-else>-</span>
+                    </span>
                 </td>
                 <!-- 提出日 -->
-                <td>{{ item.submitted_at }}</td>
+                <td data-label="提出日">
+                    <span class="cell-value">{{ item.submitted_at }}</span>
+                </td>
                 <!-- ステータス -->
-                <td>
-                    <span v-if="item.status === '添削済'">添削済</span>
-                    <span v-else-if="item.status === '受取済'">受取済</span>
-                    <span v-else>未</span>
+                <td data-label="ステータス">
+                    <span class="cell-value" v-if="item.status === '添削済'">添削済</span>
+                    <span class="cell-value" v-else-if="item.status === '受取済'">受取済</span>
+                    <span class="cell-value" v-else>未</span>
                 </td>
                 <!-- 添削結果 -->
-                <td>
-                    <button v-if="item.graded_score !== null" class="btn btn-link p-0" @click="showScoreDetail(item)">
-                        {{ item.graded_score }} 点
-                    </button>
-                    <span v-else>-</span>
+                <td data-label="添削結果">
+                    <span class="cell-value">
+                        <button v-if="item.graded_score !== null" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                            {{ item.graded_score }} 点
+                        </button>
+                        <span v-else>-</span>
+                    </span>
                 </td>
                 <!-- 編集 -->
-                <td>
-                    <div class="d-flex gap-2" v-if="item.status !== '添削済' && item.status !== '受取済'">
-                        <button class="btn btn-primary btn-sm" @click="openEditModal(item)">修正</button>
-                        <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)">削除</button>
-                    </div>
-                    <span v-else class="text-muted">-</span>
+                <td data-label="編集" class="status-actions">
+                    <span class="cell-value" v-if="item.status !== '添削済' && item.status !== '受取済'">
+                        <span class="d-flex gap-2">
+                            <button class="btn btn-primary btn-sm" @click="openEditModal(item)">修正</button>
+                            <button class="btn btn-danger btn-sm" @click="deleteSubmission(item.id)">削除</button>
+                        </span>
+                    </span>
+                    <span v-else class="cell-value text-muted">-</span>
                 </td>
             </tr>
         </tbody>
