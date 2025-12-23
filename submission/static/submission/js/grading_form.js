@@ -17,6 +17,13 @@ new Vue({
         selectedStamp: "",
         penWidth: 2,
         highlightWidth: 10,
+        showCompare: false,
+        syncScroll: true,
+        comparePdfUrl: window.comparePdfUrl || "",
+        compareSubmittedAt: window.compareSubmittedAt || "",
+        compareLoading: false,
+        compareRendered: false,
+        syncingScroll: false,
     },
     computed: {
         totalScore() {
@@ -26,6 +33,70 @@ new Vue({
     methods: {
         toggleScorePanel() {
             this.showScore = !this.showScore;
+        },
+        toggleCompare() {
+            this.showCompare = !this.showCompare;
+            if (this.showCompare) {
+                this.compareRendered = false;
+                this.$nextTick(() => this.renderComparePdf());
+            } else {
+                this.compareRendered = false;
+            }
+        },
+        toggleSyncScroll() {
+            if (!this.showCompare) return;
+            this.syncScroll = !this.syncScroll;
+        },
+        onMainScroll(e) {
+            if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
+            const target = this.$refs.comparePdfArea;
+            if (!target) return;
+            this.syncingScroll = true;
+            target.scrollTop = e.target.scrollTop;
+            setTimeout(() => { this.syncingScroll = false; }, 0);
+        },
+        onCompareScroll(e) {
+            if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
+            const target = this.$refs.pdfArea;
+            if (!target) return;
+            this.syncingScroll = true;
+            target.scrollTop = e.target.scrollTop;
+            setTimeout(() => { this.syncingScroll = false; }, 0);
+        },
+        renderComparePdf() {
+            if (!this.comparePdfUrl || this.compareRendered) return;
+            const container = this.$refs.comparePdfPages;
+            if (!container) return;
+            container.innerHTML = '';
+            this.compareLoading = true;
+            const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/";
+            const STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/";
+            const loadingTask = pdfjsLib.getDocument({
+                url: this.comparePdfUrl,
+                cMapUrl: CMAP_URL,
+                cMapPacked: true,
+                standardFontDataUrl: STANDARD_FONT_URL,
+            });
+            loadingTask.promise.then(async pdf => {
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.2 });
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.style.display = 'block';
+                    canvas.style.margin = '0 auto 16px auto';
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    container.appendChild(canvas);
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                }
+                this.compareRendered = true;
+            }).catch(err => {
+                console.error('Compare PDF error:', err);
+                container.innerHTML = '<div class="text-danger small p-2">比較PDFを表示できませんでした。</div>';
+            }).finally(() => {
+                this.compareLoading = false;
+            });
         },
         inc(item) { item.value++; },
         dec(item) { if (item.value > 0) item.value--; },

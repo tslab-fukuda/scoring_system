@@ -1,6 +1,63 @@
 .pdf-col {
     width: 100%;
+    min-width: 0;
     transition: none;
+}
+
+.grading-pdf-wrap {
+    display: grid;
+    width: 100%;
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 12px;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+}
+
+.grading-pdf-wrap.compare-active {
+    grid-template-columns: 1fr 1fr;
+}
+
+.pdf-header {
+    padding-top: 40px;
+}
+
+.main-header {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.main-body {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.compare-header {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.compare-body {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.compare-pdf-col,
+.compare-column {
+    border-left: 1px solid #ddd;
+    padding-left: 12px;
+}
+
+.compare-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.compare-panel-header {
+    font-size: 0.9rem;
+    color: #555;
 }
 
 .score-modal-float {

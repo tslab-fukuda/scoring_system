@@ -63,10 +63,23 @@ def grading_form(request, submission_id):
 
     # GET時
     score_json = json.dumps(submission.score_details) if submission.score_details else 'null'
+    previous = Submission.objects.filter(
+        student=submission.student,
+        experiment_number=submission.experiment_number,
+        report_type=submission.report_type,
+        course_offering=submission.course_offering,
+        submitted_at__lt=submission.submitted_at
+    ).order_by('-submitted_at').first()
+    compare_pdf_url = previous.file.url if previous and previous.file else ''
+    compare_submitted_at = ''
+    if previous and previous.submitted_at:
+        compare_submitted_at = timezone.localtime(previous.submitted_at).strftime('%Y-%m-%d %H:%M')
     return render(request, 'submission/grading_form.html', {
         'submission': submission,
         'pdf_url': submission.file.url,
         'score_details': score_json,
+        'compare_pdf_url': compare_pdf_url,
+        'compare_submitted_at': compare_submitted_at,
     })
 
 
@@ -262,6 +275,25 @@ def final_grading_form(request, submission_id):
         float(submission.final_score - (Decimal(total_score) / Decimal('100')))
         if submission.final_score is not None else ''
     )
+    candidates = []
+    candidate_qs = Submission.objects.filter(
+        experiment_number=submission.experiment_number,
+        report_type=submission.report_type,
+        course_offering=submission.course_offering,
+    ).exclude(student=submission.student).select_related('student__userprofile').order_by(
+        'student__userprofile__full_name', '-submitted_at'
+    )
+    seen_user_ids = set()
+    for cand in candidate_qs:
+        if cand.student_id in seen_user_ids:
+            continue
+        seen_user_ids.add(cand.student_id)
+        up = getattr(cand.student, 'userprofile', None)
+        candidates.append({
+            'user_id': cand.student_id,
+            'full_name': up.full_name if up else cand.student.username,
+            'student_id': up.student_id if up else '',
+        })
 
     return render(request, 'submission/final_grading_form.html', {
         'submission': submission,
@@ -270,4 +302,32 @@ def final_grading_form(request, submission_id):
         'pre_items': pre_items,
         'main_items': main_items,
         'final_comment': submission.final_comment or '',
+        'compare_candidates': json.dumps(candidates, ensure_ascii=False),
+    })
+
+
+@login_required
+@role_required('non-editing teacher', 'teacher', 'admin', 'course-teacher')
+def compare_user_submission(request):
+    submission_id = request.GET.get('submission_id')
+    user_id = request.GET.get('user_id')
+    if not submission_id or not user_id:
+        return JsonResponse({'status': 'error', 'message': 'submission_id and user_id are required'}, status=400)
+    submission = get_object_or_404(Submission, pk=submission_id)
+    candidate = Submission.objects.filter(
+        student_id=user_id,
+        experiment_number=submission.experiment_number,
+        report_type=submission.report_type,
+        course_offering=submission.course_offering,
+    ).exclude(id=submission.id).select_related('student__userprofile').order_by('-submitted_at').first()
+    if not candidate or not candidate.file:
+        return JsonResponse({'status': 'not_found'})
+    up = getattr(candidate.student, 'userprofile', None)
+    name = up.full_name if up else candidate.student.username
+    submitted_at = timezone.localtime(candidate.submitted_at).strftime('%Y-%m-%d %H:%M')
+    return JsonResponse({
+        'status': 'ok',
+        'pdf_url': candidate.file.url,
+        'submitted_at': submitted_at,
+        'full_name': name,
     })

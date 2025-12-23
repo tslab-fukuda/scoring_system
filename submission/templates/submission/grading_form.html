@@ -11,45 +11,78 @@
 {% block content %}
 <div id="grading-form" class="container-fluid" v-cloak>
     <div class="row" style="position:relative;">
-        <div class="pdf-col" style="padding-top:40px;">
-            <div class="mb-2">
-                <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
-                <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
-                <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
+        <div class="grading-pdf-wrap" :class="{ 'compare-active': showCompare }">
+            <div class="pdf-col pdf-header main-header">
+                <div class="mb-2">
+                    <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
+                    <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
+                    <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
+                </div>
+                {% verbatim %}
+                <div class="compare-controls mb-2">
+                    <button class="btn btn-outline-secondary" :class="{ active: showCompare }" @click="toggleCompare">
+                        {{ showCompare ? '比較を閉じる' : '比較を表示' }}
+                    </button>
+                    <button class="btn btn-outline-secondary" @click="toggleSyncScroll" :disabled="!showCompare">
+                        同期スクロール: {{ syncScroll ? 'ON' : 'OFF' }}
+                    </button>
+                    <span v-if="comparePdfUrl" class="text-muted small">比較対象提出日: {{ compareSubmittedAt }}</span>
+                    <span v-else class="text-muted small">比較対象なし</span>
+                </div>
+                {% endverbatim %}
+                <div class="pdf-toolbar mb-2">
+                    {% if effective_role != 'non-editing teacher' %}
+                    <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
+                        @click="tool='pen'">ペン</button>
+                    <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
+                        @click="tool='highlight'">蛍光ペン</button>
+                    {% endif %}
+                    <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
+                        @click="tool='eraser'">消しゴム</button>
+                    <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
+                        @click="tool='stamp'">スタンプ</button>
+                    <select v-if="tool==='stamp'" v-model="selectedStamp" class="form-select d-inline-block ms-2" style="width:auto;">
+                        {% verbatim %}
+                        <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
+                        {% endverbatim %}
+                    </select>
+                    {% if effective_role != 'non-editing teacher' %}
+                    <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                    <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                    <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
+                    <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
+                    {% endif %}
+                </div>
             </div>
-            <div class="pdf-toolbar mb-2">
-                {% if effective_role != 'non-editing teacher' %}
-                <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
-                    @click="tool='pen'">ペン</button>
-                <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
-                    @click="tool='highlight'">蛍光ペン</button>
-                {% endif %}
-                <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
-                    @click="tool='eraser'">消しゴム</button>
-                <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
-                    @click="tool='stamp'">スタンプ</button>
-                <select v-if="tool==='stamp'" v-model="selectedStamp" class="form-select d-inline-block ms-2" style="width:auto;">
-                    {% verbatim %}
-                    <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
-                    {% endverbatim %}
-                </select>
-                {% if effective_role != 'non-editing teacher' %}
-                <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
-                <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
-                <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
-                <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
-                {% endif %}
+            <div class="pdf-col pdf-body main-body">
+                <div id="pdf-area" ref="pdfArea" @scroll="onMainScroll" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
+                    <div id="pdf-pages">
+                        <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
+                        <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
+                            <canvas :ref="'pdfCanvas' + idx"></canvas>
+                            <canvas :ref="'drawCanvas' + idx" style="position:absolute;left:0;top:0;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
+                                {% if effective_role != 'non-editing teacher' %}
+                                @mousedown="startDraw(idx, $event)" @mousemove="draw(idx, $event)" @mouseup="stopDraw(idx)"
+                                @mouseleave="stopDraw(idx)"
+                                {% endif %}></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="pdf-area" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
-                <div id="pdf-pages">
-                    <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
-                    <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
-                        <canvas :ref="'pdfCanvas' + idx"></canvas>
-                        <canvas :ref="'drawCanvas' + idx" style="position:absolute;left:0;top:0;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
-                            {% if effective_role != 'non-editing teacher' %}
-                            @mousedown="startDraw(idx, $event)" @mousemove="draw(idx, $event)" @mouseup="stopDraw(idx)"
-                            @mouseleave="stopDraw(idx)"
-                            {% endif %}></canvas>
+            <div v-if="showCompare" class="pdf-col pdf-header compare-header compare-column">
+                {% verbatim %}
+                <div class="compare-panel-header mb-2">
+                    <span class="fw-semibold">比較対象</span>
+                    <span v-if="comparePdfUrl" class="text-muted ms-2 small">{{ compareSubmittedAt }}</span>
+                    <span v-else class="text-muted ms-2 small">比較対象がありません</span>
+                </div>
+                {% endverbatim %}
+            </div>
+            <div v-if="showCompare" class="pdf-col pdf-body compare-body compare-column">
+                <div id="compare-pdf-area" ref="comparePdfArea" @scroll="onCompareScroll" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
+                    <div id="compare-pdf-pages" ref="comparePdfPages">
+                        <div v-if="compareLoading" class="text-muted small p-2">比較PDFを読み込み中...</div>
+                        <div v-else-if="!comparePdfUrl" class="text-muted small p-2">比較対象がありません</div>
                     </div>
                 </div>
             </div>
@@ -112,6 +145,8 @@
     window.initialScoreDetails = {{ score_details|safe }};
     window.submissionId = {{ submission.id }};
     window.courseOfferingId = "{{ submission.course_offering_id|default_if_none:'' }}";
+    window.comparePdfUrl = "{{ compare_pdf_url }}";
+    window.compareSubmittedAt = "{{ compare_submitted_at }}";
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
