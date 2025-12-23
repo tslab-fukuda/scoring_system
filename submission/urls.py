@@ -30,6 +30,7 @@ urlpatterns = [
     path('update_group/<int:user_id>/', views_admin.update_group_view, name='update_group'),
     path('update/<int:user_id>/', views_admin.update_user_view, name='update_user'),
     path('update_permission/<int:user_id>/', views_admin.update_attendance_permission, name='update_attendance_permission'),
+    path('update_attendance_only/<int:user_id>/', views_admin.update_attendance_only, name='update_attendance_only'),
     path('delete/<int:user_id>/', views_admin.delete_user_view, name='delete_user'),
     path('create/', views_admin.create_user_view, name='create_user'),
     path('bulk_create/', views_admin.bulk_create_users, name='bulk_create_users'),

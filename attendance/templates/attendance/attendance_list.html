@@ -71,11 +71,20 @@
             <div class="d-flex flex-column align-items-end gap-2">
                 <div class="d-flex align-items-center gap-2">
                     <button id="nfc-connect-btn" type="button" class="btn btn-outline-primary btn-sm">NFC接続</button>
+{% endverbatim %}
+{% if can_register_nfc %}
+{% verbatim %}
                     <button class="btn btn-primary nfc-toggle-btn" @click="open" :disabled="showPanel">NFC登録</button>
+{% endverbatim %}
+{% endif %}
+{% verbatim %}
                 </div>
                 <div id="nfc-status" class="text-muted small">NFC未接続</div>
             </div>
         </div>
+{% endverbatim %}
+{% if can_register_nfc %}
+{% verbatim %}
         <transition name="slide-right">
             <div v-if="showPanel" class="nfc-panel">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -136,6 +145,9 @@
                 </div>
             </div>
         </transition>
+{% endverbatim %}
+{% endif %}
+{% verbatim %}
     </div>
     {% endverbatim %}
     <div class="ts-attendance-columns">

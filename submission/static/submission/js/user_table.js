@@ -3,7 +3,8 @@ new Vue({
     data: {
         users: USERS_DATA.map(user => ({
             ...user,
-            can_view_attendance: user.can_view_attendance
+            can_view_attendance: user.can_view_attendance,
+            is_attendance_only: user.is_attendance_only
         })),
         defaultDays: ['火', '木'],
         groupOptions: [].concat(...['火', '木'].map(day =>
@@ -165,6 +166,32 @@ new Vue({
                 if (!res.ok) {
                     user.can_view_attendance = !user.can_view_attendance;
                 }
+            });
+        },
+        toggleAttendanceOnly(user) {
+            const desired = user.is_attendance_only;
+            fetch(`/users/update_attendance_only/${user.id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({ enable: desired })
+            }).then(res => {
+                if (!res.ok) {
+                    throw new Error('request failed');
+                }
+                this.users.forEach(u => {
+                    if (u.id === user.id) {
+                        u.is_attendance_only = desired;
+                    }
+                });
+            }).catch(() => {
+                this.users.forEach(u => {
+                    if (u.id === user.id) {
+                        u.is_attendance_only = !desired;
+                    }
+                });
             });
         },
         deleteUser(user) {

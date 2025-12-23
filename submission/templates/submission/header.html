@@ -15,29 +15,41 @@
     <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
       <aside class="menu-panel glass" @click.stop>
         <ul class="menu-list">
+          {% if attendance_only %}
+          <a href="{% url 'attendance_list' %}" class="menu-link">
+            <span class="menu-ico">🕒</span> 出席確認
+          </a>
+          {% else %}
           <a href="{% url 'index_redirect' %}" class="menu-link">
             <span class="menu-ico">🏠</span> ダッシュボード
           </a>
+          {% endif %}
+          {% if not attendance_only %}
           <template v-if="role === 'admin'">
             <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
             <li><a href="{% url 'final_score_list' %}" class="menu-link"><span class="menu-ico">📝</span> 最終成績一覧</a></li>
             <li><a href="{% url 'scoring_items' %}" class="menu-link"><span class="menu-ico">✔</span> 採点項目編集</a></li>
             <li><a href="{% url 'stamp_list' %}" class="menu-link"><span class="menu-ico">🔖</span> スタンプ管理</a></li>
             <li><a href="{% url 'course_management' %}" class="menu-link"><span class="menu-ico">📚</span> 科目/年度管理</a></li>
-            <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
           </template>
           <template v-else-if="role === 'teacher' || role === 'course-teacher' || role === 'non-editing teacher'">
-            <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
           </template>
+          {% endif %}
           <!-- <template v-else>
             <li><span class="menu-link disabled"><span class="menu-ico">🙍</span>（メニュー例）</span></li>
           </template> -->
+          {% if not attendance_only and can_view_attendance %}
+          <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
+          {% endif %}
           <li class="divider"></li>
+          {% if not attendance_only %}
           <li class="user-label">
             <a href="/submission/user_profile/" class="menu-link">
               <span class="menu-ico">🙍</span> プロフィール
             </a>
           </li>
+          {% endif %}
+          {% if not attendance_only %}
           <li v-if="actualRole === 'admin'" class="view-as-section">
             <div class="view-as-label">閲覧ロール切替</div>
             <div class="view-as-controls">
@@ -63,6 +75,7 @@
             </div>
             <div v-if="overrideActive" class="view-as-note">現在: {{ viewRoleLabel }}</div>
           </li>
+          {% endif %}
           <li>
             <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">
               {% csrf_token %}

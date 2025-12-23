@@ -1,3 +1,61 @@
+@media (min-width: 1025px) {
+    .st-status-table {
+        table-layout: fixed;
+    }
+
+    .st-status-table th,
+    .st-status-table td {
+        vertical-align: top;
+    }
+
+    .st-status-table th:nth-child(1),
+    .st-status-table td:nth-child(1) {
+        width: 10%;
+        min-width: 7em;
+        white-space: nowrap;
+    }
+
+    .st-status-table th:nth-child(2),
+    .st-status-table td:nth-child(2) {
+        width: 9%;
+        min-width: 5em;
+        white-space: nowrap;
+    }
+
+    .st-status-table th:nth-child(3),
+    .st-status-table td:nth-child(3) {
+        width: 42%;
+    }
+
+    .st-status-table td:nth-child(3) a {
+        word-break: break-all;
+    }
+
+    .st-status-table th:nth-child(4),
+    .st-status-table td:nth-child(4) {
+        width: 14%;
+        white-space: nowrap;
+    }
+
+    .st-status-table th:nth-child(5),
+    .st-status-table td:nth-child(5) {
+        width: 7%;
+        white-space: nowrap;
+    }
+
+    .st-status-table th:nth-child(6),
+    .st-status-table td:nth-child(6) {
+        width: 8%;
+        white-space: nowrap;
+    }
+
+    .st-status-table th:nth-child(7),
+    .st-status-table td:nth-child(7) {
+        width: 10%;
+        min-width: 6em;
+    }
+}
+
 @media (max-width: 1024px) {
     .teacher-table-scroll {
         overflow-x: auto;

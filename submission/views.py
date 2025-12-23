@@ -50,6 +50,8 @@ def index_redirect(request):
     if not hasattr(request.user, "userprofile"):
         # プロフィール未登録ユーザならログアウトかエラーページ
         return redirect('login')
+    if request.user.groups.filter(name='attendance_only').exists():
+        return redirect('attendance_list')
     role = get_effective_role(request)
     if role == "admin":
         return redirect('admin_dashboard')

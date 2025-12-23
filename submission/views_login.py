@@ -8,6 +8,8 @@ def redirect_after_login(request):
     except Exception as e:
         print("UserProfile取得エラー", e)
         return redirect('/accounts/login/')
+    if request.user.groups.filter(name='attendance_only').exists():
+        return redirect('/attendance/list/')
     if role == 'admin':
         return redirect('/submission/admin_dashboard')
     elif role == 'teacher':

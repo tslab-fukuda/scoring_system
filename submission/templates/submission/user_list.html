@@ -186,6 +186,7 @@
                         </div>
                     </th>
                     <th>出席閲覧</th>
+                    <th>出席専用</th>
                     <th>最終アクセス</th>
                     <th>操作</th>
                 </tr>
@@ -200,6 +201,9 @@
                     <td>{{ user.group }}</td>
                     <td>
                         <input type="checkbox" v-model="user.can_view_attendance" @change="toggleAttendance(user)">
+                    </td>
+                    <td>
+                        <input type="checkbox" v-model="user.is_attendance_only" @change="toggleAttendanceOnly(user)">
                     </td>
                     <td>{{ user.last_login }}</td>
                     <td>

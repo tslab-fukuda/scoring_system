@@ -11,6 +11,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import AttendanceRecord
+from .permissions import (
+    allowed_offering_ids,
+    can_access_offering,
+    can_change_attendance,
+    can_register_nfc,
+    can_view_attendance,
+    is_attendance_only,
+)
 from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -90,7 +98,7 @@ def _calc_lab_time_points(diff_minutes):
 @login_required
 def scan_card(request, student_id):
     _finalize_previous_day()
-    if not request.user.has_perm('attendance.change_attendancerecord'):
+    if not can_change_attendance(request.user):
         return HttpResponseForbidden()
 
     user_profile = get_object_or_404(UserProfile, student_id=student_id)
@@ -101,6 +109,8 @@ def scan_card(request, student_id):
     course_offering = CourseOffering.objects.filter(id=offering_id).first()
     if not course_offering:
         return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+    if not can_access_offering(request.user, course_offering.id):
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=403)
     record, created = AttendanceRecord.objects.get_or_create(
         user=user,
         date=date.today(),
@@ -145,7 +155,7 @@ def scan_card(request, student_id):
 @require_POST
 def scan_nfc(request):
     _finalize_previous_day()
-    if not request.user.has_perm('attendance.change_attendancerecord'):
+    if not can_change_attendance(request.user):
         return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
     try:
         data = json.loads(request.body)
@@ -158,6 +168,8 @@ def scan_nfc(request):
         course_offering = CourseOffering.objects.filter(id=offering_id).first()
         if not course_offering:
             return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+        if not can_access_offering(request.user, course_offering.id):
+            return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=403)
 
         user_profile = UserProfile.objects.select_related('user').filter(nfc_id__iexact=nfc_id).first()
         if not user_profile:
@@ -234,10 +246,14 @@ def scan_nfc(request):
 @login_required
 def attendance_list(request):
     _finalize_previous_day()
-    if not request.user.has_perm('attendance.view_attendancerecord'):
+    if not can_view_attendance(request.user):
         return HttpResponseForbidden()
     # 科目/年度の選択肢と選択状態
-    offerings = list(CourseOffering.objects.select_related('course'))
+    offerings_qs = CourseOffering.objects.select_related('course')
+    if not is_attendance_only(request.user):
+        allowed_ids = allowed_offering_ids(request.user)
+        offerings_qs = offerings_qs.filter(id__in=allowed_ids)
+    offerings = list(offerings_qs)
     offerings_data = [
         {
             'id': off.id,
@@ -273,16 +289,18 @@ def attendance_list(request):
 
     in_room = today_records.filter(check_out__isnull=True)
     out_room = today_records.filter(check_out__isnull=False)
-    students_qs = UserProfile.objects.select_related('user')
-    if student_ids is not None:
+    can_register_nfc_flag = can_register_nfc(request.user)
+    students_list = []
+    if can_register_nfc_flag and student_ids is not None:
+        students_qs = UserProfile.objects.select_related('user')
         students_qs = students_qs.filter(user_id__in=student_ids)
-    students = students_qs.values(
-        'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email', 'role', 'user_id'
-    )
-    students_list = list(students)
-    # emailフィールドをフラットに
-    for s in students_list:
-        s['email'] = s.pop('user__email', '')
+        students = students_qs.values(
+            'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email', 'role', 'user_id'
+        )
+        students_list = list(students)
+        # emailフィールドをフラットに
+        for s in students_list:
+            s['email'] = s.pop('user__email', '')
     students_json = json.dumps(students_list, ensure_ascii=False)
     context = {
         'in_records': in_room,
@@ -290,18 +308,22 @@ def attendance_list(request):
         'students_json': students_json,
         'offerings': offerings_data,
         'selected_offering_id': selected_offering_id,
+        'can_register_nfc': can_register_nfc_flag,
     }
     return render(request, 'attendance/attendance_list.html', context)
 
 
 @login_required
 def get_user_info(request, student_id):
-    if not request.user.has_perm('attendance.change_attendancerecord'):
+    if not can_register_nfc(request.user):
         return HttpResponseForbidden()
     try:
         profile = UserProfile.objects.filter(student_id=student_id).first()
         if not profile:
             return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+        allowed_ids = allowed_offering_ids(request.user)
+        if not allowed_ids or not Enrollment.objects.filter(user=profile.user, course_offering_id__in=allowed_ids).exists():
+            return JsonResponse({'status': 'error', 'message': '担当の科目/年度に登録されていません'}, status=403)
         data = {
             'student_id': profile.student_id,
             'full_name': profile.full_name,
@@ -317,7 +339,7 @@ def get_user_info(request, student_id):
 @login_required
 @require_POST
 def register_nfc(request):
-    if not request.user.has_perm('attendance.change_attendancerecord'):
+    if not can_register_nfc(request.user):
         return HttpResponseForbidden()
     try:
         import json
@@ -331,6 +353,9 @@ def register_nfc(request):
             profile = UserProfile.objects.get(user_id=user_id)
         else:
             profile = UserProfile.objects.get(student_id=student_id)
+        allowed_ids = allowed_offering_ids(request.user)
+        if not allowed_ids or not Enrollment.objects.filter(user=profile.user, course_offering_id__in=allowed_ids).exists():
+            return JsonResponse({'status': 'error', 'message': '担当の科目/年度に登録されていません'}, status=403)
         profile.nfc_id = nfc_id
         profile.save()
         return JsonResponse({'status': 'success'})

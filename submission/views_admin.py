@@ -23,7 +23,7 @@ from submission.decorators import role_required
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from collections import Counter
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import Group, Permission, User
 from django.utils import timezone
 from urllib.parse import unquote
 from django.views.decorators.csrf import csrf_exempt
@@ -997,6 +997,11 @@ def user_list_view(request):
                 timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
                 if user.last_login else "未ログイン"
             )
+            can_view_attendance = user.user_permissions.filter(
+                codename='view_attendancerecord',
+                content_type__app_label='attendance'
+            ).exists()
+            is_attendance_only = user.groups.filter(name='attendance_only').exists()
 
             # Enrollmentごとに行を作成。紐付けが無い場合は空で1行表示。
             if enrollments:
@@ -1020,7 +1025,8 @@ def user_list_view(request):
                         'course_id': course_offering.course_id if course_offering else None,
                         'year': course_offering.year if course_offering else None,
                         'last_login': last_login,
-                        'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
+                        'can_view_attendance': can_view_attendance,
+                        'is_attendance_only': is_attendance_only,
                     })
             else:
                 group = ""
@@ -1039,7 +1045,8 @@ def user_list_view(request):
                     'course_id': None,
                     'year': None,
                     'last_login': last_login,
-                    'can_view_attendance': user.has_perm('attendance.view_attendancerecord'),
+                    'can_view_attendance': can_view_attendance,
+                    'is_attendance_only': is_attendance_only,
                 })
         except UserProfile.DoesNotExist:
             continue
@@ -1104,6 +1111,27 @@ def update_attendance_permission(request, user_id):
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
         
+@role_required('admin')
+def update_attendance_only(request, user_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body or '{}')
+            enable = bool(data.get('enable'))
+            user = User.objects.get(id=user_id)
+            group, _ = Group.objects.get_or_create(name='attendance_only')
+            view_perm = Permission.objects.get(codename='view_attendancerecord')
+            change_perm = Permission.objects.get(codename='change_attendancerecord')
+            group.permissions.add(view_perm, change_perm)
+            if enable:
+                user.groups.add(group)
+            else:
+                user.groups.remove(group)
+                user.user_permissions.remove(change_perm)
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
 @role_required('admin')
 def delete_user_view(request, user_id):
     if request.method == 'POST':
