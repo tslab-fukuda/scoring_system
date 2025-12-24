@@ -53,18 +53,31 @@ body {
     background: #ffffff;
     border-radius: 3px;
     transition: all 0.3s;
-    display: block; position: relative;
-    margin: 2px 0;
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: 0;
+    transform-origin: center;
 }
 .burger-menu:hover span { background: #a793f6; }
+.burger-menu span:nth-child(1) {
+    transform: translate(-50%, -50%) translateY(-7px);
+}
+.burger-menu span:nth-child(2) {
+    transform: translate(-50%, -50%);
+}
+.burger-menu span:nth-child(3) {
+    transform: translate(-50%, -50%) translateY(7px);
+}
 .burger-menu span.open:nth-child(1) {
-    transform: rotate(45deg) translateY(10px);
+    transform: translate(-50%, -50%) rotate(45deg);
 }
 .burger-menu span.open:nth-child(2) {
     opacity: 0;
 }
 .burger-menu span.open:nth-child(3) {
-    transform: rotate(-45deg) translateY(-10px);
+    transform: translate(-50%, -50%) rotate(-45deg);
 }
 .ts-header-title {
     font-size: 1.38rem;
