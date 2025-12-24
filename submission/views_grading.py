@@ -265,14 +265,14 @@ def final_grading_form(request, submission_id):
             final_val = Decimal(request.POST.get('final_value', '0'))
         except Exception:
             final_val = Decimal('0')
-        submission.final_score = final_val + (Decimal(total_score) / Decimal('100'))
+        submission.final_score = final_val
         submission.final_evaluated = True
         submission.final_comment = request.POST.get('final_comment', '').strip()
         submission.save()
         return redirect('/submission/non_editing_teacher_dashboard/')
 
     final_value = (
-        float(submission.final_score - (Decimal(total_score) / Decimal('100')))
+        float(submission.final_score)
         if submission.final_score is not None else ''
     )
     candidates = []

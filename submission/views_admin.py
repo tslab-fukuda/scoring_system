@@ -93,6 +93,43 @@ def _ensure_course_system_items(course):
             weight=0,
         )
 
+
+def _sum_score_details(submissions):
+    totals = {}
+    order = []
+    for sub in submissions:
+        for detail in sub.score_details or []:
+            key = detail.get('code') or detail.get('label') or ''
+            if not key:
+                continue
+            if key not in totals:
+                totals[key] = {
+                    'label': detail.get('label') or key,
+                    'weight': detail.get('weight', 1),
+                    'value': 0,
+                }
+                order.append(key)
+            totals[key]['value'] += detail.get('value', 0)
+            if totals[key].get('weight') in (None, '') and detail.get('weight') is not None:
+                totals[key]['weight'] = detail.get('weight')
+    return [totals[k] for k in order]
+
+
+def _aggregate_score_details(student_id, experiment_number, offering_id=None):
+    qs = Submission.objects.filter(
+        student_id=student_id,
+        experiment_number=experiment_number,
+        score_details__isnull=False
+    )
+    if offering_id:
+        qs = qs.filter(course_offering_id=offering_id)
+    pre_qs = qs.filter(report_type='prep').order_by('submitted_at', 'id')
+    main_qs = qs.filter(report_type='main').order_by('submitted_at', 'id')
+    return {
+        'pre': _sum_score_details(pre_qs),
+        'main': _sum_score_details(main_qs),
+    }
+
 @role_required('admin')
 def admin_dashboard(request):
     is_admin = False
@@ -181,9 +218,17 @@ def admin_get_submissions_api(request):
         all_main = all_main.filter(course_offering_id=offering_id)
     submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
     
+    detail_cache = {}
     submissions = []
     for sub in qs:
         up = getattr(sub.student, 'userprofile', None)
+        detail_offering_id = offering_id or sub.course_offering_id
+        cache_key = (sub.student_id, sub.experiment_number, detail_offering_id)
+        if cache_key not in detail_cache:
+            detail_cache[cache_key] = _aggregate_score_details(
+                sub.student_id, sub.experiment_number, detail_offering_id
+            )
+        details = detail_cache[cache_key]
         submit_count = submit_count_map[(sub.student_id, sub.experiment_number)]  # 本レポート提出回数
         submissions.append({
             'id': sub.id,
@@ -199,6 +244,8 @@ def admin_get_submissions_api(request):
                 if sub.score_details else "0"
             ),
             "score_details": sub.score_details if sub.score_details else "",
+            'pre_score_details': details['pre'],
+            'main_score_details': details['main'],
             'submission_count': submit_count,
         })
     return JsonResponse({'submissions': submissions})
@@ -223,9 +270,17 @@ def admin_get_accepted_submissions_api(request):
     if student_id:
         qs = qs.filter(student__userprofile__student_id__icontains=student_id)
 
+    detail_cache = {}
     submissions = []
     for sub in qs:
         up = getattr(sub.student, 'userprofile', None)
+        detail_offering_id = offering_id or sub.course_offering_id
+        cache_key = (sub.student_id, sub.experiment_number, detail_offering_id)
+        if cache_key not in detail_cache:
+            detail_cache[cache_key] = _aggregate_score_details(
+                sub.student_id, sub.experiment_number, detail_offering_id
+            )
+        details = detail_cache[cache_key]
         submissions.append({
             'id': sub.id,
             'experiment_day': up.experiment_day if up else "",
@@ -241,6 +296,8 @@ def admin_get_accepted_submissions_api(request):
                 if sub.score_details else "0"
             ),
             "score_details": sub.score_details if sub.score_details else "",
+            'pre_score_details': details['pre'],
+            'main_score_details': details['main'],
         })
     return JsonResponse({'submissions': submissions})
 

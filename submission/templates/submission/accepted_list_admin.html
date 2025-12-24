@@ -35,7 +35,12 @@
                     }}
                 </a>
             </td>
-            <td>{{ row.score == null ? '' : row.score }}</td>
+            <td>
+                <button v-if="row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="showScoreDetail(row)">
+                    {{ row.score }} 点
+                </button>
+                <span v-else>-</span>
+            </td>
             <td><button class="btn btn-outline-secondary btn-sm" @click.stop="returnSubmission(row.id)">返却</button></td>
         </tr>
     </tbody>

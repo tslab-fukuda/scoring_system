@@ -44,6 +44,7 @@ new Vue({
         showScoreModal: false,
         scoreSummary: { pre_total: null, main_total: null, final_total: null, final_comment: "" },
         hasScoreSummary: false,
+        showScoreSummary: false,
     },
     computed: {
         currentTabComponent() {
@@ -181,6 +182,12 @@ new Vue({
         }
     },
     mounted() {
+        const updateScoreSummaryVisibility = () => {
+            const role = (window.USER_ROLE || '').trim();
+            this.showScoreSummary = role === 'non-editing teacher';
+        };
+        updateScoreSummaryVisibility();
+        setTimeout(updateScoreSummaryVisibility, 0);
         this.ensureOfferingSelected();
         this.experimentNumbers = this.experimentOptions;
         this.refreshCurrentTab();

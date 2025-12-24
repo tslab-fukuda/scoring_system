@@ -45,8 +45,21 @@
                     }}
                 </a>
             </td>
+            {% endverbatim %}
+            {% if is_admin == 'true' %}
+            {% verbatim %}
+            <td>
+                <button v-if="row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="showScoreDetail(row)">
+                    {{ row.score }} 点
+                </button>
+                <span v-else>-</span>
+            </td>
+            {% endverbatim %}
+            {% else %}
+            {% verbatim %}
             <td>{{ row.score == null ? '' : row.score }}</td>
             {% endverbatim %}
+            {% endif %}
             {% if is_admin == 'true' %}
             {% verbatim %}
             <td>{{ row.submission_count }}</td>

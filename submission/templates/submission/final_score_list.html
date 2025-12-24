@@ -164,7 +164,7 @@
                     <div class="mb-3">
                         <div class="fw-semibold">式</div>
                         <div>
-                            ({{ finalGradeDetail.final_score_total }} + {{ finalGradeDetail.score_details_avg }} + {{ finalGradeDetail.absence_penalty }})
+                            ({{ finalGradeDetail.final_score_total }} {{ formatSigned(finalGradeDetail.score_details_avg) }} {{ formatSigned(finalGradeDetail.absence_penalty) }})
                             / {{ finalGradeDetail.experiment_count }}
                         </div>
                     </div>

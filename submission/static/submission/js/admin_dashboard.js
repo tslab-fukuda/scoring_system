@@ -36,6 +36,9 @@ window.app = new Vue({
         attendanceLogs: [],
         absenceCount: 0,
         showPhotoModal: false,
+        showScoreModal: false,
+        scoreDetailPre: [],
+        scoreDetailMain: [],
         videoStream: null,
     },
     computed: {
@@ -221,6 +224,11 @@ window.app = new Vue({
                 }
             })
             .catch(() => alert('返却に失敗しました'));
+        },
+        showScoreDetail(item) {
+            this.scoreDetailPre = Array.isArray(item.pre_score_details) ? item.pre_score_details : [];
+            this.scoreDetailMain = Array.isArray(item.main_score_details) ? item.main_score_details : [];
+            this.showScoreModal = true;
         },
         formatMonthDay(dateStr) {
             if (!dateStr) return '';

@@ -140,7 +140,67 @@
             {% include 'submission/dashboard_schedule.html' %}
         </div>
     </transition>
+
+    {% verbatim %}
+    <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">得点詳細</h5>
+                    <button type="button" class="btn-close" @click="showScoreModal=false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <div class="fw-semibold mb-1">予習レポート</div>
+                        <table v-if="Array.isArray(scoreDetailPre) && scoreDetailPre.length" class="table table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>項目</th>
+                                    <th>値</th>
+                                    <th>係数</th>
+                                    <th>小計</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in scoreDetailPre">
+                                    <td>{{ item.label }}</td>
+                                    <td>{{ item.value }}</td>
+                                    <td>{{ item.weight }}</td>
+                                    <td>{{ item.value * item.weight }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div v-else class="text-muted small">予習レポートの詳細がありません</div>
+                    </div>
+                    <div>
+                        <div class="fw-semibold mb-1">本レポート</div>
+                        <table v-if="Array.isArray(scoreDetailMain) && scoreDetailMain.length" class="table table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>項目</th>
+                                    <th>値</th>
+                                    <th>係数</th>
+                                    <th>小計</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in scoreDetailMain">
+                                    <td>{{ item.label }}</td>
+                                    <td>{{ item.value }}</td>
+                                    <td>{{ item.weight }}</td>
+                                    <td>{{ item.value * item.weight }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div v-else class="text-muted small">本レポートの詳細がありません</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endverbatim %}
 </div>
+
 
 <script>
     var students = [];

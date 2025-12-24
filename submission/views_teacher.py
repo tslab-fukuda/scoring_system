@@ -299,7 +299,7 @@ def get_graded_main_reports(request):
         final_value = None
         if items.final_score is not None:
             try:
-                final_value = float(items.final_score - (Decimal(total) / Decimal('100')))
+                final_value = float(items.final_score)
             except Exception:
                 final_value = None
         result.append({

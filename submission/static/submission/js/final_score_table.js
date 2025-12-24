@@ -177,6 +177,16 @@ new Vue({
                 final_grade: stu.final_grade
             };
         },
+        formatSigned(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) {
+                return '+ 0';
+            }
+            const absVal = Math.abs(num);
+            const sign = num < 0 ? '-' : '+';
+            return `${sign} ${absVal}`;
+        },
+
         closeFinalGradeModal() {
             this.showFinalGradeModal = false;
             this.finalGradeCourse = { course_code: '', course_name: '', year: '' };
