@@ -7,8 +7,7 @@
     background: #f7f7f8;
     border: 1.5px solid #d3d3d8;
     min-height: 340px;
-    max-height: 66vh;
-    overflow: hidden;
+    overflow: visible;
 }
 
 #pdf-preview-container {

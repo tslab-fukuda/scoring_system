@@ -139,9 +139,9 @@
                     <label>NFC ID</label>
                     <input type="text" class="form-control" v-model="nfcId" ref="nfcInput" placeholder="NFCを入力">
                 </div>
-                <div class="ts-modal-actions mt-3 d-flex justify-content-between">
-                    <button class="btn btn-success flex-grow-1 me-2" @click="registerNfc">登録</button>
-                    <button class="btn btn-outline-secondary" @click="close">閉じる</button>
+                <div class="ts-modal-actions mt-3">
+                    <button class="btn btn-success" @click="registerNfc">登録</button>
+                    <button class="btn btn-outline-secondary" @click="close">キャンセル</button>
                 </div>
             </div>
         </transition>
