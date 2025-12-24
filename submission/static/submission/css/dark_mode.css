@@ -105,6 +105,12 @@ body.dark-mode .ts-form-group select {
     color: #e0e0e0;
     border-color: #444;
 }
+body.dark-mode .form-control::file-selector-button,
+body.dark-mode .form-control::-webkit-file-upload-button {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+}
 body.dark-mode .form-control:focus,
 body.dark-mode .form-select:focus,
 body.dark-mode .ts-form-group input:focus,
@@ -129,6 +135,11 @@ body.dark-mode .ts-modal.material-modal {
     background-color: #1e1e1e;
     color: #e0e0e0;
     border-color: #444;
+}
+body.dark-mode .modal-wrapper {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #333;
 }
 body.dark-mode .modal-header,
 body.dark-mode .modal-footer {
