@@ -31,6 +31,10 @@ new Vue({
         twoFingerScroll: false,
         lastTwoFingerY: 0,
         previousOverflowY: "",
+        lastPenTime: 0,
+        useTouchType: false,
+        directScrollActive: false,
+        directScrollLastY: 0,
     },
     computed: {
         totalScore() {
@@ -64,6 +68,116 @@ new Vue({
             if (points.length === 0) return 0;
             const total = points.reduce((sum, point) => sum + point.y, 0);
             return total / points.length;
+        },
+        getTouchesByType(e, desiredType) {
+            const touches = Array.from((e && e.touches) || []);
+            return touches.filter(touch => {
+                const type = touch.touchType || 'direct';
+                return type === desiredType;
+            });
+        },
+        getTouchAverageYFromList(touches) {
+            if (!touches || touches.length === 0) return 0;
+            const total = touches.reduce((sum, touch) => sum + touch.clientY, 0);
+            return total / touches.length;
+        },
+        makeStylusEvent(touch) {
+            return {
+                pointerType: 'pen',
+                pointerId: touch.identifier,
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                cancelable: true,
+                __fromTouch: true,
+            };
+        },
+        resolvePointerType(e) {
+            const rawType = e && e.pointerType ? e.pointerType : 'mouse';
+            if (rawType !== 'touch') return rawType;
+            if (!this.isDrawable()) return rawType;
+            const now = Date.now();
+            if (this.isStylusEvent(e)) return 'pen';
+            if (now - this.lastPenTime < 800) return 'pen';
+            return rawType;
+        },
+        isStylusEvent(e) {
+            if (!e) return false;
+            if (e.pointerType === 'pen') return true;
+            if (e.pointerType !== 'touch') return false;
+            const tiltX = Math.abs(e.tiltX || 0);
+            const tiltY = Math.abs(e.tiltY || 0);
+            if (tiltX > 0 || tiltY > 0) return true;
+            const width = e.width || 0;
+            const height = e.height || 0;
+            if (width > 0 && height > 0 && width <= 10 && height <= 10) return true;
+            return false;
+        },
+        onTouchStart(idx, e) {
+            if (!this.useTouchType) return;
+            const stylusTouches = this.getTouchesByType(e, 'stylus');
+            if (stylusTouches.length > 0) {
+                const stylusEvent = this.makeStylusEvent(stylusTouches[0]);
+                this.startDraw(idx, stylusEvent);
+                if (e.cancelable) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+            }
+        },
+        onTouchMove(idx, e) {
+            if (!this.useTouchType) return;
+            const stylusTouches = this.getTouchesByType(e, 'stylus');
+            if (stylusTouches.length > 0) {
+                const stylusEvent = this.makeStylusEvent(stylusTouches[0]);
+                this.draw(idx, stylusEvent);
+                if (e.cancelable) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+            }
+        },
+        onTouchEnd(idx, e) {
+            if (!this.useTouchType) return;
+            const remainingStylus = this.getTouchesByType(e, 'stylus');
+            if (remainingStylus.length === 0) {
+                this.stopDraw(idx, { pointerType: 'pen', pointerId: this.activePointerId, cancelable: true, __fromTouch: true });
+                if (e && e.cancelable) e.preventDefault();
+                if (e && e.stopPropagation) e.stopPropagation();
+            }
+        },
+        onPdfTouchStart(e) {
+            if (!this.useTouchType) return;
+            const stylusTouches = this.getTouchesByType(e, 'stylus');
+            if (stylusTouches.length > 0) {
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
+            const directTouches = this.getTouchesByType(e, 'direct');
+            if (directTouches.length >= 2) {
+                this.directScrollActive = true;
+                this.directScrollLastY = this.getTouchAverageYFromList(directTouches);
+            }
+            if (e.cancelable) e.preventDefault();
+        },
+        onPdfTouchMove(e) {
+            if (!this.useTouchType) return;
+            if (!this.directScrollActive) return;
+            const directTouches = this.getTouchesByType(e, 'direct');
+            if (directTouches.length >= 2) {
+                const currentY = this.getTouchAverageYFromList(directTouches);
+                const deltaY = currentY - this.directScrollLastY;
+                const scrollArea = this.$refs.pdfArea;
+                if (scrollArea) {
+                    scrollArea.scrollTop -= deltaY;
+                }
+                this.directScrollLastY = currentY;
+            }
+            if (e.cancelable) e.preventDefault();
+        },
+        onPdfTouchEnd(e) {
+            if (!this.useTouchType) return;
+            const directTouches = this.getTouchesByType(e, 'direct');
+            if (directTouches.length < 2) {
+                this.directScrollActive = false;
+                this.directScrollLastY = 0;
+            }
+            if (e.cancelable) e.preventDefault();
         },
         prepareDrawContext(ctx, idx) {
             const meta = this.pageMeta[idx];
@@ -148,7 +262,10 @@ new Vue({
         isPenActive() { return this.tool === 'pen'; },
         isDrawable() { return this.tool === 'pen' || this.tool === 'eraser' || this.tool === 'highlight'; },
         startDraw(idx, e) {
-            const pointerType = e.pointerType || 'mouse';
+            if (this.useTouchType && e && !e.__fromTouch && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
+                return;
+            }
+            const pointerType = this.resolvePointerType(e);
             if (pointerType === 'touch') {
                 if (this.activePointerType === 'pen' && this.drawing) {
                     if (e.cancelable) e.preventDefault();
@@ -167,7 +284,7 @@ new Vue({
             const canvas = this.$refs['drawCanvas' + idx][0];
             const scrollArea = this.$refs.pdfArea;
             if (!canvas) return;
-            if (canvas.setPointerCapture && e.pointerId != null) {
+            if (canvas.setPointerCapture && e.pointerId != null && pointerType === 'mouse') {
                 try {
                     canvas.setPointerCapture(e.pointerId);
                 } catch (err) {
@@ -178,6 +295,7 @@ new Vue({
             this.activePointerType = pointerType;
             if (pointerType === 'pen') {
                 canvas.style.touchAction = 'none';
+                this.lastPenTime = Date.now();
                 if (scrollArea) {
                     this.previousOverflowY = scrollArea.style.overflowY;
                     scrollArea.style.overflowY = 'hidden';
@@ -209,6 +327,9 @@ new Vue({
             if (!this.isDrawable()) return;
             this.drawing = true;
             this.currentPage = idx;
+            if (pointerType === 'pen') {
+                this.lastPenTime = Date.now();
+            }
             const point = this.getCanvasPoint(idx, canvas, e);
             this.lastX = point.x;
             this.lastY = point.y;
@@ -227,7 +348,10 @@ new Vue({
             if (e.cancelable) e.preventDefault();
         },
         draw(idx, e) {
-            const pointerType = e.pointerType || 'mouse';
+            if (this.useTouchType && e && !e.__fromTouch && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
+                return;
+            }
+            const pointerType = this.resolvePointerType(e);
             if (pointerType === 'touch') {
                 if (this.activePointerType === 'pen' && this.drawing) {
                     if (e.cancelable) e.preventDefault();
@@ -251,6 +375,9 @@ new Vue({
             if (this.tool === 'stamp') return;
             if (!this.drawing || this.currentPage !== idx || !this.isDrawable()) return;
             if (this.activePointerId != null && e.pointerId != null && e.pointerId !== this.activePointerId) return;
+            if (pointerType === 'pen') {
+                this.lastPenTime = Date.now();
+            }
             const canvas = this.$refs['drawCanvas' + idx][0];
             const scrollArea = this.$refs.pdfArea;
             const ctx = canvas.getContext('2d');
@@ -284,8 +411,11 @@ new Vue({
             if (e.cancelable) e.preventDefault();
         },
         stopDraw(idx, e) {
-            const pointerType = e ? (e.pointerType || 'mouse') : 'mouse';
-            if (pointerType === 'touch') {
+            if (this.useTouchType && e && !e.__fromTouch && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
+                return;
+            }
+            const pointerType = this.resolvePointerType(e);
+            if (pointerType === 'touch' && this.activePointerType !== 'pen') {
                 if (e && e.pointerId != null && this.touchPoints[e.pointerId]) {
                     delete this.touchPoints[e.pointerId];
                 }
@@ -298,10 +428,12 @@ new Vue({
             }
             if (this.tool === 'stamp') return;
             if (!this.isDrawable()) return;
-            if (this.activePointerId != null && e && e.pointerId != null && e.pointerId !== this.activePointerId) return;
+            if (this.activePointerId != null && e && e.pointerId != null && e.pointerId !== this.activePointerId) {
+                if (this.activePointerType !== 'pen') return;
+            }
             const canvas = this.$refs['drawCanvas' + idx]?.[0];
             const scrollArea = this.$refs.pdfArea;
-            if (canvas && canvas.releasePointerCapture && this.activePointerId != null) {
+            if (canvas && canvas.releasePointerCapture && this.activePointerId != null && this.activePointerType === 'mouse') {
                 try {
                     canvas.releasePointerCapture(this.activePointerId);
                 } catch (err) {
@@ -319,6 +451,10 @@ new Vue({
             this.activePointerType = "";
             this.drawing = false;
             this.undoStack[idx] = [];
+            if (pointerType === 'pen') {
+                this.lastPenTime = Date.now();
+            }
+            if (e && e.cancelable) e.preventDefault();
         },
         redraw(idx) {
             const canvas = this.$refs['drawCanvas' + idx][0];
@@ -475,6 +611,9 @@ new Vue({
         }
     },
     mounted() {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        this.useTouchType = isIOS;
         const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/";
         const STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/";
         pdfjsLib.GlobalWorkerOptions.workerSrc =

@@ -55,7 +55,10 @@
                 </div>
             </div>
             <div class="pdf-col pdf-body main-body">
-                <div id="pdf-area" ref="pdfArea" @scroll="onMainScroll" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
+                <div id="pdf-area" ref="pdfArea" @scroll="onMainScroll"
+                    @touchstart="onPdfTouchStart($event)" @touchmove="onPdfTouchMove($event)"
+                    @touchend="onPdfTouchEnd($event)" @touchcancel="onPdfTouchEnd($event)"
+                    style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
                     <div id="pdf-pages">
                         <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
                         <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
@@ -63,7 +66,9 @@
                             <canvas :ref="'drawCanvas' + idx" class="draw-canvas" style="position:absolute;left:0;top:0;touch-action: none;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
                                 {% if effective_role != 'non-editing teacher' %}
                                 @pointerdown="startDraw(idx, $event)" @pointermove="draw(idx, $event)" @pointerup="stopDraw(idx, $event)"
-                                @pointercancel="stopDraw(idx, $event)" @pointerleave="stopDraw(idx, $event)"
+                                @pointercancel="stopDraw(idx, $event)" @pointerleave="stopDraw(idx, $event)" @lostpointercapture="stopDraw(idx, $event)"
+                                @touchstart="onTouchStart(idx, $event)" @touchmove="onTouchMove(idx, $event)"
+                                @touchend="onTouchEnd(idx, $event)" @touchcancel="onTouchEnd(idx, $event)"
                                 {% endif %}></canvas>
                         </div>
                     </div>
