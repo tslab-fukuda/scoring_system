@@ -24,6 +24,13 @@ new Vue({
         compareLoading: false,
         compareRendered: false,
         syncingScroll: false,
+        pageMeta: {},
+        activePointerId: null,
+        activePointerType: "",
+        touchPoints: {},
+        twoFingerScroll: false,
+        lastTwoFingerY: 0,
+        previousOverflowY: "",
     },
     computed: {
         totalScore() {
@@ -31,6 +38,38 @@ new Vue({
         }
     },
     methods: {
+        getCanvasMeta(idx, canvas) {
+            const meta = this.pageMeta[idx];
+            if (meta) return meta;
+            const rect = canvas.getBoundingClientRect();
+            return {
+                cssWidth: rect.width || canvas.clientWidth || canvas.width,
+                cssHeight: rect.height || canvas.clientHeight || canvas.height,
+                dpr: 1,
+            };
+        },
+        getCanvasPoint(idx, canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            const meta = this.getCanvasMeta(idx, canvas);
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+                cssWidth: meta.cssWidth || rect.width,
+                cssHeight: meta.cssHeight || rect.height,
+                dpr: meta.dpr || 1,
+            };
+        },
+        getTouchAverageY() {
+            const points = Object.values(this.touchPoints || {});
+            if (points.length === 0) return 0;
+            const total = points.reduce((sum, point) => sum + point.y, 0);
+            return total / points.length;
+        },
+        prepareDrawContext(ctx, idx) {
+            const meta = this.pageMeta[idx];
+            const dpr = meta ? meta.dpr || 1 : 1;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        },
         toggleScorePanel() {
             this.showScore = !this.showScore;
         },
@@ -78,17 +117,23 @@ new Vue({
                 standardFontDataUrl: STANDARD_FONT_URL,
             });
             loadingTask.promise.then(async pdf => {
+                const baseScale = 1.2;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.2 });
+                    const viewport = page.getViewport({ scale: baseScale });
+                    const cssWidth = viewport.width;
+                    const cssHeight = viewport.height;
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     canvas.style.display = 'block';
                     canvas.style.margin = '0 auto 16px auto';
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    canvas.width = Math.floor(cssWidth * dpr);
+                    canvas.height = Math.floor(cssHeight * dpr);
+                    canvas.style.width = `${cssWidth}px`;
+                    canvas.style.height = `${cssHeight}px`;
                     container.appendChild(canvas);
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({ canvasContext: ctx, viewport, transform: [dpr, 0, 0, dpr, 0, 0] }).promise;
                 }
                 this.compareRendered = true;
             }).catch(err => {
@@ -103,29 +148,70 @@ new Vue({
         isPenActive() { return this.tool === 'pen'; },
         isDrawable() { return this.tool === 'pen' || this.tool === 'eraser' || this.tool === 'highlight'; },
         startDraw(idx, e) {
+            const pointerType = e.pointerType || 'mouse';
+            if (pointerType === 'touch') {
+                if (this.activePointerType === 'pen' && this.drawing) {
+                    if (e.cancelable) e.preventDefault();
+                    return;
+                }
+                if (e.pointerId != null) {
+                    this.touchPoints[e.pointerId] = { y: e.clientY };
+                }
+                if (Object.keys(this.touchPoints).length >= 2) {
+                    this.twoFingerScroll = true;
+                    this.lastTwoFingerY = this.getTouchAverageY();
+                }
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
+            const canvas = this.$refs['drawCanvas' + idx][0];
+            const scrollArea = this.$refs.pdfArea;
+            if (!canvas) return;
+            if (canvas.setPointerCapture && e.pointerId != null) {
+                try {
+                    canvas.setPointerCapture(e.pointerId);
+                } catch (err) {
+                    // ignore
+                }
+            }
+            this.activePointerId = e.pointerId != null ? e.pointerId : null;
+            this.activePointerType = pointerType;
+            if (pointerType === 'pen') {
+                canvas.style.touchAction = 'none';
+                if (scrollArea) {
+                    this.previousOverflowY = scrollArea.style.overflowY;
+                    scrollArea.style.overflowY = 'hidden';
+                }
+            }
             if (this.tool === 'stamp') {
-                const canvas = this.$refs['drawCanvas' + idx][0];
-                const rect = e.target.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const point = this.getCanvasPoint(idx, canvas, e);
                 if (!this.drawData[idx]) this.drawData[idx] = [];
                 if (!this.undoStack[idx]) this.undoStack[idx] = [];
                 this.drawData[idx].push({
                     tool: 'stamp',
                     text: this.selectedStamp,
-                    xRatio: x / canvas.width,
-                    yRatio: y / canvas.height
+                    xRatio: point.x / point.cssWidth,
+                    yRatio: point.y / point.cssHeight
                 });
                 this.redraw(idx);
+                if (pointerType === 'pen') {
+                    canvas.style.touchAction = 'none';
+                    if (scrollArea) {
+                        scrollArea.style.overflowY = this.previousOverflowY || 'auto';
+                    }
+                    this.previousOverflowY = '';
+                }
+                this.activePointerId = null;
+                this.activePointerType = "";
+                if (e.cancelable) e.preventDefault();
                 return;
             }
             if (!this.isDrawable()) return;
             this.drawing = true;
             this.currentPage = idx;
-            const canvas = this.$refs['drawCanvas' + idx][0];
-            const rect = e.target.getBoundingClientRect();
-            this.lastX = e.clientX - rect.left;
-            this.lastY = e.clientY - rect.top;
+            const point = this.getCanvasPoint(idx, canvas, e);
+            this.lastX = point.x;
+            this.lastY = point.y;
             if (!this.drawData[idx]) this.drawData[idx] = [];
             if (!this.undoStack[idx]) this.undoStack[idx] = [];
             let width = this.penWidth;
@@ -134,19 +220,44 @@ new Vue({
                 tool: this.tool,
                 width: width,
                 points: [{
-                    xRatio: this.lastX / canvas.width,
-                    yRatio: this.lastY / canvas.height
+                    xRatio: point.x / point.cssWidth,
+                    yRatio: point.y / point.cssHeight
                 }]
             });
+            if (e.cancelable) e.preventDefault();
         },
         draw(idx, e) {
+            const pointerType = e.pointerType || 'mouse';
+            if (pointerType === 'touch') {
+                if (this.activePointerType === 'pen' && this.drawing) {
+                    if (e.cancelable) e.preventDefault();
+                    return;
+                }
+                if (e.pointerId == null || !this.touchPoints[e.pointerId]) return;
+                this.touchPoints[e.pointerId].y = e.clientY;
+                if (Object.keys(this.touchPoints).length >= 2) {
+                    const scrollArea = this.$refs.pdfArea;
+                    if (scrollArea) {
+                        const currentAvgY = this.getTouchAverageY();
+                        const deltaY = currentAvgY - this.lastTwoFingerY;
+                        scrollArea.scrollTop -= deltaY;
+                        this.lastTwoFingerY = currentAvgY;
+                    }
+                    this.twoFingerScroll = true;
+                }
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
             if (this.tool === 'stamp') return;
             if (!this.drawing || this.currentPage !== idx || !this.isDrawable()) return;
+            if (this.activePointerId != null && e.pointerId != null && e.pointerId !== this.activePointerId) return;
             const canvas = this.$refs['drawCanvas' + idx][0];
+            const scrollArea = this.$refs.pdfArea;
             const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            this.prepareDrawContext(ctx, idx);
+            const point = this.getCanvasPoint(idx, canvas, e);
+            const x = point.x;
+            const y = point.y;
             if (this.tool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.lineWidth = 30;
@@ -167,24 +278,64 @@ new Vue({
             ctx.globalCompositeOperation = 'source-over';
             this.lastX = x; this.lastY = y;
             this.drawData[idx][this.drawData[idx].length - 1].points.push({
-                xRatio: x / canvas.width,
-                yRatio: y / canvas.height
+                xRatio: x / point.cssWidth,
+                yRatio: y / point.cssHeight
             });
+            if (e.cancelable) e.preventDefault();
         },
-        stopDraw(idx) {
+        stopDraw(idx, e) {
+            const pointerType = e ? (e.pointerType || 'mouse') : 'mouse';
+            if (pointerType === 'touch') {
+                if (e && e.pointerId != null && this.touchPoints[e.pointerId]) {
+                    delete this.touchPoints[e.pointerId];
+                }
+                if (Object.keys(this.touchPoints).length < 2) {
+                    this.twoFingerScroll = false;
+                    this.lastTwoFingerY = 0;
+                }
+                if (e && e.cancelable) e.preventDefault();
+                return;
+            }
             if (this.tool === 'stamp') return;
             if (!this.isDrawable()) return;
+            if (this.activePointerId != null && e && e.pointerId != null && e.pointerId !== this.activePointerId) return;
+            const canvas = this.$refs['drawCanvas' + idx]?.[0];
+            const scrollArea = this.$refs.pdfArea;
+            if (canvas && canvas.releasePointerCapture && this.activePointerId != null) {
+                try {
+                    canvas.releasePointerCapture(this.activePointerId);
+                } catch (err) {
+                    // ignore
+                }
+            }
+            if (canvas && this.activePointerType === 'pen') {
+                canvas.style.touchAction = 'none';
+                if (scrollArea) {
+                    scrollArea.style.overflowY = this.previousOverflowY || 'auto';
+                }
+                this.previousOverflowY = '';
+            }
+            this.activePointerId = null;
+            this.activePointerType = "";
             this.drawing = false;
             this.undoStack[idx] = [];
         },
         redraw(idx) {
             const canvas = this.$refs['drawCanvas' + idx][0];
+            const scrollArea = this.$refs.pdfArea;
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
+            const meta = this.getCanvasMeta(idx, canvas);
+            const dpr = meta.dpr || 1;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const cssWidth = meta.cssWidth;
+            const cssHeight = meta.cssHeight;
             (this.drawData[idx] || []).forEach(stroke => {
                 if (stroke.tool === 'stamp') {
-                    const x = stroke.xRatio * canvas.width;
-                    const y = stroke.yRatio * canvas.height;
+                    const x = stroke.xRatio * cssWidth;
+                    const y = stroke.yRatio * cssHeight;
                     ctx.save();
                     ctx.font = '16px sans-serif';
                     const textWidth = ctx.measureText(stroke.text).width;
@@ -213,8 +364,8 @@ new Vue({
                 ctx.beginPath();
                 for (let i = 0; i < stroke.points.length; i++) {
                     const pt = stroke.points[i];
-                    const x = pt.xRatio * canvas.width;
-                    const y = pt.yRatio * canvas.height;
+                    const x = pt.xRatio * cssWidth;
+                    const y = pt.yRatio * cssHeight;
                     if (i == 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 }
@@ -239,6 +390,7 @@ new Vue({
             let images = [];
             this.pdfPages.forEach((_, idx) => {
                 const canvas = this.$refs['drawCanvas' + idx][0];
+            const scrollArea = this.$refs.pdfArea;
                 const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
                 images.push(hasDraw ? canvas.toDataURL() : null);
             });
@@ -298,14 +450,26 @@ new Vue({
         loadPage(pdf, i) {
             if (this.loadedPages[i]) return;
             pdf.getPage(i + 1).then(page => {
-                const viewport = page.getViewport({ scale: 1.4 });
+                const baseScale = 1.4;
+                const viewport = page.getViewport({ scale: baseScale });
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const cssWidth = viewport.width;
+                const cssHeight = viewport.height;
                 const pdfCanvas = this.$refs['pdfCanvas' + i][0];
-                pdfCanvas.width = viewport.width;
-                pdfCanvas.height = viewport.height;
-                page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport });
+                const pdfCtx = pdfCanvas.getContext('2d');
+                pdfCanvas.width = Math.floor(cssWidth * dpr);
+                pdfCanvas.height = Math.floor(cssHeight * dpr);
+                pdfCanvas.style.width = `${cssWidth}px`;
+                pdfCanvas.style.height = `${cssHeight}px`;
+                page.render({ canvasContext: pdfCtx, viewport, transform: [dpr, 0, 0, dpr, 0, 0] });
                 const drawCanvas = this.$refs['drawCanvas' + i][0];
-                drawCanvas.width = viewport.width;
-                drawCanvas.height = viewport.height;
+                const drawCtx = drawCanvas.getContext('2d');
+                drawCanvas.width = Math.floor(cssWidth * dpr);
+                drawCanvas.height = Math.floor(cssHeight * dpr);
+                drawCanvas.style.width = `${cssWidth}px`;
+                drawCanvas.style.height = `${cssHeight}px`;
+                drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                this.pageMeta[i] = { cssWidth, cssHeight, dpr };
                 this.loadedPages[i] = true;
             });
         }

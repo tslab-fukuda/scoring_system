@@ -99,23 +99,30 @@ new Vue({
             });
 
             const renderPagesSequentially = async (pdf) => {
+                const baseScale = 1.2;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.2 });
+                    const viewport = page.getViewport({ scale: baseScale });
+                    const cssWidth = viewport.width;
+                    const cssHeight = viewport.height;
 
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     canvas.style.display = 'block';
                     canvas.style.margin = '0 auto 16px auto';
 
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    canvas.width = Math.floor(cssWidth * dpr);
+                    canvas.height = Math.floor(cssHeight * dpr);
+                    canvas.style.width = `${cssWidth}px`;
+                    canvas.style.height = `${cssHeight}px`;
 
                     container.appendChild(canvas);
 
                     await page.render({
                         canvasContext: ctx,
                         viewport: viewport,
+                        transform: [dpr, 0, 0, dpr, 0, 0],
                     }).promise;
                 }
             };
@@ -143,17 +150,23 @@ new Vue({
                 standardFontDataUrl: STANDARD_FONT_URL,
             });
             loadingTask.promise.then(async pdf => {
+                const baseScale = 1.2;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.2 });
+                    const viewport = page.getViewport({ scale: baseScale });
+                    const cssWidth = viewport.width;
+                    const cssHeight = viewport.height;
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     canvas.style.display = 'block';
                     canvas.style.margin = '0 auto 16px auto';
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    canvas.width = Math.floor(cssWidth * dpr);
+                    canvas.height = Math.floor(cssHeight * dpr);
+                    canvas.style.width = `${cssWidth}px`;
+                    canvas.style.height = `${cssHeight}px`;
                     container.appendChild(canvas);
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({ canvasContext: ctx, viewport, transform: [dpr, 0, 0, dpr, 0, 0] }).promise;
                 }
             }).catch(err => {
                 console.error('Compare PDF 読み込みエラー:', err);

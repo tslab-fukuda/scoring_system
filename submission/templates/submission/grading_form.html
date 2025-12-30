@@ -60,10 +60,10 @@
                         <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
                         <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
                             <canvas :ref="'pdfCanvas' + idx"></canvas>
-                            <canvas :ref="'drawCanvas' + idx" style="position:absolute;left:0;top:0;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
+                            <canvas :ref="'drawCanvas' + idx" class="draw-canvas" style="position:absolute;left:0;top:0;touch-action: none;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
                                 {% if effective_role != 'non-editing teacher' %}
-                                @mousedown="startDraw(idx, $event)" @mousemove="draw(idx, $event)" @mouseup="stopDraw(idx)"
-                                @mouseleave="stopDraw(idx)"
+                                @pointerdown="startDraw(idx, $event)" @pointermove="draw(idx, $event)" @pointerup="stopDraw(idx, $event)"
+                                @pointercancel="stopDraw(idx, $event)" @pointerleave="stopDraw(idx, $event)"
                                 {% endif %}></canvas>
                         </div>
                     </div>
