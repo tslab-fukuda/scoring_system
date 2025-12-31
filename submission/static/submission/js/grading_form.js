@@ -35,6 +35,11 @@ new Vue({
         useTouchType: false,
         directScrollActive: false,
         directScrollLastY: 0,
+        zoomPercent: 100,
+        zoomMin: 50,
+        zoomMax: 200,
+        zoomStep: 5,
+        pdfDoc: null,
     },
     computed: {
         totalScore() {
@@ -184,6 +189,52 @@ new Vue({
             const dpr = meta ? meta.dpr || 1 : 1;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         },
+        getMainScale() {
+            const baseScale = 1.4;
+            return baseScale * (this.zoomPercent / 100);
+        },
+        getCompareScale() {
+            const baseScale = 1.2;
+            return baseScale * (this.zoomPercent / 100);
+        },
+        clampZoom(value) {
+            const stepped = Math.round(value / this.zoomStep) * this.zoomStep;
+            return Math.min(this.zoomMax, Math.max(this.zoomMin, stepped));
+        },
+        setZoom(value) {
+            const next = this.clampZoom(value);
+            if (next === this.zoomPercent) return;
+            this.zoomPercent = next;
+            this.applyZoom();
+        },
+        zoomIn() {
+            this.setZoom(this.zoomPercent + this.zoomStep);
+        },
+        zoomOut() {
+            this.setZoom(this.zoomPercent - this.zoomStep);
+        },
+        applyZoom() {
+            if (!this.pdfDoc) return;
+            const scrollArea = this.$refs.pdfArea;
+            const scrollRatio = scrollArea
+                ? scrollArea.scrollTop / Math.max(scrollArea.scrollHeight, 1)
+                : 0;
+            const pages = this.pdfPages.length;
+            for (let i = 0; i < pages; i++) {
+                if (this.loadedPages[i]) {
+                    this.renderPageAtScale(this.pdfDoc, i, true);
+                }
+            }
+            if (this.showCompare) {
+                this.compareRendered = false;
+                this.$nextTick(() => this.renderComparePdf());
+            }
+            if (scrollArea) {
+                this.$nextTick(() => {
+                    scrollArea.scrollTop = scrollRatio * Math.max(scrollArea.scrollHeight, 1);
+                });
+            }
+        },
         toggleScorePanel() {
             this.showScore = !this.showScore;
         },
@@ -231,11 +282,11 @@ new Vue({
                 standardFontDataUrl: STANDARD_FONT_URL,
             });
             loadingTask.promise.then(async pdf => {
-                const baseScale = 1.2;
+                const scale = this.getCompareScale();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: baseScale });
+                    const viewport = page.getViewport({ scale });
                     const cssWidth = viewport.width;
                     const cssHeight = viewport.height;
                     const canvas = document.createElement('canvas');
@@ -583,31 +634,37 @@ new Vue({
                     }
                 });
         },
-        loadPage(pdf, i) {
-            if (this.loadedPages[i]) return;
+        renderPageAtScale(pdf, i, force) {
+            if (this.loadedPages[i] && !force) return;
+            const scale = this.getMainScale();
             pdf.getPage(i + 1).then(page => {
-                const baseScale = 1.4;
-                const viewport = page.getViewport({ scale: baseScale });
+                const viewport = page.getViewport({ scale });
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 const cssWidth = viewport.width;
                 const cssHeight = viewport.height;
-                const pdfCanvas = this.$refs['pdfCanvas' + i][0];
+                const pdfCanvas = this.$refs['pdfCanvas' + i]?.[0];
+                if (!pdfCanvas) return;
                 const pdfCtx = pdfCanvas.getContext('2d');
                 pdfCanvas.width = Math.floor(cssWidth * dpr);
                 pdfCanvas.height = Math.floor(cssHeight * dpr);
                 pdfCanvas.style.width = `${cssWidth}px`;
                 pdfCanvas.style.height = `${cssHeight}px`;
                 page.render({ canvasContext: pdfCtx, viewport, transform: [dpr, 0, 0, dpr, 0, 0] });
-                const drawCanvas = this.$refs['drawCanvas' + i][0];
-                const drawCtx = drawCanvas.getContext('2d');
+                const drawCanvas = this.$refs['drawCanvas' + i]?.[0];
+                if (!drawCanvas) return;
                 drawCanvas.width = Math.floor(cssWidth * dpr);
                 drawCanvas.height = Math.floor(cssHeight * dpr);
                 drawCanvas.style.width = `${cssWidth}px`;
                 drawCanvas.style.height = `${cssHeight}px`;
-                drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
                 this.pageMeta[i] = { cssWidth, cssHeight, dpr };
                 this.loadedPages[i] = true;
+                if (this.drawData[i] && this.drawData[i].length > 0) {
+                    this.redraw(i);
+                }
             });
+        },
+        loadPage(pdf, i) {
+            this.renderPageAtScale(pdf, i, false);
         }
     },
     mounted() {
@@ -688,6 +745,7 @@ new Vue({
         });
 
         loadingTask.promise.then(pdf => {
+            this.pdfDoc = pdf;
             this.pdfPages = Array(pdf.numPages).fill(0);
             // まず先頭3ページだけ
             for (let i = 0; i < Math.min(3, pdf.numPages); i++) this.loadPage(pdf, i);

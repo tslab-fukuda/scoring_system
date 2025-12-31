@@ -52,6 +52,11 @@
                     <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
                     <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
                     {% endif %}
+                    <div class="btn-group ms-2" role="group" aria-label="PDFズーム">
+                        <button class="btn btn-outline-secondary" @click="zoomOut" :disabled="zoomPercent <= zoomMin">-</button>
+                        <span class="btn btn-outline-secondary disabled" v-text="zoomPercent + '%'"></span>
+                        <button class="btn btn-outline-secondary" @click="zoomIn" :disabled="zoomPercent >= zoomMax">+</button>
+                    </div>
                 </div>
             </div>
             <div class="pdf-col pdf-body main-body">
