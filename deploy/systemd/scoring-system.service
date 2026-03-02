@@ -1,0 +1,22 @@
+[Unit]
+Description=Scoring System Django (Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ceexpii
+Group=www-data
+WorkingDirectory=/home/ceexpii/scoring_system
+RuntimeDirectory=scoring-system
+Environment="DJANGO_SETTINGS_MODULE=scoring_system.settings_prod"
+# 必要に応じて環境変数を追加
+# Environment="DJANGO_ALLOWED_HOSTS=ceexp.nu-tf-lab.jp"
+# Environment="DJANGO_CSRF_TRUSTED_ORIGINS=https://ceexp.nu-tf-lab.jp"
+# Environment="GOOGLE_CLIENT_ID=..."
+# Environment="GOOGLE_CLIENT_SECRET=..."
+ExecStart=/home/ceexpii/scoring_system/venv_prod/bin/gunicorn scoring_system.wsgi:application --workers 3 --bind unix:/run/scoring-system/scoring-system.sock --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

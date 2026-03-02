@@ -20,8 +20,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from submission.views_login import redirect_after_login
 from django.urls import include
+from django.views.generic import RedirectView
 
 urlpatterns = [
+    path('', RedirectView.as_view(url='/submission/', permanent=False)),
     path('admin/', admin.site.urls),
     path('submission/', include('submission.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
