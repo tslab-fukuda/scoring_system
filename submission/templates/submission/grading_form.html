@@ -63,7 +63,7 @@
                 <div id="pdf-area" ref="pdfArea" @scroll="onMainScroll"
                     @touchstart="onPdfTouchStart($event)" @touchmove="onPdfTouchMove($event)"
                     @touchend="onPdfTouchEnd($event)" @touchcancel="onPdfTouchEnd($event)"
-                    style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
+                    style="position:relative;width:100%;background:#eee;overflow:auto;max-height:80vh;">
                     <div id="pdf-pages">
                         <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
                         <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
@@ -89,7 +89,7 @@
                 {% endverbatim %}
             </div>
             <div v-if="showCompare" class="pdf-col pdf-body compare-body compare-column">
-                <div id="compare-pdf-area" ref="comparePdfArea" @scroll="onCompareScroll" style="position:relative;width:100%;background:#eee;overflow-y:auto;max-height:80vh;">
+                <div id="compare-pdf-area" ref="comparePdfArea" @scroll="onCompareScroll" style="position:relative;width:100%;background:#eee;overflow:auto;max-height:80vh;">
                     <div id="compare-pdf-pages" ref="comparePdfPages">
                         <div v-if="compareLoading" class="text-muted small p-2">比較PDFを読み込み中...</div>
                         <div v-else-if="!comparePdfUrl" class="text-muted small p-2">比較対象がありません</div>

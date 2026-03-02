@@ -34,6 +34,7 @@ new Vue({
         lastPenTime: 0,
         useTouchType: false,
         directScrollActive: false,
+        directScrollLastX: 0,
         directScrollLastY: 0,
         zoomPercent: 100,
         zoomMin: 50,
@@ -81,10 +82,17 @@ new Vue({
                 return type === desiredType;
             });
         },
-        getTouchAverageYFromList(touches) {
-            if (!touches || touches.length === 0) return 0;
-            const total = touches.reduce((sum, touch) => sum + touch.clientY, 0);
-            return total / touches.length;
+        getTouchAveragePoint(touches) {
+            if (!touches || touches.length === 0) return { x: 0, y: 0 };
+            const total = touches.reduce((sum, touch) => {
+                sum.x += touch.clientX;
+                sum.y += touch.clientY;
+                return sum;
+            }, { x: 0, y: 0 });
+            return {
+                x: total.x / touches.length,
+                y: total.y / touches.length,
+            };
         },
         makeStylusEvent(touch) {
             return {
@@ -156,7 +164,9 @@ new Vue({
             const directTouches = this.getTouchesByType(e, 'direct');
             if (directTouches.length >= 2) {
                 this.directScrollActive = true;
-                this.directScrollLastY = this.getTouchAverageYFromList(directTouches);
+                const point = this.getTouchAveragePoint(directTouches);
+                this.directScrollLastX = point.x;
+                this.directScrollLastY = point.y;
             }
             if (e.cancelable) e.preventDefault();
         },
@@ -165,13 +175,16 @@ new Vue({
             if (!this.directScrollActive) return;
             const directTouches = this.getTouchesByType(e, 'direct');
             if (directTouches.length >= 2) {
-                const currentY = this.getTouchAverageYFromList(directTouches);
-                const deltaY = currentY - this.directScrollLastY;
+                const point = this.getTouchAveragePoint(directTouches);
+                const deltaX = point.x - this.directScrollLastX;
+                const deltaY = point.y - this.directScrollLastY;
                 const scrollArea = this.$refs.pdfArea;
                 if (scrollArea) {
                     scrollArea.scrollTop -= deltaY;
+                    scrollArea.scrollLeft -= deltaX;
                 }
-                this.directScrollLastY = currentY;
+                this.directScrollLastX = point.x;
+                this.directScrollLastY = point.y;
             }
             if (e.cancelable) e.preventDefault();
         },
@@ -180,6 +193,7 @@ new Vue({
             const directTouches = this.getTouchesByType(e, 'direct');
             if (directTouches.length < 2) {
                 this.directScrollActive = false;
+                this.directScrollLastX = 0;
                 this.directScrollLastY = 0;
             }
             if (e.cancelable) e.preventDefault();
@@ -292,7 +306,7 @@ new Vue({
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     canvas.style.display = 'block';
-                    canvas.style.margin = '0 auto 16px auto';
+                    canvas.style.margin = '0 0 16px 0';
                     canvas.width = Math.floor(cssWidth * dpr);
                     canvas.height = Math.floor(cssHeight * dpr);
                     canvas.style.width = `${cssWidth}px`;
