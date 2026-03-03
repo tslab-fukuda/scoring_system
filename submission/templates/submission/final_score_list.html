@@ -65,6 +65,7 @@
                     <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
                     <th @click="toggleSort('absence_count')" style="cursor:pointer">欠席回数</th>
                     <th @click="toggleSort('score_details_total')" style="cursor:pointer">減点</th>
+                    <th @click="toggleSort('completed_task_count')" style="cursor:pointer">実施項目数</th>
                     <th @click="toggleSort('final_grade')" style="cursor:pointer">最終成績</th>
                     {% endverbatim %}
                 </tr>
@@ -82,6 +83,9 @@
                     </td>
                     <td>{{ stu.absence_count }}</td>
                     <td>{{ stu.score_details_total !== '' ? stu.score_details_total : '-' }}</td>
+                    <td>
+                        <a href="#" @click.prevent="openExperimentLogModal(stu)">{{ stu.completed_task_count != null ? stu.completed_task_count : 0 }}</a>
+                    </td>
                     <td>
                         <a v-if="stu.final_grade !== ''" href="#" @click.prevent="openFinalGrade(stu)">{{ stu.final_grade }}</a>
                         <span v-else>-</span>
@@ -142,6 +146,49 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @click="closeScoreDetailModal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endverbatim %}
+
+    {% verbatim %}
+    <div v-if="showExperimentLogModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" style="max-width:90vw; margin-top:80px;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">実施項目詳細</h5>
+                    <button type="button" class="btn-close" @click="closeExperimentLogModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <div><b>学生:</b> {{ experimentLogStudent.name }}（{{ experimentLogStudent.student_id }}）</div>
+                        <div><b>科目:</b> {{ experimentLogCourse.course_code }} {{ experimentLogCourse.course_name }}（{{ experimentLogCourse.year }}）</div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>実験番号</th>
+                                    <th>状態</th>
+                                    <th>完了例題</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="log in experimentLogRows" :key="'exp-log-' + log.experiment_number">
+                                    <td>{{ log.experiment_number }}</td>
+                                    <td>{{ log.status }}</td>
+                                    <td>{{ log.completed_tasks }}</td>
+                                </tr>
+                                <tr v-if="!experimentLogRows.length">
+                                    <td colspan="3" class="text-muted">実施項目ログがありません</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeExperimentLogModal">閉じる</button>
                 </div>
             </div>
         </div>

@@ -16,6 +16,10 @@ new Vue({
         scoreDetailCourse: { course_code: '', course_name: '', year: '' },
         scoreDetailExperiment: '',
         scoreDetailSubmissions: [],
+        showExperimentLogModal: false,
+        experimentLogStudent: { name: '', student_id: '' },
+        experimentLogCourse: { course_code: '', course_name: '', year: '' },
+        experimentLogRows: [],
         showFinalGradeModal: false,
         finalGradeCourse: { course_code: '', course_name: '', year: '' },
         finalGradeDetail: {
@@ -153,6 +157,25 @@ new Vue({
             this.scoreDetailCourse = { course_code: '', course_name: '', year: '' };
             this.scoreDetailExperiment = '';
             this.scoreDetailSubmissions = [];
+        },
+        openExperimentLogModal(stu) {
+            const offeringId = this.selectedOfferingId || this.resolveOfferingId();
+            const offering = this.offerings.find(o => Number(o.id) === Number(offeringId));
+            this.experimentLogCourse = offering
+                ? { course_code: offering.course_code, course_name: offering.course_name, year: offering.year }
+                : { course_code: '', course_name: '', year: '' };
+            this.experimentLogStudent = {
+                name: stu.name || '',
+                student_id: stu.student_id || '',
+            };
+            this.experimentLogRows = Array.isArray(stu.experiment_logs) ? stu.experiment_logs : [];
+            this.showExperimentLogModal = true;
+        },
+        closeExperimentLogModal() {
+            this.showExperimentLogModal = false;
+            this.experimentLogStudent = { name: '', student_id: '' };
+            this.experimentLogCourse = { course_code: '', course_name: '', year: '' };
+            this.experimentLogRows = [];
         },
         openFinalGrade(stu) {
             if (!stu || stu.final_grade === '' || stu.final_grade === null || stu.final_grade === undefined) {

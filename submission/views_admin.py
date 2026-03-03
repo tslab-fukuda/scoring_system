@@ -1711,7 +1711,7 @@ def final_score_list_csv(request):
     # Add BOM for Excel compatibility
     response.write('\ufeff')
     writer = csv.writer(response)
-    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', '最終成績']
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', '実施項目数', '最終成績']
     writer.writerow(header)
 
     for row_data in student_data:
@@ -1725,6 +1725,7 @@ def final_score_list_csv(request):
             row.append(row_data.get(ex, ''))
         row.append(row_data.get('absence_count', 0))
         row.append(row_data.get('score_details_total', ''))
+        row.append(row_data.get('completed_task_count', 0))
         row.append(row_data.get('final_grade', ''))
         writer.writerow(row)
 
@@ -1732,6 +1733,15 @@ def final_score_list_csv(request):
 
 
 def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=None):
+    # 実験番号の順序を維持して重複を除外
+    unique_experiment_numbers = []
+    seen_experiment_numbers = set()
+    for ex in experiment_numbers:
+        if ex in seen_experiment_numbers:
+            continue
+        unique_experiment_numbers.append(ex)
+        seen_experiment_numbers.add(ex)
+
     students_qs = UserProfile.objects.filter(role='student').select_related('user')
     enrollment_map = {}
     if offering_id:
@@ -1781,7 +1791,37 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             for user_id, att_date in attendance_qs:
                 attendance_map.setdefault(user_id, set()).add(att_date)
     student_data = []
-    experiment_count = len(experiment_numbers) if experiment_numbers else 0
+    experiment_count = len(unique_experiment_numbers) if unique_experiment_numbers else 0
+
+    # 実施項目集計用の事前ロード（選択科目/年度かつ対象実験のみ）
+    progress_map = {}
+    completion_map = {}
+    task_config_map = {}
+    if offering_id:
+        target_user_ids = list(students_qs.values_list('user_id', flat=True))
+        progress_qs = ExperimentProgress.objects.filter(
+            course_offering_id=offering_id,
+            student_id__in=target_user_ids,
+            experiment_number__in=unique_experiment_numbers,
+        ).values_list('student_id', 'experiment_number', 'task_no')
+        for student_id, exp_no, task_no in progress_qs:
+            progress_map.setdefault((student_id, exp_no), set()).add(str(task_no))
+
+        completion_qs = ExperimentCompletion.objects.filter(
+            course_offering_id=offering_id,
+            student_id__in=target_user_ids,
+            experiment_number__in=unique_experiment_numbers,
+        ).values_list('student_id', 'experiment_number', 'completed')
+        for student_id, exp_no, completed in completion_qs:
+            completion_map[(student_id, exp_no)] = bool(completed)
+
+        task_cfg_qs = ExperimentTaskConfig.objects.filter(
+            course_offering_id=offering_id,
+            experiment_number__in=unique_experiment_numbers,
+        ).values_list('experiment_number', 'task_list')
+        for exp_no, task_list in task_cfg_qs:
+            task_config_map[exp_no] = _normalize_task_list(task_list)
+
     for up in students_qs:
         enr = enrollment_map.get(up.user_id)
         record = {
@@ -1794,7 +1834,9 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         }
         total_final_score = 0.0
         score_details_total = 0.0
-        for ex in experiment_numbers:
+        completed_task_count = 0
+        experiment_logs = []
+        for ex in unique_experiment_numbers:
             sub_qs = Submission.objects.filter(
                 student=up.user,
                 experiment_number=ex,
@@ -1830,6 +1872,21 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
                     except Exception:
                         continue
 
+            completed_set = progress_map.get((up.user_id, ex), set())
+            task_list = task_config_map.get(ex, [])
+            ordered_done = [task for task in task_list if task in completed_set]
+            ordered_done.extend(sorted(completed_set - set(task_list)))
+            completed_task_count += len(completed_set)
+            if task_list:
+                status = '完了' if set(task_list).issubset(completed_set) else '未完了'
+            else:
+                status = '完了' if completion_map.get((up.user_id, ex), False) or completed_set else '未完了'
+            experiment_logs.append({
+                'experiment_number': ex,
+                'status': status,
+                'completed_tasks': ', '.join(ordered_done) if ordered_done else '-',
+            })
+
         absence_count = 0
         if offering_id:
             day_label = record['experiment_day']
@@ -1856,6 +1913,8 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         record['final_score_total'] = total_final_score
         record['score_details_avg'] = score_details_avg
         record['experiment_count'] = experiment_count
+        record['completed_task_count'] = completed_task_count
+        record['experiment_logs'] = experiment_logs
         record['final_grade'] = final_grade
         student_data.append(record)
     return student_data
