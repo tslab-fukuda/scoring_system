@@ -11,14 +11,10 @@ fi
 
 cd "$ROOT_DIR"
 
-echo "[test] Pull latest code..."
-git pull --ff-only
+echo "[test] Use local working tree on branch: $(git branch --show-current)"
 
 echo "[test] Apply migrations..."
 "$PY_BIN" manage.py migrate --settings=scoring_system.settings
-
-echo "[test] Collect static files..."
-"$PY_BIN" manage.py collectstatic --noinput --settings=scoring_system.settings
 
 echo "[test] Start dev server on 0.0.0.0:8001..."
 exec "$PY_BIN" manage.py runserver 0.0.0.0:8001 --settings=scoring_system.settings
