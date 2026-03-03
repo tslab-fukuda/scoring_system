@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from datetime import time, timedelta
@@ -13,6 +14,8 @@ from .models import (
     CourseOffering,
     Enrollment,
     ExperimentCompletion,
+    ExperimentProgress,
+    ExperimentTaskConfig,
     Schedule,
     Submission,
     UserProfile,
@@ -101,6 +104,31 @@ def _student_enrollment_info(user, offering_id):
     full_name = up.full_name if up else user.username
     student_id = up.student_id if up else ""
     return experiment_day, experiment_group, full_name, student_id
+
+
+def _normalize_task_values(values):
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = values.replace('\r', '').replace(',', '\n').split('\n')
+    normalized = []
+    seen = set()
+    for value in values:
+        token = str(value).strip()
+        if not token or token in seen:
+            continue
+        normalized.append(token)
+        seen.add(token)
+    return normalized
+
+
+def _target_student_profile(profile_id, offering_id):
+    profile = UserProfile.objects.filter(id=profile_id, role='student').select_related('user').first()
+    if not profile:
+        return None
+    if not Enrollment.objects.filter(user=profile.user, role='student', course_offering_id=offering_id).exists():
+        return None
+    return profile
 
 
 @role_required('teacher', 'non-editing teacher', 'admin')
@@ -349,11 +377,193 @@ def mark_experiment_complete(request):
     ec.save()
     return JsonResponse({'status': 'ok'})
 
+
+def _sync_experiment_completion(student_user_id, offering_id, experiment_number):
+    task_config = ExperimentTaskConfig.objects.filter(
+        course_offering_id=offering_id,
+        experiment_number=experiment_number
+    ).first()
+    configured_tasks = _normalize_task_values(task_config.task_list if task_config else [])
+    completed_tasks = set(
+        ExperimentProgress.objects.filter(
+            student_id=student_user_id,
+            course_offering_id=offering_id,
+            experiment_number=experiment_number
+        ).values_list('task_no', flat=True)
+    )
+    if configured_tasks:
+        is_completed = set(configured_tasks).issubset(completed_tasks)
+    else:
+        is_completed = bool(completed_tasks)
+    completion, _ = ExperimentCompletion.objects.get_or_create(
+        student_id=student_user_id,
+        course_offering_id=offering_id,
+        experiment_number=experiment_number,
+        defaults={'completed': is_completed}
+    )
+    if completion.completed != is_completed:
+        completion.completed = is_completed
+        completion.save(update_fields=['completed'])
+    return is_completed
+
+
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
+def teacher_experiment_task_config_api(request):
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse({'configs': [], 'config_map': {}})
+    configs = ExperimentTaskConfig.objects.filter(
+        course_offering_id=offering_id
+    ).order_by('experiment_number')
+    data = []
+    config_map = {}
+    for cfg in configs:
+        task_list = _normalize_task_values(cfg.task_list)
+        data.append({
+            'id': cfg.id,
+            'experiment_number': cfg.experiment_number,
+            'task_list': task_list,
+        })
+        config_map[cfg.experiment_number] = task_list
+    return JsonResponse({'configs': data, 'config_map': config_map})
+
+
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
+def teacher_student_experiment_progress_api(request):
+    profile_id = request.GET.get('student_id')
+    experiment_number = (request.GET.get('experiment_number') or '').strip()
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id or not profile_id or not experiment_number:
+        return JsonResponse({'task_list': [], 'selected_task_nos': []})
+    profile = _target_student_profile(profile_id, offering_id)
+    if not profile:
+        return JsonResponse({'status': 'error', 'message': '対象学生にアクセスできません'}, status=403)
+    cfg = ExperimentTaskConfig.objects.filter(
+        course_offering_id=offering_id,
+        experiment_number=experiment_number
+    ).first()
+    task_list = _normalize_task_values(cfg.task_list if cfg else [])
+    selected = list(
+        ExperimentProgress.objects.filter(
+            student=profile.user,
+            course_offering_id=offering_id,
+            experiment_number=experiment_number
+        ).values_list('task_no', flat=True)
+    )
+    selected_set = set(selected)
+    ordered_selected = [task for task in task_list if task in selected_set]
+    for task in sorted(selected_set - set(task_list)):
+        ordered_selected.append(task)
+    return JsonResponse({'task_list': task_list, 'selected_task_nos': ordered_selected})
+
+
+@role_required('teacher')
+@require_POST
+def update_experiment_progress(request):
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        data = request.POST
+    profile_id = data.get('student_id')
+    experiment_number = str(data.get('experiment_number', '')).strip()
+    mode = str(data.get('mode', 'individual')).strip()
+    offering_id_raw = data.get('offering_id')
+    if not profile_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'student_id と experiment_number は必須です'}, status=400)
+    try:
+        offering_id = int(offering_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'offering_id が不正です'}, status=400)
+    allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
+    if offering_id not in allowed_ids:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度にはアクセスできません'}, status=403)
+    profile = _target_student_profile(profile_id, offering_id)
+    if not profile:
+        return JsonResponse({'status': 'error', 'message': '対象学生にアクセスできません'}, status=403)
+    task_config = ExperimentTaskConfig.objects.filter(
+        course_offering_id=offering_id,
+        experiment_number=experiment_number
+    ).first()
+    if not task_config:
+        return JsonResponse({'status': 'error', 'message': '実験タスク設定がありません'}, status=400)
+    task_list = _normalize_task_values(task_config.task_list)
+    if not task_list:
+        return JsonResponse({'status': 'error', 'message': '実験タスク設定が空です'}, status=400)
+    payload_tasks = data.get('task_nos', [])
+    selected_tasks = _normalize_task_values(payload_tasks)
+    allowed_set = set(task_list)
+    selected_tasks = [task for task in selected_tasks if task in allowed_set]
+    selected_set = set(selected_tasks)
+
+    target_user_ids = [profile.user_id]
+    if mode == 'group':
+        base_day, base_group, _, _ = _student_enrollment_info(profile.user, offering_id)
+        if not base_day or not base_group:
+            return JsonResponse({'status': 'error', 'message': '曜日または班が未設定のため班同期できません'}, status=400)
+        offering_student_ids = Enrollment.objects.filter(
+            course_offering_id=offering_id,
+            role='student'
+        ).values_list('user_id', flat=True)
+        group_user_ids = []
+        for up in UserProfile.objects.filter(role='student', user_id__in=offering_student_ids).select_related('user'):
+            exp_day, exp_group, _, _ = _student_enrollment_info(up.user, offering_id)
+            if exp_day == base_day and exp_group == base_group:
+                group_user_ids.append(up.user_id)
+        if group_user_ids:
+            target_user_ids = sorted(set(group_user_ids))
+        else:
+            target_user_ids = [profile.user_id]
+    elif mode != 'individual':
+        return JsonResponse({'status': 'error', 'message': 'mode が不正です'}, status=400)
+
+    with transaction.atomic():
+        for user_id in target_user_ids:
+            existing_qs = ExperimentProgress.objects.filter(
+                student_id=user_id,
+                course_offering_id=offering_id,
+                experiment_number=experiment_number
+            )
+            existing_tasks = set(existing_qs.values_list('task_no', flat=True))
+            delete_tasks = existing_tasks - selected_set
+            if delete_tasks:
+                existing_qs.filter(task_no__in=delete_tasks).delete()
+            create_tasks = selected_set - existing_tasks
+            ExperimentProgress.objects.bulk_create([
+                ExperimentProgress(
+                    student_id=user_id,
+                    course_offering_id=offering_id,
+                    experiment_number=experiment_number,
+                    task_no=task_no,
+                    updated_by=request.user
+                )
+                for task_no in create_tasks
+            ])
+            if selected_set:
+                ExperimentProgress.objects.filter(
+                    student_id=user_id,
+                    course_offering_id=offering_id,
+                    experiment_number=experiment_number,
+                    task_no__in=selected_set
+                ).update(updated_by=request.user, updated_at=timezone.now())
+            _sync_experiment_completion(user_id, offering_id, experiment_number)
+
+    return JsonResponse({
+        'status': 'ok',
+        'updated_count': len(target_user_ids),
+        'selected_task_nos': [task for task in task_list if task in selected_set],
+    })
+
+
 @role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def teacher_students_api(request):
     students = []
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
+    student_id_filter = request.GET.get('student_id')
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
@@ -368,6 +578,8 @@ def teacher_students_api(request):
         qs = qs.filter(experiment_day=day)
     if group:
         qs = qs.filter(experiment_group=group)
+    if student_id_filter:
+        qs = qs.filter(student_id__icontains=student_id_filter)
     for up in  qs:
         # その学生の実験終了リストを作成
         completions = ExperimentCompletion.objects.filter(

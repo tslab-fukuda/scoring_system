@@ -31,26 +31,34 @@ new Vue({
         offerings: offeringContext.offerings || [],
         selectedOfferingId: offeringContext.defaultOfferingId || null,
         defaultExperimentNumbers: [
-            'I-01,02','I-03,04','I-05,06','I-07,08','I-09,10',
-            'II-01,02','II-03,04','II-05,06','II-07,08','II-09,10'
+            'I-01,02', 'I-03,04', 'I-05,06', 'I-07,08', 'I-09,10',
+            'II-01,02', 'II-03,04', 'II-05,06', 'II-07,08', 'II-09,10'
         ],
-        // ▼実験終了記録タブ用
         students: [],
         showStudentModal: false,
         selectedStudent: {},
         experimentNumbers: [],
-        completeMap: {}, // { [student_id]: { [exp]: true/false } }
+        completeMap: {},
         scoreDetail: "",
         showScoreModal: false,
         scoreSummary: { pre_total: null, main_total: null, final_total: null, final_comment: "" },
         hasScoreSummary: false,
         showScoreSummary: false,
+        taskConfigs: [],
+        taskConfigMap: {},
+        showTaskModal: false,
+        taskEditor: {
+            experiment_number: '',
+            task_list: [],
+            selected_task_nos: [],
+            loading: false,
+        },
     },
     computed: {
         currentTabComponent() {
             return this.tab === 'grading' ? 'grading-list'
-                 : this.tab === 'graded' ? 'graded-list'
-                 : null;
+                : this.tab === 'graded' ? 'graded-list'
+                : null;
         },
         dayOptions() {
             const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
@@ -61,6 +69,12 @@ new Vue({
             const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
             if (current && current.experiment_numbers && current.experiment_numbers.length) return current.experiment_numbers;
             return this.defaultExperimentNumbers;
+        },
+        hasAnyTaskConfig() {
+            return Object.values(this.taskConfigMap || {}).some(tasks => Array.isArray(tasks) && tasks.length > 0);
+        },
+        canEditProgress() {
+            return (window.USER_ROLE || '').trim() === 'teacher';
         }
     },
     methods: {
@@ -117,15 +131,28 @@ new Vue({
             this.hasScoreSummary = !!(this.scoreSummary.pre_total || this.scoreSummary.main_total || this.scoreSummary.final_total || this.scoreSummary.final_comment);
             this.showScoreModal = true;
         },
-
-        // ▼実験終了記録タブ用
+        fetchTaskConfigs() {
+            this.ensureOfferingSelected();
+            if (!this.selectedOfferingId) {
+                this.taskConfigs = [];
+                this.taskConfigMap = {};
+                return;
+            }
+            const url = '/submission/teacher_experiment_task_config_api/?offering_id=' + encodeURIComponent(this.selectedOfferingId);
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    this.taskConfigs = data.configs || [];
+                    this.taskConfigMap = data.config_map || {};
+                });
+        },
         fetchStudents() {
             this.ensureOfferingSelected();
             if (!this.selectedOfferingId) {
                 this.students = [];
                 return;
             }
-            let params = [];
+            const params = [];
             params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
@@ -133,51 +160,103 @@ new Vue({
             let url = '/submission/teacher_students_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url).then(r => r.json()).then(data => {
-                this.students = data.students;
+                this.students = data.students || [];
                 this.completeMap = data.completion_map || {};
+                if (this.showStudentModal && this.selectedStudent && this.selectedStudent.id) {
+                    const updated = this.students.find(s => s.id === this.selectedStudent.id);
+                    if (updated) this.selectedStudent = updated;
+                }
             });
         },
         openStudentModal(stu) {
             this.selectedStudent = stu;
             this.showStudentModal = true;
+            this.showTaskModal = false;
         },
         isExperimentComplete(exp) {
             if (!this.selectedStudent || !this.selectedStudent.experiment_completion) return false;
             return this.selectedStudent.experiment_completion[exp] === true;
         },
-        toggleExperimentComplete(student_id, experiment_number) {
-            console.log('toggleExperimentComplete')
-            const body = new URLSearchParams({
-                student_id,
-                experiment_number
-            });
-            if (this.selectedOfferingId) {
-                body.append('offering_id', this.selectedOfferingId);
+        hasTaskConfig(experimentNumber) {
+            const tasks = this.taskConfigMap[experimentNumber] || [];
+            return Array.isArray(tasks) && tasks.length > 0;
+        },
+        openTaskEditor(experimentNumber) {
+            if (!this.selectedStudent || !this.selectedStudent.id) return;
+            const taskList = this.taskConfigMap[experimentNumber] || [];
+            if (!taskList.length) {
+                alert('この実験番号の task_list が未設定です。');
+                return;
             }
-            fetch("/submission/mark_experiment_complete/", {
-                method: "POST",
-                headers: {
-                    "X-CSRFToken": window.csrfToken,
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                body: body.toString()
-            })
-            .then(res => res.json())
-            .then(res => {
-                if (res.status === "ok") {
-                    this.fetchStudents();
-                    setTimeout(() => {
-                        this.selectedStudent = this.students.find(s => s.id === student_id);
-                    }, 300);
-                }
+            this.taskEditor = {
+                experiment_number: experimentNumber,
+                task_list: [...taskList],
+                selected_task_nos: [],
+                loading: true,
+            };
+            this.showTaskModal = true;
+            const params = new URLSearchParams({
+                offering_id: this.selectedOfferingId,
+                student_id: this.selectedStudent.id,
+                experiment_number: experimentNumber,
             });
+            fetch('/submission/teacher_student_experiment_progress_api/?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    const selected = Array.isArray(data.selected_task_nos) ? data.selected_task_nos.map(v => String(v)) : [];
+                    const allowed = new Set(this.taskEditor.task_list.map(v => String(v)));
+                    this.taskEditor.selected_task_nos = selected.filter(v => allowed.has(v));
+                })
+                .finally(() => {
+                    this.taskEditor.loading = false;
+                });
+        },
+        saveTaskProgress(mode) {
+            if (!this.selectedStudent || !this.selectedStudent.id || !this.selectedOfferingId) return;
+            if (!this.taskEditor.experiment_number) return;
+            const payload = {
+                student_id: this.selectedStudent.id,
+                offering_id: this.selectedOfferingId,
+                experiment_number: this.taskEditor.experiment_number,
+                task_nos: this.taskEditor.selected_task_nos,
+                mode,
+            };
+            this.taskEditor.loading = true;
+            fetch('/submission/update_experiment_progress/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify(payload),
+            })
+                .then(async (res) => {
+                    const data = await res.json();
+                    if (!res.ok || data.status !== 'ok') {
+                        throw new Error(data.message || '保存に失敗しました');
+                    }
+                    return data;
+                })
+                .then((data) => {
+                    this.fetchStudents();
+                    if (mode === 'group') {
+                        alert(`同一曜日・同一班の ${data.updated_count} 名に反映しました。`);
+                    }
+                })
+                .catch((err) => {
+                    alert(err.message || '保存に失敗しました');
+                })
+                .finally(() => {
+                    this.taskEditor.loading = false;
+                });
         }
     },
     watch: {
-        tab(newTab) {
+        tab() {
             this.refreshCurrentTab();
         },
         selectedOfferingId() {
+            this.fetchTaskConfigs();
             this.refreshCurrentTab();
         }
     },
@@ -190,6 +269,7 @@ new Vue({
         setTimeout(updateScoreSummaryVisibility, 0);
         this.ensureOfferingSelected();
         this.experimentNumbers = this.experimentOptions;
+        this.fetchTaskConfigs();
         this.refreshCurrentTab();
     }
 });

@@ -142,6 +142,51 @@ class ExperimentCompletion(models.Model):
         unique_together = ('student', 'experiment_number', 'course_offering')
 
 
+class ExperimentTaskConfig(models.Model):
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_task_configs'
+    )
+    experiment_number = models.CharField(max_length=32)
+    task_list = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        unique_together = ('course_offering', 'experiment_number')
+
+    def __str__(self):
+        return f"{self.course_offering} / {self.experiment_number}"
+
+
+class ExperimentProgress(models.Model):
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='experiment_progresses')
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_progresses'
+    )
+    experiment_number = models.CharField(max_length=32)
+    task_no = models.CharField(max_length=32)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_experiment_progresses'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'course_offering', 'experiment_number', 'task_no')
+        indexes = [
+            models.Index(fields=['course_offering', 'experiment_number']),
+            models.Index(fields=['student', 'course_offering', 'experiment_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.student.username} / {self.course_offering} / {self.experiment_number} / {self.task_no}"
+
+
 class Course(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50, unique=True)

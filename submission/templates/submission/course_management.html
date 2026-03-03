@@ -46,6 +46,9 @@
         <button type="button" class="list-group-item list-group-item-action"
                 :class="{active: selectedSection === 'enrollment'}"
                 @click="selectedSection = 'enrollment'">Enrollment（受講/担当紐付け）</button>
+        <button type="button" class="list-group-item list-group-item-action"
+                :class="{active: selectedSection === 'task_config'}"
+                @click="selectedSection = 'task_config'">実験進捗タスク設定</button>
       </div>
       {% endverbatim %}
     </div>
@@ -99,7 +102,7 @@
         </form>
       </div>
 
-      <div v-else>
+      <div v-else-if="selectedSection === 'enrollment'">
         <h5>Enrollment（受講/担当紐付け）</h5>
         <form @submit.prevent="addEnrollment" class="mb-3">
           <div class="mb-2">
@@ -143,6 +146,31 @@
           <button class="btn btn-primary w-100">追加</button>
         </form>
       </div>
+
+      <div v-else>
+        <h5>実験進捗タスク設定</h5>
+        <form @submit.prevent="addTaskConfig" class="mb-3">
+          <div class="mb-2">
+            <label class="form-label">科目/年度</label>
+            <select v-model="taskConfigForm.offering_id" class="form-select" required>
+              <option value="">選択</option>
+              <option v-for="o in offerings" :key="o.id" :value="o.id">{{ o.course_code }} ({{ o.year }})</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">実験番号</label>
+            <select v-model="taskConfigForm.experiment_number" class="form-select" required>
+              <option value="">選択</option>
+              <option v-for="ex in taskExperimentOptions" :key="ex" :value="ex">{{ ex }}</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">task_list（1行に1つ）</label>
+            <textarea v-model="taskConfigForm.task_list_text" class="form-control" rows="4" placeholder="1&#10;2&#10;3"></textarea>
+          </div>
+          <button class="btn btn-primary w-100">追加 / 更新</button>
+        </form>
+      </div>
       {% endverbatim %}
     </div>
 
@@ -181,7 +209,7 @@
         </table>
       </div>
 
-      <div v-else>
+      <div v-else-if="selectedSection === 'enrollment'">
         <h5>登録済み Enrollment</h5>
         <table class="table table-sm table-bordered">
           <thead><tr><th>ユーザ</th><th>科目/年度</th><th>ロール</th><th>曜/班</th><th>削除</th></tr></thead>
@@ -192,6 +220,24 @@
               <td>{{ e.role }}</td>
               <td>{{ e.experiment_day || '-' }}/{{ e.experiment_group || '-' }}</td>
               <td><button class="btn btn-sm btn-outline-danger" @click="deleteEnrollment(e.id)">削除</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else>
+        <h5>登録済み 実験進捗タスク設定</h5>
+        <table class="table table-sm table-bordered">
+          <thead><tr><th>科目/年度</th><th>実験番号</th><th>task_list</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="cfg in taskConfigs" :key="cfg.id">
+              <td>{{ cfg.course_code }} ({{ cfg.year }})</td>
+              <td>{{ cfg.experiment_number }}</td>
+              <td style="white-space: pre-line;">{{ (cfg.task_list || []).join('\n') }}</td>
+              <td class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-secondary" @click="openTaskConfigEdit(cfg)">編集</button>
+                <button class="btn btn-sm btn-outline-danger" @click="deleteTaskConfig(cfg.id)">削除</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -233,6 +279,40 @@
           </div>
           <div class="text-end">
             <button type="button" class="btn btn-secondary me-2" @click="closeCourseEdit">キャンセル</button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div v-if="showTaskConfigEdit" class="modal-mask" id="task-config-edit-modal">
+  <div class="modal-wrapper">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">実験進捗タスク設定を編集</h5>
+        <button type="button" class="btn-close" @click="closeTaskConfigEdit"></button>
+      </div>
+      <div class="modal-body">
+        <form @submit.prevent="updateTaskConfig">
+          <div class="mb-2">
+            <label class="form-label">科目/年度</label>
+            <select v-model="editTaskConfigForm.offering_id" class="form-select" required>
+              <option value="">選択</option>
+              <option v-for="o in offerings" :key="'edit-task-offering-' + o.id" :value="o.id">{{ o.course_code }} ({{ o.year }})</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">実験番号</label>
+            <input type="text" v-model="editTaskConfigForm.experiment_number" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">task_list（1行に1つ）</label>
+            <textarea v-model="editTaskConfigForm.task_list_text" class="form-control" rows="4"></textarea>
+          </div>
+          <div class="text-end">
+            <button type="button" class="btn btn-secondary me-2" @click="closeTaskConfigEdit">キャンセル</button>
             <button type="submit" class="btn btn-primary">保存</button>
           </div>
         </form>

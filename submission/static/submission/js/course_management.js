@@ -6,13 +6,17 @@ new Vue({
         offerings: [],
         enrollments: [],
         users: [],
+        taskConfigs: [],
         courseForm: { name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
         weekDays: ['月', '火', '水', '木', '金'],
         defaultEnrollmentDays: ['火', '木'],
         offeringForm: { course_id: '', year: '' },
         enrollmentForm: { user_id: '', offering_id: '', role: 'student', experiment_day: '', experiment_group: '' },
+        taskConfigForm: { offering_id: '', experiment_number: '', task_list_text: '' },
         showCourseEdit: false,
         editCourseForm: { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
+        showTaskConfigEdit: false,
+        editTaskConfigForm: { id: null, offering_id: '', experiment_number: '', task_list_text: '' },
     },
     computed: {
         selectedEnrollmentOffering() {
@@ -23,12 +27,25 @@ new Vue({
                 return this.selectedEnrollmentOffering.meeting_days;
             }
             return this.defaultEnrollmentDays;
+        },
+        selectedTaskOffering() {
+            return this.offerings.find(o => String(o.id) === String(this.taskConfigForm.offering_id)) || null;
+        },
+        taskExperimentOptions() {
+            if (this.selectedTaskOffering && Array.isArray(this.selectedTaskOffering.experiment_numbers)) {
+                return this.selectedTaskOffering.experiment_numbers;
+            }
+            return [];
         }
     },
     methods: {
         parseExperimentText(text) {
             if (!text) return [];
             return text.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+        },
+        parseTaskText(text) {
+            const items = this.parseExperimentText(text);
+            return [...new Set(items)];
         },
         fetchAll() {
             fetch('/submission/admin_course_data_api/')
@@ -38,6 +55,7 @@ new Vue({
                     this.offerings = data.offerings || [];
                     this.enrollments = data.enrollments || [];
                     this.users = data.users || [];
+                    this.taskConfigs = data.task_configs || [];
                 });
         },
         addCourse() {
@@ -85,7 +103,6 @@ new Vue({
                 if (data.status === 'success') {
                     const idx = this.courses.findIndex(c => c.id === data.course.id);
                     if (idx !== -1) this.courses.splice(idx, 1, data.course);
-                    // offerings の表示情報も更新
                     this.offerings = this.offerings.map(o => {
                         if (o.course_id === data.course.id) {
                             return {
@@ -113,9 +130,7 @@ new Vue({
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'success') {
-                    this.courses = this.courses.filter(c => c.id !== id);
-                    this.offerings = this.offerings.filter(o => o.course_id !== id);
-                    this.enrollments = this.enrollments.filter(e => e.course_id !== id);
+                    this.fetchAll();
                 } else {
                     alert(data.message || '削除に失敗しました');
                 }
@@ -146,8 +161,7 @@ new Vue({
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'success') {
-                    this.offerings = this.offerings.filter(o => o.id !== id);
-                    this.enrollments = this.enrollments.filter(e => e.course_offering_id !== id);
+                    this.fetchAll();
                 } else {
                     alert(data.message || '削除に失敗しました');
                 }
@@ -184,9 +198,94 @@ new Vue({
                 }
             });
         },
+        addTaskConfig() {
+            const payload = {
+                offering_id: this.taskConfigForm.offering_id,
+                experiment_number: this.taskConfigForm.experiment_number,
+                task_list: this.parseTaskText(this.taskConfigForm.task_list_text),
+            };
+            fetch('/submission/admin_add_task_config/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const cfg = data.task_config;
+                    const idx = this.taskConfigs.findIndex(item => item.id === cfg.id);
+                    if (idx === -1) {
+                        this.taskConfigs.push(cfg);
+                    } else {
+                        this.taskConfigs.splice(idx, 1, cfg);
+                    }
+                    this.taskConfigForm.task_list_text = '';
+                } else {
+                    alert(data.message || '追加に失敗しました');
+                }
+            });
+        },
+        openTaskConfigEdit(cfg) {
+            this.editTaskConfigForm = {
+                id: cfg.id,
+                offering_id: cfg.course_offering_id,
+                experiment_number: cfg.experiment_number,
+                task_list_text: (cfg.task_list || []).join('\n'),
+            };
+            this.showTaskConfigEdit = true;
+        },
+        closeTaskConfigEdit() {
+            this.showTaskConfigEdit = false;
+            this.editTaskConfigForm = { id: null, offering_id: '', experiment_number: '', task_list_text: '' };
+        },
+        updateTaskConfig() {
+            if (!this.editTaskConfigForm.id) return;
+            const payload = {
+                offering_id: this.editTaskConfigForm.offering_id,
+                experiment_number: this.editTaskConfigForm.experiment_number,
+                task_list: this.parseTaskText(this.editTaskConfigForm.task_list_text),
+            };
+            fetch(`/submission/admin_update_task_config/${this.editTaskConfigForm.id}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const cfg = data.task_config;
+                    const idx = this.taskConfigs.findIndex(item => item.id === cfg.id);
+                    if (idx !== -1) this.taskConfigs.splice(idx, 1, cfg);
+                    this.closeTaskConfigEdit();
+                } else {
+                    alert(data.message || '更新に失敗しました');
+                }
+            });
+        },
+        deleteTaskConfig(id) {
+            if (!confirm('削除しますか？')) return;
+            fetch(`/submission/admin_delete_task_config/${id}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': window.csrfToken }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    this.taskConfigs = this.taskConfigs.filter(item => item.id !== id);
+                } else {
+                    alert(data.message || '削除に失敗しました');
+                }
+            });
+        },
         syncEnrollmentDay() {
             if (this.enrollmentForm.experiment_day && !this.enrollmentDayOptions.includes(this.enrollmentForm.experiment_day)) {
                 this.enrollmentForm.experiment_day = '';
+            }
+        },
+        syncTaskExperiment() {
+            if (!this.taskConfigForm.experiment_number) return;
+            if (!this.taskExperimentOptions.includes(this.taskConfigForm.experiment_number)) {
+                this.taskConfigForm.experiment_number = '';
             }
         }
     },
@@ -196,6 +295,12 @@ new Vue({
         },
         enrollmentDayOptions() {
             this.syncEnrollmentDay();
+        },
+        'taskConfigForm.offering_id'() {
+            this.syncTaskExperiment();
+        },
+        taskExperimentOptions() {
+            this.syncTaskExperiment();
         }
     },
     mounted() {

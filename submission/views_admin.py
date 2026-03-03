@@ -6,6 +6,7 @@ from submission.models import (
     Stamp,
     ScoringItem,
     ExperimentCompletion,
+    ExperimentTaskConfig,
     Course,
     CourseOffering,
     Enrollment,
@@ -129,6 +130,22 @@ def _aggregate_score_details(student_id, experiment_number, offering_id=None):
         'pre': _sum_score_details(pre_qs),
         'main': _sum_score_details(main_qs),
     }
+
+
+def _normalize_task_list(values):
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = values.replace('\r', '').replace(',', '\n').split('\n')
+    normalized = []
+    seen = set()
+    for value in values:
+        token = str(value).strip()
+        if not token or token in seen:
+            continue
+        normalized.append(token)
+        seen.add(token)
+    return normalized
 
 @role_required('admin')
 def admin_dashboard(request):
@@ -367,11 +384,26 @@ def admin_course_data_api(request):
             'student_id': up.student_id if up else '',
             'email': u.email,
         })
+    task_configs = []
+    for cfg in ExperimentTaskConfig.objects.select_related('course_offering__course').order_by(
+        'course_offering__year', 'course_offering__course__code', 'experiment_number'
+    ):
+        task_list = cfg.task_list if isinstance(cfg.task_list, list) else []
+        task_configs.append({
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': cfg.course_offering.course.code,
+            'course_name': cfg.course_offering.course.name,
+            'year': cfg.course_offering.year,
+            'experiment_number': cfg.experiment_number,
+            'task_list': [str(task).strip() for task in task_list if str(task).strip()],
+        })
     return JsonResponse({
         'courses': courses,
         'offerings': offerings,
         'enrollments': enrollments,
         'users': users,
+        'task_configs': task_configs,
     })
 
 
@@ -533,6 +565,102 @@ def admin_delete_enrollment(request, enrollment_id):
         return JsonResponse({'status': 'success'})
     except Enrollment.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+
+@role_required('admin')
+@require_POST
+def admin_add_task_config(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+    offering_id = data.get('offering_id')
+    experiment_number = str(data.get('experiment_number', '')).strip()
+    task_list = _normalize_task_list(data.get('task_list', []))
+    if not offering_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'offering_id と experiment_number は必須です'}, status=400)
+    if not task_list:
+        return JsonResponse({'status': 'error', 'message': 'task_list は1件以上必要です'}, status=400)
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+    cfg, created = ExperimentTaskConfig.objects.get_or_create(
+        course_offering=offering,
+        experiment_number=experiment_number,
+        defaults={'task_list': task_list}
+    )
+    if not created:
+        cfg.task_list = task_list
+        cfg.save(update_fields=['task_list'])
+    return JsonResponse({
+        'status': 'success',
+        'task_config': {
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+            'experiment_number': cfg.experiment_number,
+            'task_list': cfg.task_list,
+        }
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_update_task_config(request, task_config_id):
+    try:
+        cfg = ExperimentTaskConfig.objects.select_related('course_offering__course').get(id=task_config_id)
+    except ExperimentTaskConfig.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    offering_id = data.get('offering_id')
+    experiment_number = str(data.get('experiment_number', cfg.experiment_number)).strip()
+    task_list = _normalize_task_list(data.get('task_list', cfg.task_list))
+    if not offering_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'offering_id と experiment_number は必須です'}, status=400)
+    if not task_list:
+        return JsonResponse({'status': 'error', 'message': 'task_list は1件以上必要です'}, status=400)
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+    duplicate = ExperimentTaskConfig.objects.filter(
+        course_offering=offering,
+        experiment_number=experiment_number
+    ).exclude(id=cfg.id).exists()
+    if duplicate:
+        return JsonResponse({'status': 'error', 'message': '同じ科目/年度・実験番号の設定が既にあります'}, status=400)
+    cfg.course_offering = offering
+    cfg.experiment_number = experiment_number
+    cfg.task_list = task_list
+    cfg.save(update_fields=['course_offering', 'experiment_number', 'task_list'])
+    return JsonResponse({
+        'status': 'success',
+        'task_config': {
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+            'experiment_number': cfg.experiment_number,
+            'task_list': cfg.task_list,
+        }
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_delete_task_config(request, task_config_id):
+    try:
+        ExperimentTaskConfig.objects.get(id=task_config_id).delete()
+        return JsonResponse({'status': 'success'})
+    except ExperimentTaskConfig.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
 
 def get_students_api(request):
     student_id = request.GET.get('student_id')

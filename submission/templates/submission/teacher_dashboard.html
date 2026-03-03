@@ -91,28 +91,89 @@
                 </div>
                 {% endverbatim %}
             </div>
-            <!-- モーダル: 実験一覧+終了判定 -->
+            <!-- モーダル: 実験一覧 -->
             <div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
-                <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
                     {% verbatim %}
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">{{ selectedStudent.full_name }} の実験終了記録</h5>
+                            <h5 class="modal-title">{{ selectedStudent.full_name }} の実験進捗</h5>
                             <button type="button" class="btn-close" @click="showStudentModal=false"></button>
                         </div>
                         <div class="modal-body">
-                            <table class="table">
-                                <tr v-for="exp in experimentNumbers" :key="exp">
-                                    <td>{{ exp }}</td>
-                                    <td>
-                                        <button class="btn"
-                                            :class="isExperimentComplete(exp) ? 'btn-success' : 'btn-outline-secondary'"
-                                            @click="toggleExperimentComplete(selectedStudent.id, exp)">
-                                            {{ isExperimentComplete(exp) ? '終了' : '未了' }}
-                                        </button>
-                                    </td>
-                                </tr>
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>実験番号</th>
+                                        <th>状態</th>
+                                        <th>編集</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="exp in experimentNumbers" :key="exp">
+                                        <td>{{ exp }}</td>
+                                        <td>
+                                            <span class="badge" :class="isExperimentComplete(exp) ? 'text-bg-success' : 'text-bg-secondary'">
+                                                {{ isExperimentComplete(exp) ? '完了' : '未完了' }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    :disabled="!canEditProgress || !hasTaskConfig(exp)"
+                                                    @click="openTaskEditor(exp)">
+                                                タスク編集
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
                             </table>
+                            <div class="small text-muted" v-if="!hasAnyTaskConfig">
+                                実験進捗タスク設定がありません。admin画面で設定してください。
+                            </div>
+                            <div class="small text-muted" v-if="!canEditProgress">
+                                進捗編集は teacher ロールのみ実行できます。
+                            </div>
+                        </div>
+                    </div>
+                    {% endverbatim %}
+                </div>
+            </div>
+            <div v-if="showTaskModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    {% verbatim %}
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                {{ selectedStudent.full_name }} / {{ taskEditor.experiment_number }} の進捗編集
+                            </h5>
+                            <button type="button" class="btn-close" @click="showTaskModal=false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div v-if="taskEditor.loading" class="text-muted">読込中...</div>
+                            <div v-else>
+                                <div v-if="!taskEditor.task_list.length" class="text-muted">
+                                    task_list が設定されていません。
+                                </div>
+                                <div v-else class="d-flex flex-wrap gap-3">
+                                    <label v-for="task in taskEditor.task_list" :key="task" class="form-check">
+                                        <input class="form-check-input" type="checkbox" :value="task" v-model="taskEditor.selected_task_nos">
+                                        <span class="form-check-label">task {{ task }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" @click="showTaskModal=false">閉じる</button>
+                                    <button type="button" class="btn btn-outline-primary"
+                                    :disabled="!canEditProgress || taskEditor.loading || !taskEditor.task_list.length"
+                                    @click="saveTaskProgress('individual')">
+                                個別保存
+                            </button>
+                            <button type="button" class="btn btn-primary"
+                                    :disabled="!canEditProgress || taskEditor.loading || !taskEditor.task_list.length"
+                                    @click="saveTaskProgress('group')">
+                                班へ反映
+                            </button>
                         </div>
                     </div>
                     {% endverbatim %}
