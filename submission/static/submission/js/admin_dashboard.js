@@ -33,6 +33,7 @@ window.app = new Vue({
         selectedStudent: null,
         showStudentModal: false,
         studentReports: [],
+        experimentLogs: [],
         attendanceLogs: [],
         absenceCount: 0,
         showPhotoModal: false,
@@ -382,6 +383,7 @@ window.app = new Vue({
             this.selectedStudentId = student.id;
             this.attendanceLogs = [];
             this.absenceCount = 0;
+            this.experimentLogs = [];
             const params = new URLSearchParams();
             params.append('student_id', student.id);
             if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
@@ -390,6 +392,7 @@ window.app = new Vue({
                 .then(data => {
                     this.studentReports = data.reports;
                     this.selectedStudent = data.full_name;
+                    this.experimentLogs = data.experiment_logs || [];
                     this.attendanceLogs = data.attendance_logs || [];
                     this.absenceCount = Number.isFinite(data.absence_count) ? data.absence_count : 0;
                     this.showStudentModal = true;
@@ -398,6 +401,7 @@ window.app = new Vue({
         closeStudentModal() {
             this.showStudentModal = false;
             this.studentReports = [];
+            this.experimentLogs = [];
             this.attendanceLogs = [];
             this.absenceCount = 0;
         },

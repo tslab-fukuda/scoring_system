@@ -43,6 +43,30 @@
           <div>{{ absenceCount }} 回</div>
         </div>
         <div class="mb-3">
+          <div class="fw-semibold mb-1">実験ログ</div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>実験番号</th>
+                  <th>状態</th>
+                  <th>完了例題</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="log in experimentLogs" :key="'exp-' + log.experiment_number">
+                  <td>{{ log.experiment_number }}</td>
+                  <td>{{ log.status }}</td>
+                  <td>{{ log.completed_tasks }}</td>
+                </tr>
+                <tr v-if="!experimentLogs.length">
+                  <td colspan="3" class="text-center text-muted">実験ログがありません</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mb-3">
           <div class="fw-semibold mb-1">出席ログ</div>
           <div class="table-responsive">
             <table class="table table-sm">

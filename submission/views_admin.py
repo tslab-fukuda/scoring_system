@@ -6,6 +6,7 @@ from submission.models import (
     Stamp,
     ScoringItem,
     ExperimentCompletion,
+    ExperimentProgress,
     ExperimentTaskConfig,
     Course,
     CourseOffering,
@@ -214,7 +215,18 @@ def admin_get_submissions_api(request):
             comp_qs = comp_qs.filter(course_offering_id=offering_id)
         comp_status = comp_qs.values_list('completed', flat=True)
         completed = comp_status[0] if comp_status else False
-        if cnt >= 3 and completed:
+
+        progress_qs = ExperimentProgress.objects.filter(
+            student_id=student_id,
+            experiment_number=experiment_number,
+        )
+        if offering_id:
+            progress_qs = progress_qs.filter(course_offering_id=offering_id)
+        else:
+            progress_qs = progress_qs.filter(course_offering__isnull=True)
+        has_any_progress = progress_qs.exists()
+
+        if cnt >= 3 and (completed or has_any_progress):
             Submission.objects.filter(
                 report_type='main', graded=False, accepted=False,
                 student_id=student_id, experiment_number=experiment_number,
@@ -1073,19 +1085,24 @@ def api_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
     if not student_id:
-        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0})
+        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0, 'experiment_logs': []})
     try:
         profile = UserProfile.objects.get(id=student_id)
     except UserProfile.DoesNotExist:
-        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0})
+        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0, 'experiment_logs': []})
     full_name = profile.full_name
 
     attendance_logs = []
     absence_count = 0
+    experiment_logs = []
     if offering_id:
+        try:
+            offering_id_int = int(offering_id)
+        except (TypeError, ValueError):
+            offering_id_int = None
         enrollment = Enrollment.objects.filter(
             user=profile.user,
-            course_offering_id=offering_id,
+            course_offering_id=offering_id_int,
             role='student'
         ).first()
         student_day = enrollment.experiment_day if enrollment else profile.experiment_day
@@ -1097,7 +1114,7 @@ def api_student_reports(request):
         schedule_dates = set()
         if student_day:
             for sched in Schedule.objects.filter(
-                course_offering_id=offering_id,
+                course_offering_id=offering_id_int,
                 date__lte=cutoff_date
             ):
                 if _weekday_label(sched.date) == student_day:
@@ -1106,7 +1123,7 @@ def api_student_reports(request):
         attendance_dates = set(
             AttendanceRecord.objects.filter(
                 user=profile.user,
-                course_offering_id=offering_id,
+                course_offering_id=offering_id_int,
                 date__in=schedule_dates
             ).values_list('date', flat=True)
         )
@@ -1114,7 +1131,7 @@ def api_student_reports(request):
 
         records = AttendanceRecord.objects.filter(
             user=profile.user,
-            course_offering_id=offering_id
+            course_offering_id=offering_id_int
         ).order_by('-date')
         for record in records:
             date_str = record.date.strftime('%Y-%m-%d')
@@ -1129,6 +1146,54 @@ def api_student_reports(request):
                     'date': date_str,
                     'status': '退室',
                     'time': timezone.localtime(record.check_out, JST).strftime('%H:%M')
+                })
+
+        if offering_id_int:
+            offering = CourseOffering.objects.select_related('course').filter(id=offering_id_int).first()
+            configured_numbers = (offering.course.experiment_numbers if offering else []) or []
+            config_map = {}
+            for cfg in ExperimentTaskConfig.objects.filter(course_offering_id=offering_id_int):
+                config_map[cfg.experiment_number] = _normalize_task_list(cfg.task_list)
+            progress_map = {}
+            for exp_no, task_no in ExperimentProgress.objects.filter(
+                student=profile.user,
+                course_offering_id=offering_id_int
+            ).values_list('experiment_number', 'task_no'):
+                progress_map.setdefault(exp_no, set()).add(str(task_no))
+            completion_map = dict(
+                ExperimentCompletion.objects.filter(
+                    student=profile.user,
+                    course_offering_id=offering_id_int
+                ).values_list('experiment_number', 'completed')
+            )
+
+            # configured順を維持しつつ重複を除外
+            all_numbers = []
+            seen_numbers = set()
+            for exp_no in configured_numbers:
+                if exp_no in seen_numbers:
+                    continue
+                all_numbers.append(exp_no)
+                seen_numbers.add(exp_no)
+            # 差集合はOR全体に対して計算する（演算子優先順位バグ対策）
+            extras = sorted(
+                (set(progress_map.keys()) | set(completion_map.keys()) | set(config_map.keys()))
+                - set(all_numbers)
+            )
+            all_numbers.extend(extras)
+            for exp_no in all_numbers:
+                task_list = _normalize_task_list(config_map.get(exp_no, []))
+                completed_set = progress_map.get(exp_no, set())
+                ordered_done = [task for task in task_list if task in completed_set]
+                ordered_done.extend(sorted(completed_set - set(task_list)))
+                if task_list:
+                    status = '完了' if set(task_list).issubset(completed_set) else '未完了'
+                else:
+                    status = '完了' if completion_map.get(exp_no) or completed_set else '未完了'
+                experiment_logs.append({
+                    'experiment_number': exp_no,
+                    'status': status,
+                    'completed_tasks': ', '.join(ordered_done) if ordered_done else '-',
                 })
 
     qs = Submission.objects.filter(student__userprofile__id=student_id)
@@ -1148,6 +1213,7 @@ def api_student_reports(request):
         'full_name': full_name,
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
+        'experiment_logs': experiment_logs,
     })
 
 @role_required('admin')
