@@ -674,6 +674,65 @@ def admin_delete_task_config(request, task_config_id):
         return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
 
 
+@role_required('admin')
+@require_POST
+def admin_copy_task_configs(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    target_offering_id = data.get('target_offering_id')
+    source_offering_id = data.get('source_offering_id')
+    if not target_offering_id or not source_offering_id:
+        return JsonResponse({'status': 'error', 'message': 'target_offering_id と source_offering_id は必須です'}, status=400)
+    if str(target_offering_id) == str(source_offering_id):
+        return JsonResponse({'status': 'error', 'message': '同じ年度はコピー元に選択できません'}, status=400)
+
+    target = CourseOffering.objects.select_related('course').filter(id=target_offering_id).first()
+    source = CourseOffering.objects.select_related('course').filter(id=source_offering_id).first()
+    if not target or not source:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+    if target.course_id != source.course_id:
+        return JsonResponse({'status': 'error', 'message': '同一科目の年度のみコピーできます'}, status=400)
+    if int(source.year) >= int(target.year):
+        return JsonResponse({'status': 'error', 'message': 'コピー元は過去年度のみ選択できます'}, status=400)
+
+    source_configs = list(
+        ExperimentTaskConfig.objects.filter(course_offering=source).order_by('experiment_number', 'id')
+    )
+    existing_numbers = set(
+        ExperimentTaskConfig.objects.filter(course_offering=target).values_list('experiment_number', flat=True)
+    )
+
+    to_create = []
+    skipped_numbers = []
+    for cfg in source_configs:
+        exp_no = str(cfg.experiment_number or '').strip()
+        if not exp_no or exp_no in existing_numbers:
+            if exp_no:
+                skipped_numbers.append(exp_no)
+            continue
+        to_create.append(ExperimentTaskConfig(
+            course_offering=target,
+            experiment_number=exp_no,
+            task_list=_normalize_task_list(cfg.task_list),
+        ))
+        existing_numbers.add(exp_no)
+
+    if to_create:
+        ExperimentTaskConfig.objects.bulk_create(to_create)
+
+    return JsonResponse({
+        'status': 'success',
+        'created_count': len(to_create),
+        'skipped_count': len(skipped_numbers),
+        'total_count': len(source_configs),
+        'source_year': source.year,
+        'target_year': target.year,
+    })
+
+
 def get_students_api(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')

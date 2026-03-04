@@ -51,6 +51,7 @@ urlpatterns = [
     path('admin_add_task_config/', views_admin.admin_add_task_config, name='admin_add_task_config'),
     path('admin_update_task_config/<int:task_config_id>/', views_admin.admin_update_task_config, name='admin_update_task_config'),
     path('admin_delete_task_config/<int:task_config_id>/', views_admin.admin_delete_task_config, name='admin_delete_task_config'),
+    path('admin_copy_task_configs/', views_admin.admin_copy_task_configs, name='admin_copy_task_configs'),
     path('admin_students_api/', views_admin.get_students_api, name='get_students_api'),
     path('api_student_reports/', views_admin.api_student_reports, name='api_student_reports'),
     path('admin_schedule_api/', views_admin.get_schedule_api, name='get_schedule_api'),

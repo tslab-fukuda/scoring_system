@@ -23,6 +23,8 @@ new Vue({
         offeringForm: { year: '' },
         enrollmentForm: { user_id: '', offering_id: '', role: 'teacher', experiment_day: '', experiment_group: '' },
         taskConfigForm: { offering_id: '', experiment_number: '', task_list_text: '' },
+        taskConfigCopySourceOfferingId: '',
+        taskConfigCopyLoading: false,
 
         showCourseEdit: false,
         editCourseForm: { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
@@ -131,6 +133,16 @@ new Vue({
         canAddTaskConfig() {
             return !!(this.contextOfferingId && this.taskConfigForm.experiment_number);
         },
+        taskConfigCopySourceOfferingOptions() {
+            if (!this.selectedContextOffering) return [];
+            const targetYear = Number(this.selectedContextOffering.year);
+            return this.offeringsForContextCourse.filter(o =>
+                String(o.id) !== String(this.contextOfferingId) && Number(o.year) < targetYear
+            );
+        },
+        canCopyTaskConfig() {
+            return !!(this.contextOfferingId && this.taskConfigCopySourceOfferingId && !this.taskConfigCopyLoading);
+        },
     },
     methods: {
         parseExperimentText(text) {
@@ -183,6 +195,7 @@ new Vue({
             this.taskConfigForm.offering_id = this.contextOfferingId || '';
             this.syncEnrollmentDay();
             this.syncTaskExperiment();
+            this.syncTaskConfigCopySource();
         },
         addCourse() {
             this.courseForm.experiment_numbers = this.parseExperimentText(this.courseForm.experiment_numbers_text);
@@ -424,6 +437,45 @@ new Vue({
                 }
             });
         },
+        copyTaskConfigFromPreviousYear() {
+            if (!this.contextOfferingId) {
+                alert('コピー先の年度を選択してください');
+                return;
+            }
+            if (!this.taskConfigCopySourceOfferingId) {
+                alert('コピー元年度を選択してください');
+                return;
+            }
+            if (!confirm('選択した過去年度の実験進捗タスク設定をコピーしますか？（既存の実験番号はスキップされます）')) {
+                return;
+            }
+            this.taskConfigCopyLoading = true;
+            fetch('/submission/admin_copy_task_configs/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
+                body: JSON.stringify({
+                    target_offering_id: this.contextOfferingId,
+                    source_offering_id: this.taskConfigCopySourceOfferingId,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const created = data.created_count || 0;
+                    const skipped = data.skipped_count || 0;
+                    alert(`コピー完了: ${created} 件追加 / ${skipped} 件スキップ`);
+                    this.fetchAll();
+                } else {
+                    alert(data.message || 'コピーに失敗しました');
+                }
+            })
+            .catch(() => {
+                alert('コピーに失敗しました');
+            })
+            .finally(() => {
+                this.taskConfigCopyLoading = false;
+            });
+        },
         syncEnrollmentDay() {
             if (this.enrollmentForm.experiment_day && !this.enrollmentDayOptions.includes(this.enrollmentForm.experiment_day)) {
                 this.enrollmentForm.experiment_day = '';
@@ -433,6 +485,15 @@ new Vue({
             if (!this.taskConfigForm.experiment_number) return;
             if (!this.contextExperimentOptions.includes(this.taskConfigForm.experiment_number)) {
                 this.taskConfigForm.experiment_number = '';
+            }
+        },
+        syncTaskConfigCopySource() {
+            if (!this.taskConfigCopySourceOfferingId) return;
+            const exists = this.taskConfigCopySourceOfferingOptions.some(
+                o => String(o.id) === String(this.taskConfigCopySourceOfferingId)
+            );
+            if (!exists) {
+                this.taskConfigCopySourceOfferingId = '';
             }
         }
     },
@@ -448,6 +509,9 @@ new Vue({
         },
         contextExperimentOptions() {
             this.syncTaskExperiment();
+        },
+        taskConfigCopySourceOfferingOptions() {
+            this.syncTaskConfigCopySource();
         }
     },
     mounted() {

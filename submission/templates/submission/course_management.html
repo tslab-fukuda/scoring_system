@@ -256,6 +256,30 @@ body.dark-mode #course-management .form-select option[value=""] {
             <label class="form-label">task_list（1行に1つ）</label>
             <textarea v-model="taskConfigForm.task_list_text" class="form-control" rows="4" placeholder="1&#10;2&#10;3" :disabled="!contextOfferingId"></textarea>
           </div>
+          <div class="mb-2">
+            <label class="form-label">過去年度からコピー</label>
+            <div class="input-group input-group-sm">
+              <select v-model="taskConfigCopySourceOfferingId" class="form-select" :disabled="!contextOfferingId || taskConfigCopyLoading">
+                <option value="">コピー元年度を選択</option>
+                <option
+                  v-for="o in taskConfigCopySourceOfferingOptions"
+                  :key="'task-copy-source-' + o.id"
+                  :value="o.id"
+                >
+                  {{ o.year }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                :disabled="!canCopyTaskConfig"
+                @click="copyTaskConfigFromPreviousYear"
+              >
+                {{ taskConfigCopyLoading ? 'コピー中...' : 'コピー実行' }}
+              </button>
+            </div>
+            <div class="form-text">同一実験番号が既に登録されている場合はスキップします。</div>
+          </div>
           <button class="btn btn-primary w-100" :disabled="!canAddTaskConfig">追加 / 更新</button>
         </form>
       </div>
