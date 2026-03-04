@@ -11,6 +11,8 @@ __pycache__/
 media/
 db.sqlite3
 db_prod.sqlite3
+db.sqlite3.*.bak
+db_prod.sqlite3.*.bak
 
 # その他 IDE
 .vscode/
