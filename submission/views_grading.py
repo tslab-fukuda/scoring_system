@@ -14,6 +14,10 @@ import io
 import json
 import base64
 import fitz  # PyMuPDF
+import re
+import unicodedata
+from functools import lru_cache
+from difflib import SequenceMatcher
 from decimal import Decimal
 from PIL import Image
 
@@ -330,4 +334,433 @@ def compare_user_submission(request):
         'pdf_url': candidate.file.url,
         'submitted_at': submitted_at,
         'full_name': name,
+    })
+
+
+def _normalize_pdf_text(text):
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = re.sub(r"\s+", "", normalized)
+    return normalized
+
+
+def _is_page_number_footer_line(text):
+    raw = unicodedata.normalize("NFKC", (text or "")).strip()
+    if not raw:
+        return False
+    compact = re.sub(r"\s+", "", raw)
+    patterns = [
+        r"^\d+$",                       # 1
+        r"^\d+/\d+$",                   # 1/10
+        r"^-\d+-$",                     # - 1 -
+        r"^page\d+$",                   # Page 1
+        r"^p\.\d+$",                    # p.1
+        r"^\d+ページ$",                  # 1ページ
+        r"^第?\d+頁$",                  # 第1頁
+    ]
+    lower_compact = compact.lower()
+    return any(re.match(p, lower_compact) for p in patterns)
+
+
+def _extract_page_lines_without_footer(page):
+    # レイアウト情報を使い、ページ下端のページ番号行を除去する。
+    try:
+        page_dict = page.get_text("dict")
+    except Exception:
+        text = page.get_text("text") or ""
+        return [line for line in text.splitlines() if line.strip()]
+
+    footer_start_y = page.rect.height * 0.92
+    line_items = []
+    for block in page_dict.get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            spans = line.get("spans", [])
+            if not spans:
+                continue
+            text = "".join((span.get("text") or "") for span in spans).strip()
+            if not text:
+                continue
+            bbox = line.get("bbox") or [0, 0, 0, 0]
+            y_mid = (float(bbox[1]) + float(bbox[3])) / 2 if len(bbox) >= 4 else 0.0
+            if y_mid >= footer_start_y and _is_page_number_footer_line(text):
+                continue
+            x0 = float(bbox[0]) if len(bbox) >= 1 else 0.0
+            y0 = float(bbox[1]) if len(bbox) >= 2 else 0.0
+            line_items.append((y0, x0, text))
+
+    line_items.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in line_items]
+
+
+@lru_cache(maxsize=256)
+def _extract_pdf_lines_cached(file_path, mtime):
+    try:
+        with fitz.open(file_path) as doc:
+            lines = []
+            for page in doc:
+                lines.extend(_extract_page_lines_without_footer(page))
+        return tuple(lines)
+    except Exception:
+        return tuple()
+
+
+@lru_cache(maxsize=256)
+def _extract_pdf_text_cached(file_path, mtime):
+    try:
+        lines = _extract_pdf_lines_cached(file_path, mtime)
+        return _normalize_pdf_text("\n".join(lines))
+    except Exception:
+        return ""
+
+
+def _extract_pdf_text(file_path):
+    try:
+        mtime = os.path.getmtime(file_path)
+    except OSError:
+        return ""
+    return _extract_pdf_text_cached(file_path, mtime)
+
+
+def _extract_pdf_lines(file_path):
+    try:
+        mtime = os.path.getmtime(file_path)
+    except OSError:
+        return []
+    return list(_extract_pdf_lines_cached(file_path, mtime))
+
+
+SECTION_TITLES = [
+    '目的', '原理', '実験方法', '予習課題', '使用器具',
+    '実験結果', '考察', '課題', '参考文献',
+]
+DEFAULT_INFO_MIN_LEN = 20
+SECTION_INFO_MIN_LEN = {
+    '考察': 10,
+    '予習課題': 10,
+}
+SECTION_TITLE_ORDER = {title: i for i, title in enumerate(SECTION_TITLES)}
+SECTION_HEADING_RE = re.compile(
+    r'^(?P<prefix>I{1,2})\s*[-‐‑‒–—―ー－]\s*(?P<major>\d+)\s*[\.．]\s*(?P<minor>\d+)\s*(?P<title>'
+    + "|".join(re.escape(t) for t in SECTION_TITLES) +
+    r')\s*$',
+    flags=re.IGNORECASE
+)
+
+
+def _match_section_heading(line):
+    normalized = unicodedata.normalize("NFKC", (line or "")).strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    match = SECTION_HEADING_RE.match(normalized)
+    if not match:
+        return None
+    title = match.group('title')
+    heading = f"{match.group('prefix').upper()}-{match.group('major')}.{match.group('minor')} {title}"
+    return {'title': title, 'heading': heading}
+
+
+def _build_sections_from_lines(lines):
+    sections = []
+    current = None
+    section_counts = {}
+
+    def _start_section(title, heading):
+        count = section_counts.get(title, 0) + 1
+        section_counts[title] = count
+        return {
+            'title': title,
+            'heading': heading,
+            'section_key': f'{title}#{count}',
+            'lines': [],
+        }
+
+    def _flush():
+        nonlocal current
+        if not current:
+            return
+        raw_text = "\n".join(current['lines']).strip()
+        norm_text = _normalize_pdf_text(raw_text)
+        if norm_text:
+            sections.append({
+                'title': current['title'],
+                'heading': current['heading'],
+                'section_key': current['section_key'],
+                'text_raw': raw_text,
+                'text_norm': norm_text,
+            })
+        current = None
+
+    for line in lines:
+        if not (line or "").strip():
+            continue
+        heading = _match_section_heading(line)
+        if heading:
+            _flush()
+            current = _start_section(heading['title'], heading['heading'])
+            continue
+        if current is None:
+            current = _start_section('未分類', '')
+        current['lines'].append(line)
+
+    _flush()
+    return sections
+
+
+def _group_sections_by_title(sections):
+    grouped = {}
+    for section in sections:
+        grouped.setdefault(section['title'], []).append(section)
+    return grouped
+
+
+def _section_sort_key(title):
+    return SECTION_TITLE_ORDER.get(title, 999), title
+
+
+def _risk_level_from_summary(high_count, medium_count, has_info):
+    if high_count > 0:
+        return 'high'
+    if medium_count > 0:
+        return 'medium'
+    if has_info:
+        return 'low'
+    return 'none'
+
+
+def _compare_section_texts(target_text, candidate_text, min_match_len):
+    if not target_text or not candidate_text:
+        return 0.0, []
+    matcher = SequenceMatcher(None, target_text, candidate_text, autojunk=False)
+    blocks = matcher.get_matching_blocks()
+    total_match = 0
+    matches = []
+    seen = set()
+    for block in blocks:
+        size = int(block.size or 0)
+        if size <= 0:
+            continue
+        total_match += size
+        if size < min_match_len:
+            continue
+        snippet = target_text[block.a:block.a + size]
+        preview = snippet[:120] + ('...' if len(snippet) > 120 else '')
+        key = (size, preview)
+        if key in seen:
+            continue
+        seen.add(key)
+        matches.append({'length': size, 'snippet': preview})
+    similarity = round((2 * total_match / (len(target_text) + len(candidate_text))) * 100, 1)
+    matches.sort(key=lambda item: item['length'], reverse=True)
+    return similarity, matches
+
+
+def _compare_sections(target_sections, candidate_sections, min_match_len=20, alert_match_len=30):
+    target_map = _group_sections_by_title(target_sections)
+    candidate_map = _group_sections_by_title(candidate_sections)
+    common_titles = sorted(set(target_map.keys()) & set(candidate_map.keys()), key=_section_sort_key)
+
+    section_details = []
+    max_similarity = 0.0
+    total_alert_matches = 0
+    total_info_matches = 0
+
+    for title in common_titles:
+        title_min_match_len = SECTION_INFO_MIN_LEN.get(title, min_match_len)
+        pair_max_similarity = 0.0
+        merged_matches = []
+        for target_section in target_map.get(title, []):
+            for candidate_section in candidate_map.get(title, []):
+                similarity, pair_matches = _compare_section_texts(
+                    target_section['text_norm'],
+                    candidate_section['text_norm'],
+                    min_match_len=title_min_match_len,
+                )
+                pair_max_similarity = max(pair_max_similarity, similarity)
+                for item in pair_matches:
+                    merged_matches.append({
+                        'length': item['length'],
+                        'snippet': item['snippet'],
+                        'target_section': target_section['section_key'],
+                        'candidate_section': candidate_section['section_key'],
+                    })
+
+        if not merged_matches and pair_max_similarity <= 0:
+            continue
+
+        merged_matches.sort(key=lambda item: item['length'], reverse=True)
+        deduped = []
+        seen_keys = set()
+        for item in merged_matches:
+            key = (item['length'], item['snippet'])
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            deduped.append(item)
+
+        all_matches = deduped[:200]
+        top_matches = all_matches[:5]
+        info_count = len(all_matches)
+        alert_count = sum(1 for item in all_matches if item['length'] >= alert_match_len)
+
+        total_info_matches += info_count
+        total_alert_matches += alert_count
+        max_similarity = max(max_similarity, pair_max_similarity)
+
+        if alert_count > 0 and pair_max_similarity >= 30.0:
+            level = 'high'
+        elif info_count > 0 and pair_max_similarity >= 15.0:
+            level = 'medium'
+        elif info_count > 0:
+            level = 'low'
+        else:
+            level = 'none'
+
+        section_details.append({
+            'title': title,
+            'level': level,
+            'max_similarity': pair_max_similarity,
+            'info_match_count': info_count,
+            'alert_match_count': alert_count,
+            'info_min_len': title_min_match_len,
+            'top_matches': top_matches,
+            'all_matches': all_matches,
+        })
+
+    section_details.sort(key=lambda item: _section_sort_key(item['title']))
+    high_count = sum(1 for item in section_details if item['level'] == 'high')
+    medium_count = sum(1 for item in section_details if item['level'] == 'medium')
+    has_info = any(item['info_match_count'] > 0 for item in section_details)
+    risk_level = _risk_level_from_summary(high_count, medium_count, has_info)
+    risk_score = (
+        high_count * 100000
+        + medium_count * 10000
+        + int(max_similarity * 100)
+        + total_alert_matches
+    )
+    badges = [{'title': item['title'], 'level': item['level']} for item in section_details if item['level'] in ('high', 'medium')]
+
+    return {
+        'section_details': section_details,
+        'section_badges': badges,
+        'max_similarity': round(max_similarity, 1),
+        'risk_level': risk_level,
+        'risk_score': risk_score,
+        'total_alert_matches': total_alert_matches,
+        'total_info_matches': total_info_matches,
+    }
+
+
+def _char_ngrams(text, n=8):
+    if not text:
+        return set()
+    if len(text) <= n:
+        return {text}
+    return {text[i:i + n] for i in range(len(text) - n + 1)}
+
+
+def _jaccard_similarity_percent(text_a, text_b, n=8):
+    grams_a = _char_ngrams(text_a, n=n)
+    grams_b = _char_ngrams(text_b, n=n)
+    if not grams_a or not grams_b:
+        return 0.0
+    union = grams_a | grams_b
+    if not union:
+        return 0.0
+    inter = grams_a & grams_b
+    return round((len(inter) / len(union)) * 100, 1)
+
+
+@login_required
+@role_required('teacher', 'admin', 'course-teacher', 'non-editing teacher')
+def submission_similarity_api(request):
+    submission_id = request.GET.get('submission_id')
+    if not submission_id:
+        return JsonResponse({'status': 'error', 'message': 'submission_id is required'}, status=400)
+
+    submission = get_object_or_404(Submission, pk=submission_id)
+    if not submission.file:
+        return JsonResponse({'status': 'error', 'message': '対象PDFがありません'}, status=404)
+
+    target_text = _extract_pdf_text(submission.file.path)
+    if not target_text:
+        return JsonResponse({
+            'status': 'success',
+            'message': '対象PDFからテキストを抽出できませんでした。',
+            'results': [],
+            'checked_count': 0,
+        })
+    target_lines = _extract_pdf_lines(submission.file.path)
+    target_sections = _build_sections_from_lines(target_lines)
+
+    candidate_qs = Submission.objects.filter(
+        experiment_number=submission.experiment_number,
+        report_type=submission.report_type,
+        course_offering=submission.course_offering,
+    ).exclude(student=submission.student).exclude(file='').select_related(
+        'student__userprofile'
+    ).order_by('student_id', '-submitted_at')
+
+    latest_by_student = []
+    seen_student_ids = set()
+    for cand in candidate_qs:
+        if cand.student_id in seen_student_ids:
+            continue
+        seen_student_ids.add(cand.student_id)
+        latest_by_student.append(cand)
+
+    results = []
+    for cand in latest_by_student:
+        if not cand.file:
+            continue
+        cand_text = _extract_pdf_text(cand.file.path)
+        overall_similarity = _jaccard_similarity_percent(target_text, cand_text, n=8)
+        candidate_lines = _extract_pdf_lines(cand.file.path)
+        candidate_sections = _build_sections_from_lines(candidate_lines)
+        section_result = _compare_sections(
+            target_sections,
+            candidate_sections,
+            min_match_len=20,
+            alert_match_len=30,
+        )
+        up = getattr(cand.student, 'userprofile', None)
+        results.append({
+            'submission_id': cand.id,
+            'user_id': cand.student_id,
+            'student_name': up.full_name if up else cand.student.username,
+            'student_id': up.student_id if up else '',
+            'submitted_at': timezone.localtime(cand.submitted_at).strftime('%Y-%m-%d %H:%M') if cand.submitted_at else '',
+            'pdf_url': cand.file.url if cand.file else '',
+            'overall_similarity': overall_similarity,
+            'max_similarity': section_result['max_similarity'],
+            'risk_level': section_result['risk_level'],
+            'risk_score': section_result['risk_score'],
+            'section_badges': section_result['section_badges'],
+            'section_details': section_result['section_details'],
+            'total_alert_matches': section_result['total_alert_matches'],
+            'total_info_matches': section_result['total_info_matches'],
+        })
+
+    results.sort(
+        key=lambda x: (
+            x['risk_score'],
+            x['max_similarity'],
+            x['overall_similarity'],
+        ),
+        reverse=True
+    )
+
+    return JsonResponse({
+        'status': 'success',
+        'message': '同一科目/年度・同一実験番号・同一レポート種別で、見出し単位の一致箇所を抽出しました。',
+        'rules': {
+            'info_min_len_default': DEFAULT_INFO_MIN_LEN,
+            'info_min_len_overrides': SECTION_INFO_MIN_LEN,
+            'alert_min_len': 30,
+            'high_similarity_threshold': 30,
+            'medium_similarity_threshold': 15,
+        },
+        'results': results,
+        'checked_count': len(results),
     })

@@ -85,6 +85,7 @@ urlpatterns = [
     path('graded_pdf/<int:submission_id>/', views_grading.graded_pdf, name='graded_pdf'),
     path('final_grading_form/<int:submission_id>/', views_grading.final_grading_form, name='final_grading_form'),
     path('compare_user_submission/', views_grading.compare_user_submission, name='compare_user_submission'),
+    path('submission_similarity_api/', views_grading.submission_similarity_api, name='submission_similarity_api'),
     path('scoring_items_api/', views_grading.scoring_items_api, name='scoring_items_api'),
     path('stamps_api/', views_grading.stamps_api, name='stamps_api'),
     path('mark_experiment_complete/', views_teacher.mark_experiment_complete, name='mark_experiment_complete'),

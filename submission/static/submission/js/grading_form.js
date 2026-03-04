@@ -23,6 +23,13 @@ new Vue({
         compareSubmittedAt: window.compareSubmittedAt || "",
         compareLoading: false,
         compareRendered: false,
+        similarityLoading: false,
+        similarityChecked: false,
+        similarityResults: [],
+        similarityMessage: "",
+        selectedSimilaritySubmissionId: null,
+        selectedSimilarityRow: null,
+        sectionExpandState: {},
         syncingScroll: false,
         pageMeta: {},
         activePointerId: null,
@@ -208,8 +215,18 @@ new Vue({
             return baseScale * (this.zoomPercent / 100);
         },
         getCompareScale() {
-            const baseScale = 1.2;
-            return baseScale * (this.zoomPercent / 100);
+            return this.getMainScale();
+        },
+        getScrollRatio(el) {
+            if (!el) return 0;
+            const maxScroll = Math.max(el.scrollHeight - el.clientHeight, 0);
+            if (maxScroll <= 0) return 0;
+            return el.scrollTop / maxScroll;
+        },
+        setScrollByRatio(el, ratio) {
+            if (!el) return;
+            const maxScroll = Math.max(el.scrollHeight - el.clientHeight, 0);
+            el.scrollTop = Math.max(0, Math.min(1, ratio)) * maxScroll;
         },
         clampZoom(value) {
             const stepped = Math.round(value / this.zoomStep) * this.zoomStep;
@@ -230,9 +247,9 @@ new Vue({
         applyZoom() {
             if (!this.pdfDoc) return;
             const scrollArea = this.$refs.pdfArea;
-            const scrollRatio = scrollArea
-                ? scrollArea.scrollTop / Math.max(scrollArea.scrollHeight, 1)
-                : 0;
+            const scrollRatio = this.getScrollRatio(scrollArea);
+            const compareArea = this.$refs.comparePdfArea;
+            const compareScrollRatio = this.getScrollRatio(compareArea);
             const pages = this.pdfPages.length;
             for (let i = 0; i < pages; i++) {
                 if (this.loadedPages[i]) {
@@ -245,7 +262,8 @@ new Vue({
             }
             if (scrollArea) {
                 this.$nextTick(() => {
-                    scrollArea.scrollTop = scrollRatio * Math.max(scrollArea.scrollHeight, 1);
+                    this.setScrollByRatio(scrollArea, scrollRatio);
+                    this.setScrollByRatio(this.$refs.comparePdfArea, compareScrollRatio);
                 });
             }
         },
@@ -265,12 +283,82 @@ new Vue({
             if (!this.showCompare) return;
             this.syncScroll = !this.syncScroll;
         },
+        riskLabel(level) {
+            if (level === 'high') return '高';
+            if (level === 'medium') return '中';
+            if (level === 'low') return '低';
+            return '-';
+        },
+        riskClass(level) {
+            if (level === 'high') return 'text-bg-danger';
+            if (level === 'medium') return 'text-bg-warning';
+            if (level === 'low') return 'text-bg-secondary';
+            return 'text-bg-light';
+        },
+        sectionBadgeClass(level) {
+            if (level === 'high') return 'text-bg-danger';
+            if (level === 'medium') return 'text-bg-warning';
+            return 'text-bg-secondary';
+        },
+        sectionExpandKey(row, title) {
+            return `${row.submission_id}:${title}`;
+        },
+        isSectionExpanded(row, title) {
+            const key = this.sectionExpandKey(row, title);
+            return !!this.sectionExpandState[key];
+        },
+        toggleSectionExpand(row, title) {
+            const key = this.sectionExpandKey(row, title);
+            this.$set(this.sectionExpandState, key, !this.sectionExpandState[key]);
+        },
+        visibleSectionMatches(row, detail) {
+            if (!detail) return [];
+            if (this.isSectionExpanded(row, detail.title)) {
+                return detail.all_matches || [];
+            }
+            return detail.top_matches || [];
+        },
+        openSimilarityCompare(row) {
+            this.selectedSimilaritySubmissionId = row.submission_id;
+            this.selectedSimilarityRow = row;
+            this.sectionExpandState = {};
+            if (!row.pdf_url) return;
+            this.comparePdfUrl = row.pdf_url;
+            this.compareSubmittedAt = row.submitted_at || '';
+            this.showCompare = true;
+            this.compareRendered = false;
+            this.$nextTick(() => this.renderComparePdf());
+        },
+        runSimilarityCheck() {
+            this.similarityLoading = true;
+            fetch(`/submission/submission_similarity_api/?submission_id=${encodeURIComponent(window.submissionId)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        alert(data.message || 'コピペチェックに失敗しました');
+                        return;
+                    }
+                    this.similarityChecked = true;
+                    this.similarityResults = data.results || [];
+                    this.similarityMessage = `${data.message || ''}（比較件数: ${data.checked_count || 0}）`;
+                    this.selectedSimilaritySubmissionId = null;
+                    this.selectedSimilarityRow = null;
+                    this.sectionExpandState = {};
+                })
+                .catch(() => {
+                    alert('コピペチェックに失敗しました');
+                })
+                .finally(() => {
+                    this.similarityLoading = false;
+                });
+        },
         onMainScroll(e) {
             if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
             const target = this.$refs.comparePdfArea;
             if (!target) return;
             this.syncingScroll = true;
-            target.scrollTop = e.target.scrollTop;
+            const ratio = this.getScrollRatio(e.target);
+            this.setScrollByRatio(target, ratio);
             setTimeout(() => { this.syncingScroll = false; }, 0);
         },
         onCompareScroll(e) {
@@ -278,11 +366,13 @@ new Vue({
             const target = this.$refs.pdfArea;
             if (!target) return;
             this.syncingScroll = true;
-            target.scrollTop = e.target.scrollTop;
+            const ratio = this.getScrollRatio(e.target);
+            this.setScrollByRatio(target, ratio);
             setTimeout(() => { this.syncingScroll = false; }, 0);
         },
         renderComparePdf() {
             if (!this.comparePdfUrl || this.compareRendered) return;
+            const prevRatio = this.getScrollRatio(this.$refs.comparePdfArea);
             const container = this.$refs.comparePdfPages;
             if (!container) return;
             container.innerHTML = '';
@@ -320,6 +410,9 @@ new Vue({
                 container.innerHTML = '<div class="text-danger small p-2">比較PDFを表示できませんでした。</div>';
             }).finally(() => {
                 this.compareLoading = false;
+                this.$nextTick(() => {
+                    this.setScrollByRatio(this.$refs.comparePdfArea, prevRatio);
+                });
             });
         },
         inc(item) { item.value++; },

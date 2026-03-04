@@ -11,7 +11,7 @@
 {% block content %}
 <div id="grading-form" class="container-fluid" v-cloak>
     <div class="row" style="position:relative;">
-        <div class="grading-pdf-wrap" :class="{ 'compare-active': showCompare }">
+        <div class="grading-pdf-wrap w-100" :class="{ 'compare-active': showCompare, 'single-mode': !showCompare }">
             <div class="pdf-col pdf-header main-header">
                 <div class="mb-2">
                     <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
@@ -25,6 +25,9 @@
                     </button>
                     <button class="btn btn-outline-secondary" @click="toggleSyncScroll" :disabled="!showCompare">
                         同期スクロール: {{ syncScroll ? 'ON' : 'OFF' }}
+                    </button>
+                    <button class="btn btn-outline-warning" @click="runSimilarityCheck" :disabled="similarityLoading">
+                        {{ similarityLoading ? 'コピペチェック中...' : 'コピペチェック' }}
                     </button>
                     <span v-if="comparePdfUrl" class="text-muted small">比較対象提出日: {{ compareSubmittedAt }}</span>
                     <span v-else class="text-muted small">比較対象なし</span>
@@ -59,6 +62,77 @@
                     </div>
                 </div>
             </div>
+            {% verbatim %}
+            <div v-if="similarityChecked" class="similarity-panel-inline border rounded p-2 mb-2">
+                <div class="small text-muted mb-2">{{ similarityMessage }}</div>
+                <table v-if="similarityResults.length" class="table table-sm mb-2">
+                    <thead>
+                        <tr>
+                            <th>学生名</th>
+                            <th>学生番号</th>
+                            <th>危険度</th>
+                            <th>該当見出し</th>
+                            <th>最大一致率</th>
+                            <th>提出日</th>
+                            <th>比較</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="row in similarityResults"
+                            :key="'sim-' + row.submission_id"
+                            :class="{ 'table-active': selectedSimilaritySubmissionId === row.submission_id }"
+                        >
+                            <td>{{ row.student_name }}</td>
+                            <td>{{ row.student_id || '-' }}</td>
+                            <td>
+                                <span class="badge" :class="riskClass(row.risk_level)">{{ riskLabel(row.risk_level) }}</span>
+                            </td>
+                            <td>
+                                <span v-if="!row.section_badges || !row.section_badges.length" class="text-muted small">-</span>
+                                <span
+                                    v-for="badge in (row.section_badges || [])"
+                                    :key="'badge-' + row.submission_id + '-' + badge.title"
+                                    class="badge me-1"
+                                    :class="sectionBadgeClass(badge.level)"
+                                >
+                                    {{ badge.title }}
+                                </span>
+                            </td>
+                            <td>{{ row.max_similarity != null ? row.max_similarity + '%' : '-' }}</td>
+                            <td>{{ row.submitted_at || '-' }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @click="openSimilarityCompare(row)">比較表示</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="selectedSimilarityRow" class="border rounded p-2">
+                    <div class="fw-semibold mb-2">{{ selectedSimilarityRow.student_name }} の一致詳細</div>
+                    <div v-for="detail in (selectedSimilarityRow.section_details || [])" :key="'detail-' + selectedSimilarityRow.submission_id + '-' + detail.title" class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div>
+                                <span class="badge me-2" :class="sectionBadgeClass(detail.level)">{{ detail.title }}</span>
+                                <span class="small text-muted">最大一致率 {{ detail.max_similarity }}% / 一致 {{ detail.info_match_count }}件</span>
+                            </div>
+                            <button
+                                v-if="detail.all_matches && detail.all_matches.length > (detail.top_matches || []).length"
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @click="toggleSectionExpand(selectedSimilarityRow, detail.title)"
+                            >
+                                {{ isSectionExpanded(selectedSimilarityRow, detail.title) ? '上位のみ表示' : '全件表示' }}
+                            </button>
+                        </div>
+                        <div v-if="!(detail.top_matches || []).length" class="small text-muted">一致箇所なし</div>
+                        <div v-for="(m, idx) in visibleSectionMatches(selectedSimilarityRow, detail)" :key="'match-' + selectedSimilarityRow.submission_id + '-' + detail.title + '-' + idx" class="small">
+                            ・{{ m.length }}文字一致: {{ m.snippet }}
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="small text-muted">比較対象データがありません。</div>
+            </div>
+            {% endverbatim %}
             <div class="pdf-col pdf-body main-body">
                 <div id="pdf-area" ref="pdfArea" @scroll="onMainScroll"
                     @touchstart="onPdfTouchStart($event)" @touchmove="onPdfTouchMove($event)"
