@@ -24,13 +24,96 @@
   padding: 1.5rem;
   box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
+.panel-table-wrap {
+  max-height: 58vh;
+  overflow: auto;
+}
+.context-card {
+  border: 1px solid #dfe4ea;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.9rem;
+}
+.helper-badge {
+  font-size: 0.8rem;
+}
+
+body.dark-mode #course-management .context-card {
+  background: #1e1e1e;
+  border-color: #3a3a3a;
+}
+
+body.dark-mode #course-management .context-card .text-muted {
+  color: #b0b0b0 !important;
+}
+
+body.dark-mode #course-management .form-control.bg-light {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0;
+  border-color: #444;
+}
+
+body.dark-mode #course-management .helper-badge.text-bg-light {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+  border: 1px solid #444;
+}
+
+body.dark-mode #course-management .form-control::placeholder,
+body.dark-mode #course-management textarea::placeholder {
+  color: #9ea4ad !important;
+  opacity: 1;
+}
+
+body.dark-mode #course-management .form-control:-ms-input-placeholder,
+body.dark-mode #course-management textarea:-ms-input-placeholder {
+  color: #9ea4ad !important;
+}
+
+body.dark-mode #course-management .form-control::-ms-input-placeholder,
+body.dark-mode #course-management textarea::-ms-input-placeholder {
+  color: #9ea4ad !important;
+}
+
+body.dark-mode #course-management .form-select option[disabled],
+body.dark-mode #course-management .form-select option[value=""] {
+  color: #b8bec7;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="course-management-app">
 <div id="course-management" class="container mt-4 pb-5">
-  <h2 class="mb-4">科目/年度管理</h2>
+  <h2 class="mb-3">科目/年度管理</h2>
+
+  {% verbatim %}
+  <div class="context-card mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label mb-1">表示対象の科目</label>
+        <select class="form-select" v-model="contextCourseId">
+          <option value="">選択</option>
+          <option v-for="c in sortedCourses" :key="'ctx-course-' + c.id" :value="String(c.id)">
+            {{ c.code }} - {{ c.name }}
+          </option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label mb-1">表示対象の年度</label>
+        <select class="form-select" v-model="contextOfferingId" :disabled="!offeringsForContextCourse.length">
+          <option value="">選択</option>
+          <option v-for="o in offeringsForContextCourse" :key="'ctx-offering-' + o.id" :value="String(o.id)">
+            {{ o.year }}
+          </option>
+        </select>
+      </div>
+      <div class="col-md-4 text-muted small">
+        右パネルは選択中の科目/年度のみ表示します。
+      </div>
+    </div>
+  </div>
+  {% endverbatim %}
 
   <div class="row">
     <div class="col-md-3 mb-3">
@@ -74,7 +157,6 @@
                 <label class="form-check-label" :for="'course-day-' + day">{{ day }}</label>
               </div>
             </div>
-            <small class="text-muted">複数選択可（最大週2回など）</small>
           </div>
           <div class="mb-2">
             <label class="form-label">実験番号（1行に1つずつ）</label>
@@ -86,89 +168,95 @@
 
       <div v-else-if="selectedSection === 'offering'">
         <h5>CourseOffering (年度)</h5>
+        <div v-if="!contextCourseId" class="alert alert-info small">先に上部で科目を選択してください。</div>
         <form @submit.prevent="addOffering" class="mb-3">
           <div class="mb-2">
             <label class="form-label">科目</label>
-            <select v-model="offeringForm.course_id" class="form-select" required>
-              <option value="">選択</option>
-              <option v-for="c in courses" :value="c.id">{{ c.code }} - {{ c.name }}</option>
-            </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">年度</label>
-          <input type="number" v-model.number="offeringForm.year" class="form-control" required placeholder="例: 2025" min="2000">
-        </div>
-          <button class="btn btn-primary w-100">追加</button>
+            <input type="text" class="form-control" :value="contextCourseLabel" readonly>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">登録済み年度</label>
+            <div class="form-control bg-light">{{ registeredYearLabel }}</div>
+          </div>
+          <div class="mb-2" v-if="isOfferingInitialRegistration">
+            <label class="form-label">年度（初期登録）</label>
+            <input type="number" v-model.number="offeringForm.year" class="form-control" placeholder="例: 2025" min="2000" :disabled="!canAddOffering">
+            <small class="text-muted">初回のみ入力します。</small>
+          </div>
+          <div class="mb-2" v-else>
+            <label class="form-label">追加される年度</label>
+            <input type="number" class="form-control" :value="suggestedNextYear" readonly>
+            <small class="text-muted">次年度を自動提案しています。</small>
+          </div>
+          <button class="btn btn-primary w-100" :disabled="!canAddOffering">
+            {{ isOfferingInitialRegistration ? '初期年度を追加' : '次年度を追加' }}
+          </button>
         </form>
       </div>
 
       <div v-else-if="selectedSection === 'enrollment'">
         <h5>Enrollment（受講/担当紐付け）</h5>
+        <div v-if="!contextOfferingId" class="alert alert-info small">上部で年度を選択してください。</div>
         <form @submit.prevent="addEnrollment" class="mb-3">
           <div class="mb-2">
-            <label class="form-label">ユーザ</label>
-            <select v-model="enrollmentForm.user_id" class="form-select" required>
-              <option value="">選択</option>
-              <option v-for="u in users" :value="u.id">{{ u.full_name }} ({{ u.student_id || u.email }})</option>
-            </select>
+            <label class="form-label">科目/年度</label>
+            <input type="text" class="form-control" :value="contextOfferingLabel" readonly>
           </div>
           <div class="mb-2">
-            <label class="form-label">科目/年度</label>
-            <select v-model="enrollmentForm.offering_id" class="form-select" required>
+            <label class="form-label">ユーザ検索</label>
+            <input type="text" v-model="userSearchKeyword" class="form-control" placeholder="氏名・学籍番号・メール">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">ユーザ</label>
+            <select v-model="enrollmentForm.user_id" class="form-select" :disabled="!contextOfferingId" required>
               <option value="">選択</option>
-              <option v-for="o in offerings" :value="o.id">{{ o.course_code }} ({{ o.year }})</option>
+              <option v-for="u in availableUsersForEnrollment" :key="'enr-user-' + u.id" :value="u.id">{{ u.full_name }} ({{ u.student_id || u.email }})</option>
             </select>
           </div>
           <div class="mb-2">
             <label class="form-label">ロール</label>
-            <select v-model="enrollmentForm.role" class="form-select" required>
-              <option value="student">student</option>
-              <option value="teacher">teacher</option>
-              <option value="course-teacher">course-teacher</option>
-              <option value="non-editing teacher">non-editing teacher</option>
-              <option value="admin">admin</option>
+            <select v-model="enrollmentForm.role" class="form-select" :disabled="!contextOfferingId" required>
+              <option v-for="role in enrollmentRoleOptions" :key="'role-' + role" :value="role">{{ role }}</option>
             </select>
           </div>
           <div class="mb-2">
             <label class="form-label">曜日</label>
-            <select v-model="enrollmentForm.experiment_day" class="form-select">
+            <select v-model="enrollmentForm.experiment_day" class="form-select" :disabled="!contextOfferingId">
               <option value="">-</option>
-              <option v-for="d in enrollmentDayOptions" :key="d" :value="d">{{ d }}</option>
+              <option v-for="d in enrollmentDayOptions" :key="'enr-day-' + d" :value="d">{{ d }}</option>
             </select>
           </div>
           <div class="mb-2">
             <label class="form-label">班</label>
-            <select v-model="enrollmentForm.experiment_group" class="form-select">
+            <select v-model="enrollmentForm.experiment_group" class="form-select" :disabled="!contextOfferingId">
               <option value="">-</option>
-              <option v-for="n in 20" :value="('0'+n).slice(-2)">{{ ('0'+n).slice(-2) }}</option>
+              <option v-for="n in 20" :key="'enr-group-' + n" :value="('0'+n).slice(-2)">{{ ('0'+n).slice(-2) }}</option>
             </select>
           </div>
-          <button class="btn btn-primary w-100">追加</button>
+          <button class="btn btn-primary w-100" :disabled="!canAddEnrollment">追加</button>
         </form>
       </div>
 
       <div v-else>
         <h5>実験進捗タスク設定</h5>
+        <div v-if="!contextOfferingId" class="alert alert-info small">上部で年度を選択してください。</div>
         <form @submit.prevent="addTaskConfig" class="mb-3">
           <div class="mb-2">
             <label class="form-label">科目/年度</label>
-            <select v-model="taskConfigForm.offering_id" class="form-select" required>
-              <option value="">選択</option>
-              <option v-for="o in offerings" :key="o.id" :value="o.id">{{ o.course_code }} ({{ o.year }})</option>
-            </select>
+            <input type="text" class="form-control" :value="contextOfferingLabel" readonly>
           </div>
           <div class="mb-2">
             <label class="form-label">実験番号</label>
-            <select v-model="taskConfigForm.experiment_number" class="form-select" required>
+            <select v-model="taskConfigForm.experiment_number" class="form-select" :disabled="!contextOfferingId" required>
               <option value="">選択</option>
-              <option v-for="ex in taskExperimentOptions" :key="ex" :value="ex">{{ ex }}</option>
+              <option v-for="ex in contextExperimentOptions" :key="'task-ex-' + ex" :value="ex">{{ ex }}</option>
             </select>
           </div>
           <div class="mb-2">
             <label class="form-label">task_list（1行に1つ）</label>
-            <textarea v-model="taskConfigForm.task_list_text" class="form-control" rows="4" placeholder="1&#10;2&#10;3"></textarea>
+            <textarea v-model="taskConfigForm.task_list_text" class="form-control" rows="4" placeholder="1&#10;2&#10;3" :disabled="!contextOfferingId"></textarea>
           </div>
-          <button class="btn btn-primary w-100">追加 / 更新</button>
+          <button class="btn btn-primary w-100" :disabled="!canAddTaskConfig">追加 / 更新</button>
         </form>
       </div>
       {% endverbatim %}
@@ -178,75 +266,113 @@
       {% verbatim %}
       <div v-if="selectedSection === 'course'">
         <h5>登録済み Course</h5>
-        <table class="table table-sm table-bordered">
-          <thead><tr><th>コード</th><th>科目名</th><th>曜日</th><th>実験番号</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="c in courses" :key="c.id">
-              <td>{{ c.code }}</td>
-              <td>{{ c.name }}</td>
-              <td>{{ (c.meeting_days || []).join('、') }}</td>
-              <td style="white-space: pre-line;">{{ (c.experiment_numbers || []).join('\n') }}</td>
-              <td class="d-flex gap-1">
-                <button class="btn btn-sm btn-outline-secondary" @click="openCourseEdit(c)">編集</button>
-                <button class="btn btn-sm btn-outline-danger" @click="deleteCourse(c.id)">削除</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="panel-table-wrap">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>コード</th><th>科目名</th><th>曜日</th><th>実験番号</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="c in sortedCourses" :key="'course-' + c.id">
+                <td>{{ c.code }}</td>
+                <td>{{ c.name }}</td>
+                <td>{{ (c.meeting_days || []).join('、') }}</td>
+                <td style="white-space: pre-line;">{{ (c.experiment_numbers || []).join('\n') }}</td>
+                <td class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-secondary" @click="openCourseEdit(c)">編集</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="deleteCourse(c.id)">削除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div v-else-if="selectedSection === 'offering'">
-        <h5>登録済み CourseOffering (年度)</h5>
-        <table class="table table-sm table-bordered">
-          <thead><tr><th>科目</th><th>年度</th><th>削除</th></tr></thead>
-          <tbody>
-            <tr v-for="o in offerings" :key="o.id">
-              <td>{{ o.course_code }}</td>
-              <td>{{ o.year }}</td>
-              <td><button class="btn btn-sm btn-outline-danger" @click="deleteOffering(o.id)">削除</button></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">登録済み CourseOffering (年度)</h5>
+          <span class="badge text-bg-light helper-badge">{{ filteredOfferings.length }} 件</span>
+        </div>
+        <div class="panel-table-wrap">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>科目</th><th>年度</th><th>削除</th></tr></thead>
+            <tbody>
+              <tr v-for="o in filteredOfferings" :key="'offering-' + o.id">
+                <td>{{ o.course_code }}</td>
+                <td>{{ o.year }}</td>
+                <td><button class="btn btn-sm btn-outline-danger" @click="deleteOffering(o.id)">削除</button></td>
+              </tr>
+              <tr v-if="!filteredOfferings.length">
+                <td colspan="3" class="text-center text-muted">表示対象の年度がありません</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div v-else-if="selectedSection === 'enrollment'">
-        <h5>登録済み Enrollment</h5>
-        <table class="table table-sm table-bordered">
-          <thead><tr><th>ユーザ</th><th>科目/年度</th><th>ロール</th><th>曜/班</th><th>削除</th></tr></thead>
-          <tbody>
-            <tr v-for="e in enrollments" :key="e.id">
-              <td>{{ e.full_name }}<div class="text-muted small">{{ e.student_id }}</div></td>
-              <td>{{ e.course_code }} ({{ e.year }})</td>
-              <td>{{ e.role }}</td>
-              <td>{{ e.experiment_day || '-' }}/{{ e.experiment_group || '-' }}</td>
-              <td><button class="btn btn-sm btn-outline-danger" @click="deleteEnrollment(e.id)">削除</button></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">登録済み Enrollment</h5>
+          <span class="badge text-bg-light helper-badge">{{ filteredEnrollments.length }} 件</span>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <input type="text" class="form-control form-control-sm" v-model="enrollmentListSearch" placeholder="氏名・学籍番号・メールで絞り込み">
+          </div>
+          <div class="col-5">
+            <select class="form-select form-select-sm" v-model="enrollmentRoleFilter">
+              <option value="">全ロール</option>
+              <option v-for="role in enrollmentRoleOptions" :key="'list-role-' + role" :value="role">{{ role }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-table-wrap">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>ユーザ</th><th>ロール</th><th>曜/班</th><th>削除</th></tr></thead>
+            <tbody>
+              <tr v-for="e in filteredEnrollments" :key="'enr-' + e.id">
+                <td>{{ e.full_name }}<div class="text-muted small">{{ e.student_id || e.email }}</div></td>
+                <td>{{ e.role }}</td>
+                <td>{{ e.experiment_day || '-' }}/{{ e.experiment_group || '-' }}</td>
+                <td><button class="btn btn-sm btn-outline-danger" @click="deleteEnrollment(e.id)">削除</button></td>
+              </tr>
+              <tr v-if="!filteredEnrollments.length">
+                <td colspan="4" class="text-center text-muted">登録がありません</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div v-else>
-        <h5>登録済み 実験進捗タスク設定</h5>
-        <table class="table table-sm table-bordered">
-          <thead><tr><th>科目/年度</th><th>実験番号</th><th>task_list</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr v-for="cfg in taskConfigs" :key="cfg.id">
-              <td>{{ cfg.course_code }} ({{ cfg.year }})</td>
-              <td>{{ cfg.experiment_number }}</td>
-              <td style="white-space: pre-line;">{{ (cfg.task_list || []).join('\n') }}</td>
-              <td class="d-flex gap-1">
-                <button class="btn btn-sm btn-outline-secondary" @click="openTaskConfigEdit(cfg)">編集</button>
-                <button class="btn btn-sm btn-outline-danger" @click="deleteTaskConfig(cfg.id)">削除</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">登録済み 実験進捗タスク設定</h5>
+          <span class="badge text-bg-light helper-badge">{{ filteredTaskConfigs.length }} 件</span>
+        </div>
+        <div class="mb-2">
+          <input type="text" class="form-control form-control-sm" v-model="taskConfigSearch" placeholder="実験番号で絞り込み">
+        </div>
+        <div class="panel-table-wrap">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>実験番号</th><th>task_list</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="cfg in filteredTaskConfigs" :key="'task-cfg-' + cfg.id">
+                <td>{{ cfg.experiment_number }}</td>
+                <td style="white-space: pre-line;">{{ (cfg.task_list || []).join('\n') }}</td>
+                <td class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-secondary" @click="openTaskConfigEdit(cfg)">編集</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="deleteTaskConfig(cfg.id)">削除</button>
+                </td>
+              </tr>
+              <tr v-if="!filteredTaskConfigs.length">
+                <td colspan="3" class="text-center text-muted">設定がありません</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       {% endverbatim %}
     </div>
   </div>
+
 {% verbatim %}
-<!-- コース編集モーダル（#course-management 配下） -->
 <div v-if="showCourseEdit" class="modal-mask" id="course-edit-modal">
   <div class="modal-wrapper">
     <div class="modal-content">
@@ -267,15 +393,15 @@
           <div class="mb-2">
             <label class="form-label">授業曜日</label>
             <div class="d-flex flex-wrap gap-2">
-              <div v-for="day in weekDays" :key="day" class="form-check form-check-inline">
+              <div v-for="day in weekDays" :key="'edit-day-' + day" class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" :id="'edit-course-day-' + day" :value="day" v-model="editCourseForm.meeting_days">
                 <label class="form-check-label" :for="'edit-course-day-' + day">{{ day }}</label>
               </div>
             </div>
           </div>
           <div class="mb-2">
-            <label class="form-label">実験番号（カンマ区切り）</label>
-          <textarea v-model="editCourseForm.experiment_numbers_text" class="form-control" rows="3" placeholder="I-01,02&#10;I-03,04"></textarea>
+            <label class="form-label">実験番号（1行に1つ）</label>
+            <textarea v-model="editCourseForm.experiment_numbers_text" class="form-control" rows="3" placeholder="I-01,02&#10;I-03,04"></textarea>
           </div>
           <div class="text-end">
             <button type="button" class="btn btn-secondary me-2" @click="closeCourseEdit">キャンセル</button>
