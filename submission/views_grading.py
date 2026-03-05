@@ -481,11 +481,36 @@ def _serialize_sections_for_cache(sections):
         text_norm = _normalize_pdf_text(section.get('text_norm', ''))
         if not text_norm:
             continue
+        minor_spans = []
+        for span in section.get('minor_spans', []) or []:
+            if not isinstance(span, dict):
+                continue
+            start = int(span.get('start', 0) or 0)
+            end = int(span.get('end', 0) or 0)
+            if end <= start:
+                continue
+            minor_heading = str(span.get('minor_heading') or '').strip()
+            if not minor_heading:
+                minor_heading = '小見出しなし'
+            minor_spans.append({
+                'start': start,
+                'end': end,
+                'minor_heading': minor_heading,
+            })
+        compare_unit_key = str(section.get('compare_unit_key') or '').strip()
+        if not compare_unit_key:
+            compare_unit_key = section.get('title', '') or ''
+        compare_unit_label = str(section.get('compare_unit_label') or '').strip()
+        if not compare_unit_label:
+            compare_unit_label = section.get('title', '') or ''
         serialized.append({
             'title': section.get('title', ''),
             'heading': section.get('heading', ''),
             'section_key': section.get('section_key', ''),
+            'compare_unit_key': compare_unit_key,
+            'compare_unit_label': compare_unit_label,
             'text_norm': text_norm,
+            'minor_spans': minor_spans,
         })
     return serialized
 
@@ -500,11 +525,36 @@ def _load_sections_from_cache(data):
         text_norm = _normalize_pdf_text(item.get('text_norm', ''))
         if not text_norm:
             continue
+        minor_spans = []
+        for span in item.get('minor_spans', []) or []:
+            if not isinstance(span, dict):
+                continue
+            start = int(span.get('start', 0) or 0)
+            end = int(span.get('end', 0) or 0)
+            if end <= start:
+                continue
+            minor_heading = str(span.get('minor_heading') or '').strip()
+            if not minor_heading:
+                minor_heading = '小見出しなし'
+            minor_spans.append({
+                'start': start,
+                'end': end,
+                'minor_heading': minor_heading,
+            })
+        compare_unit_key = str(item.get('compare_unit_key') or '').strip()
+        if not compare_unit_key:
+            compare_unit_key = item.get('title', '') or ''
+        compare_unit_label = str(item.get('compare_unit_label') or '').strip()
+        if not compare_unit_label:
+            compare_unit_label = item.get('title', '') or ''
         sections.append({
             'title': item.get('title', ''),
             'heading': item.get('heading', ''),
             'section_key': item.get('section_key', ''),
+            'compare_unit_key': compare_unit_key,
+            'compare_unit_label': compare_unit_label,
             'text_norm': text_norm,
+            'minor_spans': minor_spans,
         })
     return sections
 
@@ -531,9 +581,9 @@ def _get_submission_text_index(submission):
     if is_fresh:
         return idx
 
-    lines = _extract_pdf_lines(file_path)
-    sections = _build_sections_from_lines(lines)
-    normalized_text = _normalize_pdf_text("\n".join(lines))
+    raw_lines = [line.strip() for line in _extract_pdf_lines(file_path) if (line or "").strip()]
+    sections = _build_sections_from_lines(raw_lines)
+    normalized_text = "".join(section.get('text_norm', '') for section in sections if section.get('text_norm'))
     signature = _build_minhash_signature(normalized_text)
     file_hash = _hash_file_sha256(file_path)
 
@@ -563,8 +613,8 @@ SECTION_TITLES = [
 ]
 DEFAULT_INFO_MIN_LEN = 20
 TOP_SIMILARITY_RESULTS = 10
-INDEX_VERSION = 'v1'
-SIMILARITY_ALGORITHM_VERSION = 'v2-section-rough'
+INDEX_VERSION = 'v3'
+SIMILARITY_ALGORITHM_VERSION = 'v6-section-rough-major-lock'
 SIMILARITY_CACHE_TTL_HOURS = 24
 ROUGH_TOP_CANDIDATES = 40
 MINHASH_N = 8
@@ -580,6 +630,52 @@ SECTION_HEADING_RE = re.compile(
     r')\s*$',
     flags=re.IGNORECASE
 )
+COMPARE_UNIT_KEY_RE = re.compile(r'^(?P<prefix>I{1,2})-(?P<major>\d+):(?P<title>.+)$')
+SECTION_PREFIX_ORDER = {'I': 0, 'II': 1}
+MINOR_SUBHEADING_RE = re.compile(
+    r'^(?P<num>('
+    r'\d+\s*[\.．]\s*\d+(?:\s*[\.．]\s*\d+)?'
+    r'|'
+    r'\d+\s*[-‐‑‒–—―ー－]\s*\d+(?:\s*[-‐‑‒–—―ー－]\s*\d+)?'
+    r'))\s*(?P<body>.+)$'
+)
+MINOR_SUBHEADING_MAX_LEN = 48
+MINOR_SUBHEADING_TRAILING_PUNCT = ('。', '．', '.', '!', '?', '！', '？', '、', ',', '，', ';', '；', ':', '：')
+DEFAULT_MINOR_HEADING_LABEL = '小見出しなし'
+
+
+def _parse_minor_subheading_line(line):
+    normalized = unicodedata.normalize("NFKC", (line or "")).strip()
+    if not normalized:
+        return None
+    normalized = re.sub(r"\s+", " ", normalized)
+    if len(normalized) > MINOR_SUBHEADING_MAX_LEN:
+        return None
+
+    match = MINOR_SUBHEADING_RE.match(normalized)
+    if not match:
+        return None
+
+    number_text = re.sub(r"\s+", "", (match.group('num') or ''))
+    body = (match.group('body') or '').strip()
+    if len(body) < 2:
+        return None
+    if body.endswith(MINOR_SUBHEADING_TRAILING_PUNCT):
+        return None
+    if not re.search(r'[A-Za-zぁ-んァ-ヶ一-龥]', body):
+        return None
+    if re.fullmatch(r'[\d\W_]+', body):
+        return None
+
+    compact = re.sub(r"\s+", "", body)
+    if not compact:
+        return None
+    digit_count = sum(ch.isdigit() for ch in compact)
+    if digit_count > 0 and (digit_count / len(compact)) >= 0.45:
+        return None
+    if re.search(r'[=<>±×/]', body) and digit_count > 0:
+        return None
+    return f"{number_text} {body}"
 
 
 def _match_section_heading(line):
@@ -588,9 +684,19 @@ def _match_section_heading(line):
     match = SECTION_HEADING_RE.match(normalized)
     if not match:
         return None
+    prefix = match.group('prefix').upper()
+    major = str(match.group('major'))
+    minor = str(match.group('minor'))
     title = match.group('title')
-    heading = f"{match.group('prefix').upper()}-{match.group('major')}.{match.group('minor')} {title}"
-    return {'title': title, 'heading': heading}
+    heading = f"{prefix}-{major}.{minor} {title}"
+    compare_unit_key = f"{prefix}-{major}:{title}"
+    compare_unit_label = f"{prefix}-{major} {title}"
+    return {
+        'title': title,
+        'heading': heading,
+        'compare_unit_key': compare_unit_key,
+        'compare_unit_label': compare_unit_label,
+    }
 
 
 def _build_sections_from_lines(lines):
@@ -598,57 +704,119 @@ def _build_sections_from_lines(lines):
     current = None
     section_counts = {}
 
-    def _start_section(title, heading):
+    def _start_section(title, heading, compare_unit_key="", compare_unit_label=""):
         count = section_counts.get(title, 0) + 1
         section_counts[title] = count
+        normalized_compare_unit_key = (compare_unit_key or "").strip() or title
+        normalized_compare_unit_label = (compare_unit_label or "").strip() or title
         return {
             'title': title,
             'heading': heading,
             'section_key': f'{title}#{count}',
-            'lines': [],
+            'compare_unit_key': normalized_compare_unit_key,
+            'compare_unit_label': normalized_compare_unit_label,
+            'minor_heading': DEFAULT_MINOR_HEADING_LABEL,
+            'content_items': [],
         }
 
     def _flush():
         nonlocal current
         if not current:
             return
-        raw_text = "\n".join(current['lines']).strip()
-        norm_text = _normalize_pdf_text(raw_text)
+        raw_parts = []
+        norm_parts = []
+        minor_spans = []
+        cursor = 0
+        for item in current.get('content_items', []):
+            raw_line = (item.get('text') or '').strip()
+            if not raw_line:
+                continue
+            raw_parts.append(raw_line)
+            norm_line = _normalize_pdf_text(raw_line)
+            if not norm_line:
+                continue
+            start = cursor
+            end = start + len(norm_line)
+            minor_heading = (item.get('minor_heading') or DEFAULT_MINOR_HEADING_LABEL).strip() or DEFAULT_MINOR_HEADING_LABEL
+            if minor_spans and minor_spans[-1]['minor_heading'] == minor_heading and minor_spans[-1]['end'] == start:
+                minor_spans[-1]['end'] = end
+            else:
+                minor_spans.append({
+                    'start': start,
+                    'end': end,
+                    'minor_heading': minor_heading,
+                })
+            cursor = end
+            norm_parts.append(norm_line)
+        raw_text = "\n".join(raw_parts).strip()
+        norm_text = "".join(norm_parts)
         if norm_text:
             sections.append({
                 'title': current['title'],
                 'heading': current['heading'],
                 'section_key': current['section_key'],
+                'compare_unit_key': current.get('compare_unit_key') or current['title'],
+                'compare_unit_label': current.get('compare_unit_label') or current['title'],
                 'text_raw': raw_text,
                 'text_norm': norm_text,
+                'minor_spans': minor_spans,
             })
         current = None
 
     for line in lines:
-        if not (line or "").strip():
+        raw_line = (line or "").strip()
+        if not raw_line:
             continue
-        heading = _match_section_heading(line)
+        heading = _match_section_heading(raw_line)
         if heading:
             _flush()
-            current = _start_section(heading['title'], heading['heading'])
+            current = _start_section(
+                heading['title'],
+                heading['heading'],
+                heading.get('compare_unit_key', ''),
+                heading.get('compare_unit_label', ''),
+            )
             continue
         if current is None:
-            current = _start_section('未分類', '')
-        current['lines'].append(line)
+            current = _start_section('未分類', '', '未分類', '未分類')
+        minor_heading = _parse_minor_subheading_line(raw_line)
+        if minor_heading:
+            current['minor_heading'] = minor_heading
+            continue
+        current['content_items'].append({
+            'text': raw_line,
+            'minor_heading': current.get('minor_heading') or DEFAULT_MINOR_HEADING_LABEL,
+        })
 
     _flush()
     return sections
 
 
-def _group_sections_by_title(sections):
+def _group_sections_by_compare_unit(sections):
     grouped = {}
     for section in sections:
-        grouped.setdefault(section['title'], []).append(section)
+        key = str(section.get('compare_unit_key') or section.get('title') or '').strip()
+        if not key:
+            key = '未分類'
+        grouped.setdefault(key, []).append(section)
     return grouped
 
 
-def _section_sort_key(title):
-    return SECTION_TITLE_ORDER.get(title, 999), title
+def _compare_unit_sort_key(unit_key):
+    normalized = str(unit_key or '').strip()
+    match = COMPARE_UNIT_KEY_RE.match(normalized)
+    if match:
+        prefix = match.group('prefix').upper()
+        major = int(match.group('major'))
+        title = match.group('title')
+        return (
+            SECTION_PREFIX_ORDER.get(prefix, 9),
+            major,
+            SECTION_TITLE_ORDER.get(title, 999),
+            title,
+            normalized,
+        )
+    return (9, 999999, SECTION_TITLE_ORDER.get(normalized, 999), normalized, normalized)
 
 
 def _risk_level_from_summary(high_count, medium_count, has_info):
@@ -659,6 +827,35 @@ def _risk_level_from_summary(high_count, medium_count, has_info):
     if has_info:
         return 'low'
     return 'none'
+
+
+def _resolve_minor_heading_labels(spans, start, end):
+    if not isinstance(spans, list):
+        return [DEFAULT_MINOR_HEADING_LABEL]
+    labels = []
+    for span in spans:
+        if not isinstance(span, dict):
+            continue
+        span_start = int(span.get('start', 0) or 0)
+        span_end = int(span.get('end', 0) or 0)
+        if span_end <= start or end <= span_start:
+            continue
+        label = str(span.get('minor_heading') or '').strip() or DEFAULT_MINOR_HEADING_LABEL
+        if label not in labels:
+            labels.append(label)
+    if not labels:
+        return [DEFAULT_MINOR_HEADING_LABEL]
+    return labels
+
+
+def _format_minor_heading_label(labels):
+    if not labels:
+        return DEFAULT_MINOR_HEADING_LABEL
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} ～ {labels[1]}"
+    return f"{labels[0]} ～ {labels[-1]}"
 
 
 def _compare_section_texts(target_text, candidate_text, min_match_len):
@@ -678,32 +875,49 @@ def _compare_section_texts(target_text, candidate_text, min_match_len):
             continue
         snippet = target_text[block.a:block.a + size]
         preview = snippet[:120] + ('...' if len(snippet) > 120 else '')
-        key = (size, preview)
+        key = (size, preview, int(block.a or 0), int(block.b or 0))
         if key in seen:
             continue
         seen.add(key)
-        matches.append({'length': size, 'snippet': preview})
+        matches.append({
+            'length': size,
+            'snippet': preview,
+            'target_start': int(block.a or 0),
+            'target_end': int(block.a or 0) + size,
+            'candidate_start': int(block.b or 0),
+            'candidate_end': int(block.b or 0) + size,
+        })
     similarity = round((2 * total_match / (len(target_text) + len(candidate_text))) * 100, 1)
     matches.sort(key=lambda item: item['length'], reverse=True)
     return similarity, matches
 
 
 def _compare_sections(target_sections, candidate_sections, min_match_len=20, alert_match_len=30):
-    target_map = _group_sections_by_title(target_sections)
-    candidate_map = _group_sections_by_title(candidate_sections)
-    common_titles = sorted(set(target_map.keys()) & set(candidate_map.keys()), key=_section_sort_key)
+    target_map = _group_sections_by_compare_unit(target_sections)
+    candidate_map = _group_sections_by_compare_unit(candidate_sections)
+    common_units = sorted(set(target_map.keys()) & set(candidate_map.keys()), key=_compare_unit_sort_key)
 
     section_details = []
     max_similarity = 0.0
     total_alert_matches = 0
     total_info_matches = 0
 
-    for title in common_titles:
-        title_min_match_len = SECTION_INFO_MIN_LEN.get(title, min_match_len)
+    for unit_key in common_units:
+        target_unit_sections = target_map.get(unit_key, [])
+        candidate_unit_sections = candidate_map.get(unit_key, [])
+        if not target_unit_sections or not candidate_unit_sections:
+            continue
+        section_title = target_unit_sections[0].get('title') or candidate_unit_sections[0].get('title') or str(unit_key)
+        section_label = (
+            target_unit_sections[0].get('compare_unit_label')
+            or candidate_unit_sections[0].get('compare_unit_label')
+            or section_title
+        )
+        title_min_match_len = SECTION_INFO_MIN_LEN.get(section_title, min_match_len)
         pair_max_similarity = 0.0
         merged_matches = []
-        for target_section in target_map.get(title, []):
-            for candidate_section in candidate_map.get(title, []):
+        for target_section in target_unit_sections:
+            for candidate_section in candidate_unit_sections:
                 similarity, pair_matches = _compare_section_texts(
                     target_section['text_norm'],
                     candidate_section['text_norm'],
@@ -711,11 +925,25 @@ def _compare_sections(target_sections, candidate_sections, min_match_len=20, ale
                 )
                 pair_max_similarity = max(pair_max_similarity, similarity)
                 for item in pair_matches:
+                    target_minor_labels = _resolve_minor_heading_labels(
+                        target_section.get('minor_spans', []),
+                        item.get('target_start', 0),
+                        item.get('target_end', 0),
+                    )
+                    candidate_minor_labels = _resolve_minor_heading_labels(
+                        candidate_section.get('minor_spans', []),
+                        item.get('candidate_start', 0),
+                        item.get('candidate_end', 0),
+                    )
                     merged_matches.append({
                         'length': item['length'],
                         'snippet': item['snippet'],
                         'target_section': target_section['section_key'],
                         'candidate_section': candidate_section['section_key'],
+                        'target_major_heading': target_section.get('heading') or section_label,
+                        'candidate_major_heading': candidate_section.get('heading') or section_label,
+                        'target_minor_heading': _format_minor_heading_label(target_minor_labels),
+                        'candidate_minor_heading': _format_minor_heading_label(candidate_minor_labels),
                     })
 
         if not merged_matches and pair_max_similarity <= 0:
@@ -725,7 +953,14 @@ def _compare_sections(target_sections, candidate_sections, min_match_len=20, ale
         deduped = []
         seen_keys = set()
         for item in merged_matches:
-            key = (item['length'], item['snippet'])
+            key = (
+                item['length'],
+                item['snippet'],
+                item.get('target_major_heading', ''),
+                item.get('candidate_major_heading', ''),
+                item.get('target_minor_heading', ''),
+                item.get('candidate_minor_heading', ''),
+            )
             if key in seen_keys:
                 continue
             seen_keys.add(key)
@@ -750,7 +985,9 @@ def _compare_sections(target_sections, candidate_sections, min_match_len=20, ale
             level = 'none'
 
         section_details.append({
-            'title': title,
+            'title': section_label,
+            'section_title': section_title,
+            'compare_unit_key': str(unit_key),
             'level': level,
             'max_similarity': pair_max_similarity,
             'info_match_count': info_count,
@@ -760,7 +997,7 @@ def _compare_sections(target_sections, candidate_sections, min_match_len=20, ale
             'all_matches': all_matches,
         })
 
-    section_details.sort(key=lambda item: _section_sort_key(item['title']))
+    section_details.sort(key=lambda item: _compare_unit_sort_key(item.get('compare_unit_key', item.get('title', ''))))
     high_count = sum(1 for item in section_details if item['level'] == 'high')
     medium_count = sum(1 for item in section_details if item['level'] == 'medium')
     has_info = any(item['info_match_count'] > 0 for item in section_details)
@@ -849,6 +1086,8 @@ def submission_similarity_api(request):
                     'alert_min_len': 30,
                     'high_similarity_threshold': 30,
                     'medium_similarity_threshold': 15,
+                    'minor_subheading_excluded': True,
+                    'compare_unit_policy': 'I/II + major + title',
                 },
                 'results': [],
                 'displayed_count': 0,
@@ -960,6 +1199,8 @@ def submission_similarity_api(request):
                 'high_similarity_threshold': 30,
                 'medium_similarity_threshold': 15,
                 'rough_top_candidates': ROUGH_TOP_CANDIDATES,
+                'minor_subheading_excluded': True,
+                'compare_unit_policy': 'I/II + major + title',
             },
             'results': displayed_results,
             'displayed_count': len(displayed_results),

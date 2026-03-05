@@ -115,24 +115,35 @@
                 </table>
                 <div v-if="selectedSimilarityRow" class="border rounded p-2">
                     <div class="fw-semibold mb-2">{{ selectedSimilarityRow.student_name }} の一致詳細</div>
-                    <div v-for="detail in (selectedSimilarityRow.section_details || [])" :key="'detail-' + selectedSimilarityRow.submission_id + '-' + detail.title" class="mb-2">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <div>
+                    <div v-for="detail in (selectedSimilarityRow.section_details || [])" :key="'detail-' + selectedSimilarityRow.submission_id + '-' + detail.title" class="mb-2 border rounded">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            @click="toggleDetailAccordion(selectedSimilarityRow, detail.title)"
+                        >
+                            <span>
                                 <span class="badge me-2" :class="sectionBadgeClass(detail.level)">{{ detail.title }}</span>
-                                <span class="small text-muted">最大一致率 {{ detail.max_similarity }}% / 一致 {{ detail.info_match_count }}件</span>
+                                <span class="small">最大一致率 {{ detail.max_similarity }}% / 一致 {{ detail.info_match_count }}件</span>
+                            </span>
+                            <span class="small">{{ isDetailAccordionOpen(selectedSimilarityRow, detail.title) ? '▲' : '▼' }}</span>
+                        </button>
+                        <div v-if="isDetailAccordionOpen(selectedSimilarityRow, detail.title)" class="p-2">
+                            <div class="d-flex justify-content-end mb-1">
+                                <button
+                                    v-if="detail.all_matches && detail.all_matches.length > (detail.top_matches || []).length"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    @click="toggleSectionExpand(selectedSimilarityRow, detail.title)"
+                                >
+                                    {{ isSectionExpanded(selectedSimilarityRow, detail.title) ? '上位のみ表示' : '全件表示' }}
+                                </button>
                             </div>
-                            <button
-                                v-if="detail.all_matches && detail.all_matches.length > (detail.top_matches || []).length"
-                                type="button"
-                                class="btn btn-sm btn-outline-secondary"
-                                @click="toggleSectionExpand(selectedSimilarityRow, detail.title)"
-                            >
-                                {{ isSectionExpanded(selectedSimilarityRow, detail.title) ? '上位のみ表示' : '全件表示' }}
-                            </button>
-                        </div>
-                        <div v-if="!(detail.top_matches || []).length" class="small text-muted">一致箇所なし</div>
-                        <div v-for="(m, idx) in visibleSectionMatches(selectedSimilarityRow, detail)" :key="'match-' + selectedSimilarityRow.submission_id + '-' + detail.title + '-' + idx" class="small">
-                            ・{{ m.length }}文字一致: {{ m.snippet }}
+                            <div v-if="!(detail.top_matches || []).length" class="small text-muted">一致箇所なし</div>
+                            <div v-for="(m, idx) in visibleSectionMatches(selectedSimilarityRow, detail)" :key="'match-' + selectedSimilarityRow.submission_id + '-' + detail.title + '-' + idx" class="small mb-1">
+                                ・{{ m.length }}文字一致
+                                <span class="text-muted">（対象: {{ m.target_major_heading || '-' }} / {{ m.target_minor_heading || '-' }} / 比較: {{ m.candidate_major_heading || '-' }} / {{ m.candidate_minor_heading || '-' }}）</span>
+                                : {{ m.snippet }}
+                            </div>
                         </div>
                     </div>
                 </div>

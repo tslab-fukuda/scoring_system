@@ -32,6 +32,7 @@ new Vue({
         selectedSimilaritySubmissionId: null,
         selectedSimilarityRow: null,
         sectionExpandState: {},
+        detailAccordionState: {},
         syncingScroll: false,
         mainLastScrollTop: 0,
         compareLastScrollTop: 0,
@@ -338,6 +339,24 @@ new Vue({
             const key = this.sectionExpandKey(row, title);
             this.$set(this.sectionExpandState, key, !this.sectionExpandState[key]);
         },
+        detailAccordionKey(row, title) {
+            return `${row.submission_id}:${title}`;
+        },
+        isDetailAccordionOpen(row, title) {
+            const key = this.detailAccordionKey(row, title);
+            return !!this.detailAccordionState[key];
+        },
+        toggleDetailAccordion(row, title) {
+            const rowPrefix = `${row.submission_id}:`;
+            Object.keys(this.detailAccordionState).forEach((key) => {
+                if (key.startsWith(rowPrefix)) {
+                    this.$set(this.detailAccordionState, key, false);
+                }
+            });
+            const key = this.detailAccordionKey(row, title);
+            const nextState = !this.detailAccordionState[key];
+            this.$set(this.detailAccordionState, key, nextState);
+        },
         visibleSectionMatches(row, detail) {
             if (!detail) return [];
             if (this.isSectionExpanded(row, detail.title)) {
@@ -349,6 +368,7 @@ new Vue({
             this.selectedSimilaritySubmissionId = row.submission_id;
             this.selectedSimilarityRow = row;
             this.sectionExpandState = {};
+            this.detailAccordionState = {};
             if (!row.pdf_url) return;
             this.comparePdfUrl = row.pdf_url;
             this.compareSubmittedAt = row.submitted_at || '';
@@ -393,6 +413,7 @@ new Vue({
                     this.selectedSimilaritySubmissionId = null;
                     this.selectedSimilarityRow = null;
                     this.sectionExpandState = {};
+                    this.detailAccordionState = {};
                 })
                 .catch(() => {
                     alert('コピペチェックに失敗しました');
