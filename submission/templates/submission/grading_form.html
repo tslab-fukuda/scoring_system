@@ -26,7 +26,13 @@
                     <button class="btn btn-outline-secondary" @click="toggleSyncScroll" :disabled="!showCompare">
                         同期スクロール: {{ syncScroll ? 'ON' : 'OFF' }}
                     </button>
-                    <button class="btn btn-outline-warning" @click="runSimilarityCheck" :disabled="similarityLoading">
+                    <button
+                        class="btn btn-outline-warning similarity-progress-btn"
+                        :class="{ loading: similarityLoading }"
+                        :style="{ '--sim-progress': similarityProgress + '%' }"
+                        @click="runSimilarityCheck"
+                        :disabled="similarityLoading"
+                    >
                         {{ similarityLoading ? 'コピペチェック中...' : 'コピペチェック' }}
                     </button>
                     <span v-if="comparePdfUrl" class="text-muted small">比較対象提出日: {{ compareSubmittedAt }}</span>

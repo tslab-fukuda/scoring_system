@@ -228,3 +228,54 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.course_offering} ({self.role})"
+
+
+class SubmissionTextIndex(models.Model):
+    submission = models.OneToOneField(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name='text_index'
+    )
+    index_version = models.CharField(max_length=16, default='v1')
+    file_hash = models.CharField(max_length=64, blank=True, default='')
+    file_size = models.BigIntegerField(default=0)
+    file_mtime = models.FloatField(default=0)
+    normalized_text = models.TextField(blank=True, default='')
+    sections_json = models.JSONField(default=list, blank=True)
+    signature_json = models.JSONField(default=list, blank=True)
+    indexed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"text-index:{self.submission_id}({self.index_version})"
+
+
+class SimilarityJob(models.Model):
+    STATUS_CHOICES = [
+        ('queued', 'queued'),
+        ('running', 'running'),
+        ('done', 'done'),
+        ('failed', 'failed'),
+    ]
+    target_submission = models.ForeignKey(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name='similarity_jobs'
+    )
+    algorithm_version = models.CharField(max_length=32, default='v1')
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='queued')
+    result_cache_json = models.JSONField(default=dict, blank=True)
+    checked_count = models.PositiveIntegerField(default=0)
+    displayed_count = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True, default='')
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('target_submission', 'algorithm_version')
+
+    def __str__(self):
+        return f"similarity-job:{self.target_submission_id}:{self.algorithm_version}:{self.status}"

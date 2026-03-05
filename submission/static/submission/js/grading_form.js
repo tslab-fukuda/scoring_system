@@ -24,6 +24,8 @@ new Vue({
         compareLoading: false,
         compareRendered: false,
         similarityLoading: false,
+        similarityProgress: 0,
+        similarityProgressTimer: null,
         similarityChecked: false,
         similarityResults: [],
         similarityMessage: "",
@@ -31,6 +33,8 @@ new Vue({
         selectedSimilarityRow: null,
         sectionExpandState: {},
         syncingScroll: false,
+        mainLastScrollTop: 0,
+        compareLastScrollTop: 0,
         pageMeta: {},
         activePointerId: null,
         activePointerType: "",
@@ -228,6 +232,23 @@ new Vue({
             const maxScroll = Math.max(el.scrollHeight - el.clientHeight, 0);
             el.scrollTop = Math.max(0, Math.min(1, ratio)) * maxScroll;
         },
+        refreshScrollAnchors() {
+            const mainArea = this.$refs.pdfArea;
+            const compareArea = this.$refs.comparePdfArea;
+            if (mainArea) this.mainLastScrollTop = mainArea.scrollTop;
+            if (compareArea) this.compareLastScrollTop = compareArea.scrollTop;
+        },
+        syncByScrollDelta(sourceEl, targetEl, sourceKey, targetKey) {
+            const current = sourceEl ? sourceEl.scrollTop : 0;
+            const previous = this[sourceKey] || 0;
+            const delta = current - previous;
+            this[sourceKey] = current;
+            if (!targetEl || delta === 0) return;
+            const maxTargetScroll = Math.max(targetEl.scrollHeight - targetEl.clientHeight, 0);
+            const next = Math.max(0, Math.min(maxTargetScroll, targetEl.scrollTop + delta));
+            targetEl.scrollTop = next;
+            this[targetKey] = next;
+        },
         clampZoom(value) {
             const stepped = Math.round(value / this.zoomStep) * this.zoomStep;
             return Math.min(this.zoomMax, Math.max(this.zoomMin, stepped));
@@ -264,6 +285,7 @@ new Vue({
                 this.$nextTick(() => {
                     this.setScrollByRatio(scrollArea, scrollRatio);
                     this.setScrollByRatio(this.$refs.comparePdfArea, compareScrollRatio);
+                    this.refreshScrollAnchors();
                 });
             }
         },
@@ -274,14 +296,19 @@ new Vue({
             this.showCompare = !this.showCompare;
             if (this.showCompare) {
                 this.compareRendered = false;
-                this.$nextTick(() => this.renderComparePdf());
+                this.$nextTick(() => {
+                    this.refreshScrollAnchors();
+                    this.renderComparePdf();
+                });
             } else {
                 this.compareRendered = false;
+                this.$nextTick(() => this.refreshScrollAnchors());
             }
         },
         toggleSyncScroll() {
             if (!this.showCompare) return;
             this.syncScroll = !this.syncScroll;
+            if (this.syncScroll) this.refreshScrollAnchors();
         },
         riskLabel(level) {
             if (level === 'high') return '高';
@@ -327,10 +354,32 @@ new Vue({
             this.compareSubmittedAt = row.submitted_at || '';
             this.showCompare = true;
             this.compareRendered = false;
-            this.$nextTick(() => this.renderComparePdf());
+            this.$nextTick(() => {
+                this.refreshScrollAnchors();
+                this.renderComparePdf();
+            });
+        },
+        startSimilarityProgress() {
+            this.clearSimilarityProgressTimer();
+            this.similarityProgress = 5;
+            this.similarityProgressTimer = setInterval(() => {
+                if (!this.similarityLoading) return;
+                const remaining = 95 - this.similarityProgress;
+                if (remaining <= 0) return;
+                const step = Math.max(0.5, remaining * 0.08);
+                this.similarityProgress = Math.min(95, this.similarityProgress + step);
+            }, 200);
+        },
+        clearSimilarityProgressTimer() {
+            if (this.similarityProgressTimer) {
+                clearInterval(this.similarityProgressTimer);
+                this.similarityProgressTimer = null;
+            }
         },
         runSimilarityCheck() {
+            if (this.similarityLoading) return;
             this.similarityLoading = true;
+            this.startSimilarityProgress();
             fetch(`/submission/submission_similarity_api/?submission_id=${encodeURIComponent(window.submissionId)}`)
                 .then(res => res.json())
                 .then(data => {
@@ -349,25 +398,34 @@ new Vue({
                     alert('コピペチェックに失敗しました');
                 })
                 .finally(() => {
-                    this.similarityLoading = false;
+                    this.clearSimilarityProgressTimer();
+                    this.similarityProgress = 100;
+                    setTimeout(() => {
+                        this.similarityLoading = false;
+                        this.similarityProgress = 0;
+                    }, 180);
                 });
         },
         onMainScroll(e) {
-            if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
+            if (!this.showCompare || !this.syncScroll || this.syncingScroll) {
+                this.mainLastScrollTop = e.target ? e.target.scrollTop : 0;
+                return;
+            }
             const target = this.$refs.comparePdfArea;
             if (!target) return;
             this.syncingScroll = true;
-            const ratio = this.getScrollRatio(e.target);
-            this.setScrollByRatio(target, ratio);
+            this.syncByScrollDelta(e.target, target, 'mainLastScrollTop', 'compareLastScrollTop');
             setTimeout(() => { this.syncingScroll = false; }, 0);
         },
         onCompareScroll(e) {
-            if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
+            if (!this.showCompare || !this.syncScroll || this.syncingScroll) {
+                this.compareLastScrollTop = e.target ? e.target.scrollTop : 0;
+                return;
+            }
             const target = this.$refs.pdfArea;
             if (!target) return;
             this.syncingScroll = true;
-            const ratio = this.getScrollRatio(e.target);
-            this.setScrollByRatio(target, ratio);
+            this.syncByScrollDelta(e.target, target, 'compareLastScrollTop', 'mainLastScrollTop');
             setTimeout(() => { this.syncingScroll = false; }, 0);
         },
         renderComparePdf() {
@@ -412,6 +470,7 @@ new Vue({
                 this.compareLoading = false;
                 this.$nextTick(() => {
                     this.setScrollByRatio(this.$refs.comparePdfArea, prevRatio);
+                    this.refreshScrollAnchors();
                 });
             });
         },
@@ -898,5 +957,8 @@ new Vue({
                 e.preventDefault();
             }
         });
+    },
+    beforeDestroy() {
+        this.clearSimilarityProgressTimer();
     }
 });

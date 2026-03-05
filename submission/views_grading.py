@@ -2,12 +2,18 @@ from django.shortcuts import render, get_object_or_404, redirect
 from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
-from submission.models import ScoringItem, CourseOffering
+from submission.models import (
+    ScoringItem,
+    CourseOffering,
+    SubmissionTextIndex,
+    SimilarityJob,
+)
 from submission.models import Stamp
 from django.http import JsonResponse
 from django.http import FileResponse, Http404
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
 
 import os
 import io
@@ -16,6 +22,7 @@ import base64
 import fitz  # PyMuPDF
 import re
 import unicodedata
+import hashlib
 from functools import lru_cache
 from difflib import SequenceMatcher
 from decimal import Decimal
@@ -432,11 +439,136 @@ def _extract_pdf_lines(file_path):
     return list(_extract_pdf_lines_cached(file_path, mtime))
 
 
+def _hash_file_sha256(file_path):
+    digest = hashlib.sha256()
+    with open(file_path, 'rb') as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _build_minhash_signature(text, n=8, size=96):
+    if not text:
+        return []
+    hashes = set()
+    if len(text) <= n:
+        chunk = text
+        hv = int.from_bytes(hashlib.blake2b(chunk.encode('utf-8'), digest_size=8).digest(), 'big')
+        hashes.add(hv)
+    else:
+        for i in range(len(text) - n + 1):
+            chunk = text[i:i + n]
+            hv = int.from_bytes(hashlib.blake2b(chunk.encode('utf-8'), digest_size=8).digest(), 'big')
+            hashes.add(hv)
+    return sorted(hashes)[:size]
+
+
+def _signature_overlap_score(sig_a, sig_b):
+    if not sig_a or not sig_b:
+        return 0.0
+    set_a = set(sig_a)
+    set_b = set(sig_b)
+    union = set_a | set_b
+    if not union:
+        return 0.0
+    inter = set_a & set_b
+    return round((len(inter) / len(union)) * 100, 1)
+
+
+def _serialize_sections_for_cache(sections):
+    serialized = []
+    for section in sections:
+        text_norm = _normalize_pdf_text(section.get('text_norm', ''))
+        if not text_norm:
+            continue
+        serialized.append({
+            'title': section.get('title', ''),
+            'heading': section.get('heading', ''),
+            'section_key': section.get('section_key', ''),
+            'text_norm': text_norm,
+        })
+    return serialized
+
+
+def _load_sections_from_cache(data):
+    if not isinstance(data, list):
+        return []
+    sections = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        text_norm = _normalize_pdf_text(item.get('text_norm', ''))
+        if not text_norm:
+            continue
+        sections.append({
+            'title': item.get('title', ''),
+            'heading': item.get('heading', ''),
+            'section_key': item.get('section_key', ''),
+            'text_norm': text_norm,
+        })
+    return sections
+
+
+def _get_submission_text_index(submission):
+    if not submission.file:
+        return None
+    try:
+        file_path = submission.file.path
+        st = os.stat(file_path)
+    except (OSError, ValueError):
+        return None
+
+    file_size = int(st.st_size or 0)
+    file_mtime = float(st.st_mtime or 0.0)
+    idx, _ = SubmissionTextIndex.objects.get_or_create(submission=submission)
+
+    is_fresh = (
+        idx.index_version == INDEX_VERSION
+        and int(idx.file_size or 0) == file_size
+        and abs(float(idx.file_mtime or 0.0) - file_mtime) < 1e-6
+        and bool(idx.normalized_text)
+    )
+    if is_fresh:
+        return idx
+
+    lines = _extract_pdf_lines(file_path)
+    sections = _build_sections_from_lines(lines)
+    normalized_text = _normalize_pdf_text("\n".join(lines))
+    signature = _build_minhash_signature(normalized_text)
+    file_hash = _hash_file_sha256(file_path)
+
+    idx.index_version = INDEX_VERSION
+    idx.file_size = file_size
+    idx.file_mtime = file_mtime
+    idx.file_hash = file_hash
+    idx.normalized_text = normalized_text
+    idx.sections_json = _serialize_sections_for_cache(sections)
+    idx.signature_json = signature
+    idx.save(update_fields=[
+        'index_version',
+        'file_size',
+        'file_mtime',
+        'file_hash',
+        'normalized_text',
+        'sections_json',
+        'signature_json',
+        'indexed_at',
+    ])
+    return idx
+
+
 SECTION_TITLES = [
     '目的', '原理', '実験方法', '予習課題', '使用器具',
     '実験結果', '考察', '課題', '参考文献',
 ]
 DEFAULT_INFO_MIN_LEN = 20
+TOP_SIMILARITY_RESULTS = 10
+INDEX_VERSION = 'v1'
+SIMILARITY_ALGORITHM_VERSION = 'v2-section-rough'
+SIMILARITY_CACHE_TTL_HOURS = 24
+ROUGH_TOP_CANDIDATES = 40
+MINHASH_N = 8
+MINHASH_SIZE = 96
 SECTION_INFO_MIN_LEN = {
     '考察': 10,
     '予習課題': 10,
@@ -682,85 +814,179 @@ def submission_similarity_api(request):
     submission = get_object_or_404(Submission, pk=submission_id)
     if not submission.file:
         return JsonResponse({'status': 'error', 'message': '対象PDFがありません'}, status=404)
-
-    target_text = _extract_pdf_text(submission.file.path)
-    if not target_text:
-        return JsonResponse({
-            'status': 'success',
-            'message': '対象PDFからテキストを抽出できませんでした。',
-            'results': [],
-            'checked_count': 0,
-        })
-    target_lines = _extract_pdf_lines(submission.file.path)
-    target_sections = _build_sections_from_lines(target_lines)
-
-    candidate_qs = Submission.objects.filter(
-        experiment_number=submission.experiment_number,
-        report_type=submission.report_type,
-        course_offering=submission.course_offering,
-    ).exclude(student=submission.student).exclude(file='').select_related(
-        'student__userprofile'
-    ).order_by('student_id', '-submitted_at')
-
-    latest_by_student = []
-    seen_student_ids = set()
-    for cand in candidate_qs:
-        if cand.student_id in seen_student_ids:
-            continue
-        seen_student_ids.add(cand.student_id)
-        latest_by_student.append(cand)
-
-    results = []
-    for cand in latest_by_student:
-        if not cand.file:
-            continue
-        cand_text = _extract_pdf_text(cand.file.path)
-        overall_similarity = _jaccard_similarity_percent(target_text, cand_text, n=8)
-        candidate_lines = _extract_pdf_lines(cand.file.path)
-        candidate_sections = _build_sections_from_lines(candidate_lines)
-        section_result = _compare_sections(
-            target_sections,
-            candidate_sections,
-            min_match_len=20,
-            alert_match_len=30,
-        )
-        up = getattr(cand.student, 'userprofile', None)
-        results.append({
-            'submission_id': cand.id,
-            'user_id': cand.student_id,
-            'student_name': up.full_name if up else cand.student.username,
-            'student_id': up.student_id if up else '',
-            'submitted_at': timezone.localtime(cand.submitted_at).strftime('%Y-%m-%d %H:%M') if cand.submitted_at else '',
-            'pdf_url': cand.file.url if cand.file else '',
-            'overall_similarity': overall_similarity,
-            'max_similarity': section_result['max_similarity'],
-            'risk_level': section_result['risk_level'],
-            'risk_score': section_result['risk_score'],
-            'section_badges': section_result['section_badges'],
-            'section_details': section_result['section_details'],
-            'total_alert_matches': section_result['total_alert_matches'],
-            'total_info_matches': section_result['total_info_matches'],
-        })
-
-    results.sort(
-        key=lambda x: (
-            x['risk_score'],
-            x['max_similarity'],
-            x['overall_similarity'],
-        ),
-        reverse=True
+    now = timezone.now()
+    job, _ = SimilarityJob.objects.get_or_create(
+        target_submission=submission,
+        algorithm_version=SIMILARITY_ALGORITHM_VERSION,
+        defaults={'status': 'queued'}
     )
+    if (
+        job.status == 'done'
+        and job.expires_at
+        and job.expires_at > now
+        and isinstance(job.result_cache_json, dict)
+        and job.result_cache_json.get('status') == 'success'
+    ):
+        cached_payload = dict(job.result_cache_json)
+        cached_payload['cached'] = True
+        return JsonResponse(cached_payload)
 
-    return JsonResponse({
-        'status': 'success',
-        'message': '同一科目/年度・同一実験番号・同一レポート種別で、見出し単位の一致箇所を抽出しました。',
-        'rules': {
-            'info_min_len_default': DEFAULT_INFO_MIN_LEN,
-            'info_min_len_overrides': SECTION_INFO_MIN_LEN,
-            'alert_min_len': 30,
-            'high_similarity_threshold': 30,
-            'medium_similarity_threshold': 15,
-        },
-        'results': results,
-        'checked_count': len(results),
-    })
+    job.status = 'running'
+    job.error_message = ''
+    job.started_at = now
+    job.finished_at = None
+    job.save(update_fields=['status', 'error_message', 'started_at', 'finished_at', 'updated_at'])
+
+    try:
+        target_index = _get_submission_text_index(submission)
+        if not target_index or not target_index.normalized_text:
+            payload = {
+                'status': 'success',
+                'message': '対象PDFからテキストを抽出できませんでした。',
+                'rules': {
+                    'info_min_len_default': DEFAULT_INFO_MIN_LEN,
+                    'info_min_len_overrides': SECTION_INFO_MIN_LEN,
+                    'alert_min_len': 30,
+                    'high_similarity_threshold': 30,
+                    'medium_similarity_threshold': 15,
+                },
+                'results': [],
+                'displayed_count': 0,
+                'checked_count': 0,
+            }
+            job.status = 'done'
+            job.checked_count = 0
+            job.displayed_count = 0
+            job.result_cache_json = payload
+            job.finished_at = timezone.now()
+            job.expires_at = job.finished_at + timedelta(hours=SIMILARITY_CACHE_TTL_HOURS)
+            job.save(update_fields=[
+                'status',
+                'checked_count',
+                'displayed_count',
+                'result_cache_json',
+                'finished_at',
+                'expires_at',
+                'updated_at',
+            ])
+            return JsonResponse(payload)
+
+        target_text = target_index.normalized_text
+        target_sections = _load_sections_from_cache(target_index.sections_json)
+        target_signature = target_index.signature_json if isinstance(target_index.signature_json, list) else []
+
+        candidate_qs = Submission.objects.filter(
+            experiment_number=submission.experiment_number,
+            report_type=submission.report_type,
+            course_offering=submission.course_offering,
+        ).exclude(student=submission.student).exclude(file='').select_related(
+            'student__userprofile'
+        ).order_by('student_id', '-submitted_at')
+
+        latest_by_student = []
+        seen_student_ids = set()
+        for cand in candidate_qs:
+            if cand.student_id in seen_student_ids:
+                continue
+            seen_student_ids.add(cand.student_id)
+            latest_by_student.append(cand)
+
+        rough_candidates = []
+        for cand in latest_by_student:
+            if not cand.file:
+                continue
+            cand_index = _get_submission_text_index(cand)
+            if not cand_index or not cand_index.normalized_text:
+                continue
+            cand_signature = cand_index.signature_json if isinstance(cand_index.signature_json, list) else []
+            rough_score = _signature_overlap_score(target_signature, cand_signature)
+            rough_candidates.append((rough_score, cand, cand_index))
+
+        rough_candidates.sort(key=lambda item: item[0], reverse=True)
+        if len(rough_candidates) > ROUGH_TOP_CANDIDATES:
+            detailed_candidates = rough_candidates[:ROUGH_TOP_CANDIDATES]
+        else:
+            detailed_candidates = rough_candidates
+
+        results = []
+        for _, cand, cand_index in detailed_candidates:
+            cand_text = cand_index.normalized_text
+            overall_similarity = _jaccard_similarity_percent(target_text, cand_text, n=8)
+            candidate_sections = _load_sections_from_cache(cand_index.sections_json)
+            section_result = _compare_sections(
+                target_sections,
+                candidate_sections,
+                min_match_len=20,
+                alert_match_len=30,
+            )
+            up = getattr(cand.student, 'userprofile', None)
+            results.append({
+                'submission_id': cand.id,
+                'user_id': cand.student_id,
+                'student_name': up.full_name if up else cand.student.username,
+                'student_id': up.student_id if up else '',
+                'submitted_at': timezone.localtime(cand.submitted_at).strftime('%Y-%m-%d %H:%M') if cand.submitted_at else '',
+                'pdf_url': cand.file.url if cand.file else '',
+                'overall_similarity': overall_similarity,
+                'max_similarity': section_result['max_similarity'],
+                'risk_level': section_result['risk_level'],
+                'risk_score': section_result['risk_score'],
+                'section_badges': section_result['section_badges'],
+                'section_details': section_result['section_details'],
+                'total_alert_matches': section_result['total_alert_matches'],
+                'total_info_matches': section_result['total_info_matches'],
+            })
+
+        results.sort(
+            key=lambda x: (
+                x['risk_score'],
+                x['max_similarity'],
+                x['overall_similarity'],
+            ),
+            reverse=True
+        )
+        displayed_results = results[:TOP_SIMILARITY_RESULTS]
+        checked_count = len(rough_candidates)
+        payload = {
+            'status': 'success',
+            'message': (
+                f'同一科目/年度・同一実験番号・同一レポート種別で、見出し単位の一致箇所を抽出しました'
+                f'（比較{checked_count}件 / 詳細計算{len(results)}件 / 表示上位{TOP_SIMILARITY_RESULTS}件）。'
+            ),
+            'rules': {
+                'info_min_len_default': DEFAULT_INFO_MIN_LEN,
+                'info_min_len_overrides': SECTION_INFO_MIN_LEN,
+                'alert_min_len': 30,
+                'high_similarity_threshold': 30,
+                'medium_similarity_threshold': 15,
+                'rough_top_candidates': ROUGH_TOP_CANDIDATES,
+            },
+            'results': displayed_results,
+            'displayed_count': len(displayed_results),
+            'checked_count': checked_count,
+            'calculated_count': len(results),
+            'cached': False,
+        }
+
+        job.status = 'done'
+        job.checked_count = checked_count
+        job.displayed_count = len(displayed_results)
+        job.result_cache_json = payload
+        job.finished_at = timezone.now()
+        job.expires_at = job.finished_at + timedelta(hours=SIMILARITY_CACHE_TTL_HOURS)
+        job.save(update_fields=[
+            'status',
+            'checked_count',
+            'displayed_count',
+            'result_cache_json',
+            'finished_at',
+            'expires_at',
+            'updated_at',
+        ])
+        return JsonResponse(payload)
+    except Exception as exc:
+        job.status = 'failed'
+        job.error_message = str(exc)
+        job.finished_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+        return JsonResponse({'status': 'error', 'message': f'コピペチェックに失敗しました: {exc}'}, status=500)
