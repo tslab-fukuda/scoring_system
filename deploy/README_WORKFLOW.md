@@ -46,3 +46,9 @@ bash deploy/scripts/deploy_prod.sh
 journalctl -u scoring-system -f
 sudo tail -f /var/log/nginx/error.log
 ```
+
+## 6. 機能仕様（ロール別）
+
+- Student: `deploy/README_FEATURES_STUDENT.md`
+- Teacher: `deploy/README_FEATURES_TEACHER.md`
+- Admin: `deploy/README_FEATURES_ADMIN.md`
