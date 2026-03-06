@@ -22,6 +22,7 @@
 | 手動受付 | 個別提出を手動で受付 | 1. 対象行で受付操作 2. API実行 | `submission/views_admin.py` / `accept_submission` |
 | 学生別詳細API | 学生ごとの提出/出席/欠席/実験ログを取得 | 1. 学生別詳細で学生選択 2. 詳細表示 | `submission/views_admin.py` / `api_student_reports` |
 | 授業予定（CRUD） | 授業日追加・更新・削除 | 1. 授業予定表タブで操作 2. API実行 | `submission/views_admin.py` / `get_schedule_api`, `add_schedule_api`, `update_schedule_api`, `delete_schedule_api` |
+| 授業予定PDF取込 | シラバスPDFから「対面授業」行の日付を抽出し、曜日一致分のみ一括追加 | 1. 授業予定表タブでPDF選択 2. 解析プレビュー 3. 登録可日付を確定追加 | `submission/views_admin.py` / `admin_schedule_pdf_preview_api`, `admin_schedule_pdf_commit_api`<br>`submission/templates/submission/dashboard_schedule.html`<br>`submission/static/submission/js/admin_dashboard.js` |
 | 提出状況集計API | 科目/年度ごとの提出状況集計 | 1. 提出状況一覧タブを開く 2. 集計を確認 | `submission/views_admin.py` / `get_summary_api` |
 | 学生一覧取得API | 学生情報一覧の取得（写真含む） | 1. 学生別詳細表示時にAPI呼出 | `submission/views_admin.py` / `get_students_api` |
 | 学生写真アップロード | 学生プロフィール写真を登録 | 1. 学生詳細で画像を選択 2. アップロード | `submission/views_admin.py` / `upload_student_photo` |

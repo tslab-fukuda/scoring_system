@@ -13,6 +13,7 @@ window.app = new Vue({
         studentsLoaded: false,
         scheduleLoaded: false,
         summaryLoaded: false,
+        scheduleOfferingId: null,
         showAddModal: false,
         showEditModal: false,
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
@@ -41,6 +42,11 @@ window.app = new Vue({
         scoreDetailPre: [],
         scoreDetailMain: [],
         videoStream: null,
+        scheduleImportFile: null,
+        scheduleImportLoading: false,
+        scheduleCommitLoading: false,
+        scheduleImportPreview: null,
+        scheduleImportMessage: '',
     },
     computed: {
         mainReportItems() {
@@ -96,9 +102,112 @@ window.app = new Vue({
         },
         allowOfferingSwitch() {
             return this.offerings && this.offerings.length > 0;
+        },
+        hasRegisterableScheduleImportDates() {
+            if (!this.scheduleImportPreview) return false;
+            const dates = this.scheduleImportPreview.registerable_dates || [];
+            return dates.length > 0;
         }
     },
     methods: {
+        resetSchedulePdfImport() {
+            this.scheduleImportFile = null;
+            this.scheduleImportLoading = false;
+            this.scheduleCommitLoading = false;
+            this.scheduleImportPreview = null;
+            this.scheduleImportMessage = '';
+            if (this.$refs.schedulePdfInput) {
+                this.$refs.schedulePdfInput.value = '';
+            }
+        },
+        onSchedulePdfFileChange(e) {
+            const file = e && e.target && e.target.files ? e.target.files[0] : null;
+            this.scheduleImportFile = file || null;
+            this.scheduleImportPreview = null;
+            this.scheduleImportMessage = file ? `選択中: ${file.name}` : '';
+        },
+        previewSchedulePdfImport() {
+            if (!this.selectedOfferingId) {
+                alert('科目/年度を選択してください');
+                return;
+            }
+            if (!this.scheduleImportFile) {
+                alert('PDFファイルを選択してください');
+                return;
+            }
+            const fd = new FormData();
+            fd.append('offering_id', this.selectedOfferingId);
+            fd.append('pdf', this.scheduleImportFile);
+            this.scheduleImportLoading = true;
+            this.scheduleImportMessage = 'PDFを解析しています...';
+            fetch('/submission/admin_schedule_pdf_preview_api/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: fd
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        throw new Error(data.message || 'PDF解析に失敗しました');
+                    }
+                    this.scheduleImportPreview = data.preview || null;
+                    const regCount = (this.scheduleImportPreview && this.scheduleImportPreview.registerable_dates)
+                        ? this.scheduleImportPreview.registerable_dates.length
+                        : 0;
+                    this.scheduleImportMessage = `解析完了: 登録可 ${regCount} 件`;
+                })
+                .catch(err => {
+                    this.scheduleImportPreview = null;
+                    this.scheduleImportMessage = '';
+                    alert(err.message || 'PDF解析に失敗しました');
+                })
+                .finally(() => {
+                    this.scheduleImportLoading = false;
+                });
+        },
+        commitSchedulePdfImport() {
+            if (!this.selectedOfferingId) {
+                alert('科目/年度を選択してください');
+                return;
+            }
+            if (!this.hasRegisterableScheduleImportDates) {
+                alert('登録可能な日付がありません');
+                return;
+            }
+            const dates = (this.scheduleImportPreview.registerable_dates || []).map(x => x.date);
+            this.scheduleCommitLoading = true;
+            this.scheduleImportMessage = '授業日を登録しています...';
+            fetch('/submission/admin_schedule_pdf_commit_api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({
+                    offering_id: this.selectedOfferingId,
+                    dates: dates,
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        throw new Error(data.message || '授業日の登録に失敗しました');
+                    }
+                    const createdCount = (data.created_dates || []).length;
+                    const dupCount = (data.skipped_duplicate_dates || []).length;
+                    const weekCount = (data.skipped_weekday_mismatch_dates || []).length;
+                    this.scheduleImportMessage = `登録完了: 追加 ${createdCount} 件 / 重複 ${dupCount} 件 / 曜日不一致 ${weekCount} 件`;
+                    this.fetchSchedule(true);
+                })
+                .catch(err => {
+                    alert(err.message || '授業日の登録に失敗しました');
+                })
+                .finally(() => {
+                    this.scheduleCommitLoading = false;
+                });
+        },
         refreshCurrentTab() {
             if (this.tab === 'submissions') {
                 this.fetchList();
@@ -481,6 +590,7 @@ window.app = new Vue({
         selectedOfferingId() {
             this.refreshCurrentTab();
             this.scheduleLoaded = false;
+            this.resetSchedulePdfImport();
         }
     },
     mounted() {

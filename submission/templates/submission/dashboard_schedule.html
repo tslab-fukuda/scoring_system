@@ -1,4 +1,81 @@
 <h4>授業予定表（チケット表示）</h4>
+{% verbatim %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="fw-semibold mb-2">PDFから授業日を取り込む（対面授業のみ）</div>
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <input ref="schedulePdfInput" type="file" class="form-control" accept="application/pdf" @change="onSchedulePdfFileChange">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-outline-primary" :disabled="scheduleImportLoading || !scheduleImportFile" @click="previewSchedulePdfImport">
+                    {{ scheduleImportLoading ? '解析中...' : '解析してプレビュー' }}
+                </button>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" :disabled="scheduleCommitLoading || !hasRegisterableScheduleImportDates" @click="commitSchedulePdfImport">
+                    {{ scheduleCommitLoading ? '登録中...' : '登録可日付を追加' }}
+                </button>
+            </div>
+        </div>
+        <div v-if="scheduleImportMessage" class="small mt-2 text-muted">{{ scheduleImportMessage }}</div>
+
+        <div v-if="scheduleImportPreview" class="mt-3">
+            <div class="small mb-1">検出件数: {{ scheduleImportPreview.found_face_to_face_count || 0 }}</div>
+            <div class="small mb-1 text-success">登録可: {{ (scheduleImportPreview.registerable_dates || []).length }} 件</div>
+            <div class="small mb-1 text-warning">曜日不一致: {{ (scheduleImportPreview.weekday_mismatch_dates || []).length }} 件</div>
+            <div class="small mb-1 text-secondary">既存重複: {{ (scheduleImportPreview.duplicate_dates || []).length }} 件</div>
+            <div class="small mb-1 text-danger">抽出失敗/警告: {{ (scheduleImportPreview.parse_errors || []).length }} 件</div>
+
+            <div v-if="(scheduleImportPreview.registerable_dates || []).length" class="mt-2">
+                <div class="fw-semibold small">登録可日付</div>
+                <div class="small">
+                    <span v-for="item in scheduleImportPreview.registerable_dates" :key="'ok-' + item.date" class="badge text-bg-success me-1 mb-1">
+                        {{ item.date }} ({{ item.weekday }})
+                    </span>
+                </div>
+            </div>
+            <div v-if="(scheduleImportPreview.weekday_mismatch_dates || []).length" class="mt-2">
+                <div class="fw-semibold small">曜日不一致</div>
+                <div class="small">
+                    <span v-for="item in scheduleImportPreview.weekday_mismatch_dates" :key="'ng-week-' + item.date" class="badge text-bg-warning me-1 mb-1">
+                        {{ item.date }} ({{ item.weekday }})
+                    </span>
+                </div>
+            </div>
+            <div v-if="(scheduleImportPreview.duplicate_dates || []).length" class="mt-2">
+                <div class="fw-semibold small">既存重複</div>
+                <div class="small">
+                    <span v-for="item in scheduleImportPreview.duplicate_dates" :key="'dup-' + item.date" class="badge text-bg-secondary me-1 mb-1">
+                        {{ item.date }} ({{ item.weekday }})
+                    </span>
+                </div>
+            </div>
+            <div v-if="(scheduleImportPreview.parse_errors || []).length" class="mt-2">
+                <div class="fw-semibold small text-danger">抽出失敗 / 警告 詳細</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mt-1 mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 130px;">日付</th>
+                                <th style="width: 280px;">内容</th>
+                                <th>該当行</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(err, idx) in (scheduleImportPreview.parse_errors || [])" :key="'err-' + idx">
+                                <td>{{ err.date || '-' }}</td>
+                                <td>{{ err.message || '-' }}</td>
+                                <td class="small">{{ err.marker_line || '-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endverbatim %}
 <div class="mb-3 text-end">
     <button class="btn btn-primary" @click="showAddModal = true">＋ 授業日を追加</button>
 </div>

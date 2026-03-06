@@ -13,7 +13,7 @@ from submission.models import (
     Enrollment,
 )
 from attendance.models import AttendanceRecord
-from datetime import time, timedelta
+from datetime import time, timedelta, date as dt_date
 from zoneinfo import ZoneInfo
 from django.core.files.storage import default_storage
 import json
@@ -21,6 +21,9 @@ import csv
 import io
 import os
 import zipfile
+import re
+import unicodedata
+import fitz
 from submission.decorators import role_required
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
@@ -38,6 +41,9 @@ SYSTEM_SCORING_DEFS = [
     {'code': 'absence', 'label': '欠席', 'category': 'main'},
     {'code': 'lab_time', 'label': '実験時間', 'category': 'pre'},
 ]
+SCHEDULE_DATE_RE = re.compile(
+    r'(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日(?:\s*[（(]\s*(?P<weekday>[月火水木金土日])\s*[)）])?'
+)
 
 
 def _weekday_label(dt):
@@ -801,6 +807,142 @@ def get_summary_api(request):
         })
     return JsonResponse({'submission_summary': results})
 
+def _normalize_schedule_pdf_line(text):
+    normalized = unicodedata.normalize("NFKC", str(text or ""))
+    normalized = normalized.replace('\u3000', ' ')
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def _extract_schedule_pdf_lines(pdf_bytes):
+    lines = []
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        for page in doc:
+            text = page.get_text("text") or ""
+            for raw_line in text.splitlines():
+                line = _normalize_schedule_pdf_line(raw_line)
+                if line:
+                    lines.append(line)
+    return lines
+
+
+def _resolve_schedule_date(offering_year, month, day):
+    year = int(offering_year)
+    if month <= 3:
+        year += 1
+    return dt_date(year, month, day)
+
+
+def _extract_face_to_face_dates(lines, offering_year):
+    extracted = []
+    for idx, line in enumerate(lines):
+        if '対面授業' not in line:
+            continue
+        window_indexes = [idx, idx - 1, idx - 2, idx - 3, idx - 4, idx + 1, idx + 2]
+        found = False
+        for target_idx in window_indexes:
+            if target_idx < 0 or target_idx >= len(lines):
+                continue
+            source_line = lines[target_idx]
+            for match in SCHEDULE_DATE_RE.finditer(source_line):
+                month = int(match.group('month'))
+                day = int(match.group('day'))
+                weekday_hint = (match.group('weekday') or '').strip()
+                try:
+                    date_obj = _resolve_schedule_date(offering_year, month, day)
+                except ValueError:
+                    continue
+                extracted.append({
+                    'date': date_obj,
+                    'weekday_hint': weekday_hint,
+                    'source_line': source_line,
+                    'marker_line': line,
+                })
+                found = True
+                break
+            if found:
+                break
+        if not found:
+            extracted.append({
+                'date': None,
+                'weekday_hint': '',
+                'source_line': '',
+                'marker_line': line,
+            })
+    return extracted
+
+
+def _build_schedule_pdf_preview(offering, pdf_bytes):
+    lines = _extract_schedule_pdf_lines(pdf_bytes)
+    candidates = _extract_face_to_face_dates(lines, offering.year)
+    existing_dates = set(
+        Schedule.objects.filter(course_offering=offering).values_list('date', flat=True)
+    )
+    meeting_days = {
+        str(day).strip()
+        for day in (offering.course.meeting_days or [])
+        if str(day).strip()
+    }
+    if not meeting_days:
+        meeting_days = {'月', '火', '水', '木', '金', '土', '日'}
+
+    registerable = []
+    duplicate_dates = []
+    weekday_mismatch = []
+    parse_errors = []
+    seen_date_keys = set()
+
+    for item in candidates:
+        date_obj = item.get('date')
+        if not date_obj:
+            parse_errors.append({
+                'marker_line': item.get('marker_line', ''),
+                'message': '対面授業の近傍で日付を抽出できませんでした',
+            })
+            continue
+
+        date_key = date_obj.isoformat()
+        if date_key in seen_date_keys:
+            continue
+        seen_date_keys.add(date_key)
+
+        weekday = _weekday_label(date_obj)
+        base_payload = {
+            'date': date_key,
+            'weekday': weekday,
+            'weekday_hint': item.get('weekday_hint', ''),
+            'source_line': item.get('source_line', ''),
+        }
+
+        weekday_hint = item.get('weekday_hint')
+        if weekday_hint and weekday_hint != weekday:
+            parse_errors.append({
+                'marker_line': item.get('marker_line', ''),
+                'message': f'PDF内曜日({weekday_hint})と計算曜日({weekday})が不一致です',
+                'date': date_key,
+            })
+
+        if weekday not in meeting_days:
+            weekday_mismatch.append(base_payload)
+            continue
+        if date_obj in existing_dates:
+            duplicate_dates.append(base_payload)
+            continue
+        registerable.append(base_payload)
+
+    registerable.sort(key=lambda x: x['date'])
+    duplicate_dates.sort(key=lambda x: x['date'])
+    weekday_mismatch.sort(key=lambda x: x['date'])
+
+    return {
+        'registerable_dates': registerable,
+        'duplicate_dates': duplicate_dates,
+        'weekday_mismatch_dates': weekday_mismatch,
+        'parse_errors': parse_errors,
+        'meeting_days': sorted(meeting_days),
+        'found_face_to_face_count': len([x for x in candidates if x.get('date')]),
+    }
+
 def get_schedule_api(request):
     offering_id = request.GET.get('offering_id')
     schedule_qs = Schedule.objects.all()
@@ -816,6 +958,104 @@ def get_schedule_api(request):
         for s in schedule_qs
     ]
     return JsonResponse({'schedule_json': schedule})
+
+
+@role_required('admin')
+@require_POST
+def admin_schedule_pdf_preview_api(request):
+    offering_id = request.POST.get('offering_id')
+    pdf_file = request.FILES.get('pdf')
+
+    if not offering_id:
+        return JsonResponse({'status': 'error', 'message': 'offering_id は必須です'}, status=400)
+    if not pdf_file:
+        return JsonResponse({'status': 'error', 'message': 'PDFファイルは必須です'}, status=400)
+
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+
+    try:
+        pdf_bytes = pdf_file.read()
+        if not pdf_bytes:
+            return JsonResponse({'status': 'error', 'message': 'PDFファイルが空です'}, status=400)
+        preview = _build_schedule_pdf_preview(offering, pdf_bytes)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'PDF解析に失敗しました: {exc}'}, status=400)
+
+    return JsonResponse({
+        'status': 'success',
+        'preview': preview,
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_schedule_pdf_commit_api(request):
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    offering_id = data.get('offering_id')
+    dates = data.get('dates') or []
+    if not offering_id:
+        return JsonResponse({'status': 'error', 'message': 'offering_id は必須です'}, status=400)
+    if not isinstance(dates, list) or not dates:
+        return JsonResponse({'status': 'error', 'message': 'dates は1件以上必要です'}, status=400)
+
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
+
+    meeting_days = {
+        str(day).strip()
+        for day in (offering.course.meeting_days or [])
+        if str(day).strip()
+    }
+    if not meeting_days:
+        meeting_days = {'月', '火', '水', '木', '金', '土', '日'}
+
+    existing_dates = set(
+        Schedule.objects.filter(course_offering=offering).values_list('date', flat=True)
+    )
+
+    created = []
+    skipped_duplicate = []
+    skipped_weekday = []
+    skipped_invalid = []
+    to_create = []
+
+    for token in dates:
+        token_str = str(token).strip()
+        if not token_str:
+            continue
+        try:
+            date_obj = dt_date.fromisoformat(token_str)
+        except ValueError:
+            skipped_invalid.append(token_str)
+            continue
+        weekday = _weekday_label(date_obj)
+        if weekday not in meeting_days:
+            skipped_weekday.append({'date': token_str, 'weekday': weekday})
+            continue
+        if date_obj in existing_dates:
+            skipped_duplicate.append({'date': token_str, 'weekday': weekday})
+            continue
+        to_create.append(Schedule(date=date_obj, course_offering=offering))
+        existing_dates.add(date_obj)
+        created.append({'date': token_str, 'weekday': weekday})
+
+    if to_create:
+        Schedule.objects.bulk_create(to_create)
+
+    return JsonResponse({
+        'status': 'success',
+        'created_dates': created,
+        'skipped_duplicate_dates': skipped_duplicate,
+        'skipped_weekday_mismatch_dates': skipped_weekday,
+        'skipped_invalid_dates': skipped_invalid,
+    })
 
 @role_required('admin')
 def add_schedule_api(request):
