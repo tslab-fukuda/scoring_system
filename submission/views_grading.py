@@ -175,7 +175,7 @@ def stamps_api(request):
 
 
 @login_required
-@role_required('non-editing teacher', 'teacher', 'admin')
+@role_required('non-editing teacher', 'admin')
 def final_grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
 

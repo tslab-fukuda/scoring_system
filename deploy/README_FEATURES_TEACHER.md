@@ -10,7 +10,7 @@
 |---|---|---|---|
 | ダッシュボード | `/submission/teacher_dashboard/` | `/submission/course_teacher_dashboard/` | `/submission/non_editing_teacher_dashboard/` |
 | 添削フォーム（通常） | 利用可（採点/書き込み） | 利用可（採点/書き込み） | 利用可（閲覧中心） |
-| 最終評価フォーム | 利用可 | 標準遷移なし | 利用可 |
+| 最終評価フォーム | 利用不可 | 標準遷移なし | 利用可 |
 | 実験進捗更新（保存） | 利用可 | 不可 | 不可 |
 
 ## 機能一覧
@@ -20,7 +20,7 @@
 | 予習レポート一覧API | 未添削/添削済予習レポートを取得 | 1. 画面で曜日/班/実験番号を指定 2. 一覧を再読込 | `submission/views_teacher.py` / `get_ungraded_submissions`, `get_graded_submissions` |
 | 本レポート一覧API | 未最終評価/最終評価済の本レポートを取得 | 1. 条件指定 2. 一覧読込 | `submission/views_teacher.py` / `get_ungraded_main_reports`, `get_graded_main_reports` |
 | 添削フォーム（通常） | PDF注釈、採点保存、比較表示、コピペチェック | 1. レポート行の「採点/閲覧」 2. PDF確認 3. 必要なら比較表示 4. コピペチェック 5. 保存 | `submission/views_grading.py` / `grading_form`<br>`submission/templates/submission/grading_form.html`<br>`submission/static/submission/js/grading_form.js` |
-| 最終評価フォーム | 予習/本の得点集約表示、最終評価値・コメント保存、比較表示、コピペチェック | 1. 最終評価対象を開く 2. 比較/コピペチェックで確認 3. 最終評価保存 | `submission/views_grading.py` / `final_grading_form`<br>`submission/templates/submission/final_grading_form.html`<br>`submission/static/submission/js/final_grading_form.js` |
+| 最終評価フォーム（non-editing teacherのみ） | 予習/本の得点集約表示、最終評価値・コメント保存、比較表示、コピペチェック | 1. 最終評価対象を開く 2. 比較/コピペチェックで確認 3. 最終評価保存 | `submission/views_grading.py` / `final_grading_form`<br>`submission/templates/submission/final_grading_form.html`<br>`submission/static/submission/js/final_grading_form.js` |
 | 比較対象PDF取得 | 指定学生の同一条件提出を比較表示 | 1. 添削画面で比較ユーザ選択 2. PDF表示 | `submission/views_grading.py` / `compare_user_submission` |
 | コピペチェックAPI | 同一科目/年度・同一実験番号・同一種別で類似候補抽出 | 1. 添削画面で「コピペチェック」 2. 一致詳細を確認 3. 比較表示へ遷移 | `submission/views_grading.py` / `submission_similarity_api`<br>`submission/views_grading.py` / `_get_submission_text_index`, `_compare_sections` ほか内部関数 |
 | 学生一覧取得 | 担当科目/年度の学生を取得 | 1. ダッシュボードで学生一覧表示を開く 2. 条件で絞り込み | `submission/views_teacher.py` / `teacher_students_api` |
