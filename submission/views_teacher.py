@@ -6,14 +6,18 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
-from datetime import time, timedelta
+from datetime import time, timedelta, date as dt_date
 from zoneinfo import ZoneInfo
 
 from submission.decorators import role_required
+from submission.roles import get_effective_role
 from .models import (
     CourseOffering,
     Enrollment,
     ExperimentCompletion,
+    ExperimentEquipmentCheckLog,
+    ExperimentEquipmentCheckState,
+    ExperimentEquipmentConfig,
     ExperimentProgress,
     ExperimentTaskConfig,
     Schedule,
@@ -120,6 +124,41 @@ def _normalize_task_values(values):
         normalized.append(token)
         seen.add(token)
     return normalized
+
+
+def _normalize_equipment_values(values):
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = values.replace('\r', '').replace(',', '\n').split('\n')
+    normalized = []
+    seen = set()
+    for value in values:
+        token = str(value).strip()
+        if not token or token in seen:
+            continue
+        normalized.append(token)
+        seen.add(token)
+    return normalized
+
+
+def _display_user_name(user):
+    if not user:
+        return ''
+    profile = getattr(user, 'userprofile', None)
+    return profile.full_name if profile and profile.full_name else user.username
+
+
+def _local_now():
+    return timezone.localtime(timezone.now(), JST)
+
+
+def _is_equipment_complete(items, checked_items):
+    item_set = set(_normalize_equipment_values(items))
+    checked_set = set(_normalize_equipment_values(checked_items))
+    if not item_set:
+        return False
+    return item_set.issubset(checked_set)
 
 
 def _target_student_profile(profile_id, offering_id):
@@ -680,4 +719,233 @@ def teacher_student_reports(request):
         'reports': data,
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
+    })
+
+
+def _resolve_equipment_selected_date(date_raw, schedule_dates):
+    if not schedule_dates:
+        return None
+    parsed = None
+    if date_raw:
+        try:
+            parsed = dt_date.fromisoformat(str(date_raw))
+        except ValueError:
+            parsed = None
+    if parsed and parsed in schedule_dates:
+        return parsed
+    now_date = _local_now().date()
+    past_or_today = [d for d in schedule_dates if d <= now_date]
+    if past_or_today:
+        return max(past_or_today)
+    return min(schedule_dates)
+
+
+@role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
+def teacher_equipment_dashboard_api(request):
+    offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
+    if error_response:
+        return error_response
+    if not offering_id:
+        return JsonResponse({
+            'status': 'ok',
+            'schedule_dates': [],
+            'selected_date': '',
+            'selected_phase': 'start',
+            'configs': [],
+            'history': [],
+            'alerts': {'total_missing': 0, 'rows': []},
+            'can_edit': False,
+        })
+
+    phase = (request.GET.get('phase') or 'start').strip()
+    if phase not in {'start', 'end'}:
+        phase = 'start'
+
+    configs_qs = ExperimentEquipmentConfig.objects.filter(
+        course_offering_id=offering_id
+    ).order_by('experiment_number')
+    config_map = {
+        cfg.experiment_number: _normalize_equipment_values(cfg.items_json)
+        for cfg in configs_qs
+    }
+    config_numbers = list(config_map.keys())
+
+    schedule_dates = list(
+        Schedule.objects.filter(course_offering_id=offering_id)
+        .order_by('date')
+        .values_list('date', flat=True)
+    )
+    selected_date = _resolve_equipment_selected_date(request.GET.get('schedule_date'), schedule_dates)
+
+    state_map = {}
+    history = []
+    if selected_date:
+        states = ExperimentEquipmentCheckState.objects.filter(
+            course_offering_id=offering_id,
+            schedule_date=selected_date,
+            phase=phase,
+        ).select_related('updated_by', 'updated_by__userprofile')
+        for state in states:
+            checked = _normalize_equipment_values(state.checked_items_json)
+            state_map[state.experiment_number] = {
+                'checked_items': checked,
+                'updated_by': _display_user_name(state.updated_by),
+                'updated_at': timezone.localtime(state.updated_at, JST).strftime('%Y-%m-%d %H:%M'),
+            }
+
+        logs = (
+            ExperimentEquipmentCheckLog.objects.filter(
+                course_offering_id=offering_id,
+                schedule_date=selected_date,
+            )
+            .select_related('checked_by', 'checked_by__userprofile')
+            .order_by('-checked_at')[:200]
+        )
+        for log in logs:
+            items = _normalize_equipment_values(log.checked_items_json)
+            total_count = len(config_map.get(log.experiment_number, []))
+            history.append({
+                'experiment_number': log.experiment_number,
+                'phase': '開始時' if log.phase == 'start' else '終了時',
+                'checked_count': len(items),
+                'item_count': total_count,
+                'checked_by': _display_user_name(log.checked_by),
+                'checked_at': timezone.localtime(log.checked_at, JST).strftime('%Y-%m-%d %H:%M'),
+            })
+
+    config_rows = []
+    for exp_no in config_numbers:
+        items = config_map.get(exp_no, [])
+        state = state_map.get(exp_no, {})
+        checked_items = state.get('checked_items', [])
+        config_rows.append({
+            'experiment_number': exp_no,
+            'items': items,
+            'checked_items': checked_items,
+            'checked_count': len(checked_items),
+            'item_count': len(items),
+            'completed': _is_equipment_complete(items, checked_items),
+            'updated_by': state.get('updated_by', ''),
+            'updated_at': state.get('updated_at', ''),
+        })
+
+    now_date = _local_now().date()
+    due_dates = [d for d in schedule_dates if d <= now_date]
+    state_due_qs = ExperimentEquipmentCheckState.objects.filter(
+        course_offering_id=offering_id,
+        schedule_date__in=due_dates,
+    ).values_list('schedule_date', 'experiment_number', 'phase', 'checked_items_json')
+    completion_map = {}
+    for date_value, exp_no, phase_value, checked_items in state_due_qs:
+        items = config_map.get(exp_no, [])
+        completion_map[(date_value, exp_no, phase_value)] = _is_equipment_complete(items, checked_items)
+
+    alert_rows = []
+    total_missing = 0
+    for date_value in sorted(due_dates, reverse=True):
+        missing_labels = []
+        for exp_no in config_numbers:
+            if not completion_map.get((date_value, exp_no, 'start'), False):
+                missing_labels.append(f'{exp_no}(開始時)')
+            if not completion_map.get((date_value, exp_no, 'end'), False):
+                missing_labels.append(f'{exp_no}(終了時)')
+        if missing_labels:
+            total_missing += len(missing_labels)
+            alert_rows.append({
+                'date': date_value.strftime('%Y-%m-%d'),
+                'missing_count': len(missing_labels),
+                'missing_labels': missing_labels[:10],
+            })
+
+    effective_role = (get_effective_role(request) or '').strip()
+    can_edit = effective_role == 'teacher'
+
+    return JsonResponse({
+        'status': 'ok',
+        'schedule_dates': [d.strftime('%Y-%m-%d') for d in schedule_dates],
+        'selected_date': selected_date.strftime('%Y-%m-%d') if selected_date else '',
+        'selected_phase': phase,
+        'configs': config_rows,
+        'history': history,
+        'alerts': {
+            'total_missing': total_missing,
+            'rows': alert_rows,
+        },
+        'can_edit': can_edit,
+    })
+
+
+@role_required('teacher')
+@require_POST
+def teacher_save_equipment_check_api(request):
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    offering_id_raw = data.get('offering_id')
+    schedule_date_raw = str(data.get('schedule_date', '')).strip()
+    experiment_number = str(data.get('experiment_number', '')).strip()
+    phase = str(data.get('phase', 'start')).strip()
+    checked_items = _normalize_equipment_values(data.get('checked_items', []))
+
+    try:
+        offering_id = int(offering_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'offering_id が不正です'}, status=400)
+    try:
+        schedule_date = dt_date.fromisoformat(schedule_date_raw)
+    except ValueError:
+        return JsonResponse({'status': 'error', 'message': 'schedule_date が不正です'}, status=400)
+    if not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'experiment_number は必須です'}, status=400)
+    if phase not in {'start', 'end'}:
+        return JsonResponse({'status': 'error', 'message': 'phase は start/end のみ指定できます'}, status=400)
+
+    allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
+    if offering_id not in allowed_ids:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度にはアクセスできません'}, status=403)
+    if not Schedule.objects.filter(course_offering_id=offering_id, date=schedule_date).exists():
+        return JsonResponse({'status': 'error', 'message': '指定日が授業予定に存在しません'}, status=400)
+
+    cfg = ExperimentEquipmentConfig.objects.filter(
+        course_offering_id=offering_id,
+        experiment_number=experiment_number
+    ).first()
+    if not cfg:
+        return JsonResponse({'status': 'error', 'message': '器具チェック設定がありません'}, status=400)
+    allowed_items = set(_normalize_equipment_values(cfg.items_json))
+    filtered_checked = [item for item in checked_items if item in allowed_items]
+
+    with transaction.atomic():
+        state, _ = ExperimentEquipmentCheckState.objects.update_or_create(
+            course_offering_id=offering_id,
+            schedule_date=schedule_date,
+            experiment_number=experiment_number,
+            phase=phase,
+            defaults={
+                'checked_items_json': filtered_checked,
+                'updated_by': request.user,
+            }
+        )
+        ExperimentEquipmentCheckLog.objects.create(
+            course_offering_id=offering_id,
+            schedule_date=schedule_date,
+            experiment_number=experiment_number,
+            phase=phase,
+            checked_items_json=filtered_checked,
+            checked_by=request.user,
+        )
+
+    completed = _is_equipment_complete(cfg.items_json, filtered_checked)
+    return JsonResponse({
+        'status': 'ok',
+        'experiment_number': experiment_number,
+        'phase': phase,
+        'checked_items': filtered_checked,
+        'checked_count': len(filtered_checked),
+        'item_count': len(_normalize_equipment_values(cfg.items_json)),
+        'completed': completed,
+        'updated_by': _display_user_name(request.user),
+        'updated_at': timezone.localtime(state.updated_at, JST).strftime('%Y-%m-%d %H:%M'),
     })

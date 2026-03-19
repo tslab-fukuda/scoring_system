@@ -132,6 +132,9 @@ body.dark-mode #course-management .form-select option[value=""] {
         <button type="button" class="list-group-item list-group-item-action"
                 :class="{active: selectedSection === 'task_config'}"
                 @click="selectedSection = 'task_config'">実験進捗タスク設定</button>
+        <button type="button" class="list-group-item list-group-item-action"
+                :class="{active: selectedSection === 'equipment_config'}"
+                @click="selectedSection = 'equipment_config'">実験器具チェック設定</button>
       </div>
       {% endverbatim %}
     </div>
@@ -237,7 +240,7 @@ body.dark-mode #course-management .form-select option[value=""] {
         </form>
       </div>
 
-      <div v-else>
+      <div v-else-if="selectedSection === 'task_config'">
         <h5>実験進捗タスク設定</h5>
         <div v-if="!contextOfferingId" class="alert alert-info small">上部で年度を選択してください。</div>
         <form @submit.prevent="addTaskConfig" class="mb-3">
@@ -281,6 +284,59 @@ body.dark-mode #course-management .form-select option[value=""] {
             <div class="form-text">同一実験番号が既に登録されている場合はスキップします。</div>
           </div>
           <button class="btn btn-primary w-100" :disabled="!canAddTaskConfig">追加 / 更新</button>
+        </form>
+      </div>
+
+      <div v-else>
+        <h5>実験器具チェック設定</h5>
+        <div v-if="!contextOfferingId" class="alert alert-info small">上部で年度を選択してください。</div>
+        <form @submit.prevent="addEquipmentConfig" class="mb-3">
+          <div class="mb-2">
+            <label class="form-label">科目/年度</label>
+            <input type="text" class="form-control" :value="contextOfferingLabel" readonly>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">実験番号</label>
+            <select v-model="equipmentConfigForm.experiment_number" class="form-select" :disabled="!contextOfferingId" required>
+              <option value="">選択</option>
+              <option v-for="ex in contextExperimentOptions" :key="'equip-ex-' + ex" :value="ex">{{ ex }}</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">器具項目（1行に1つ）</label>
+            <textarea
+              v-model="equipmentConfigForm.items_text"
+              class="form-control"
+              rows="6"
+              :disabled="!contextOfferingId"
+              placeholder="測定用かいろ基盤x2&#10;BNC-ワニ口&#10;MicroUSB_TA管理"
+            ></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">過去年度からコピー</label>
+            <div class="input-group input-group-sm">
+              <select v-model="equipmentConfigCopySourceOfferingId" class="form-select" :disabled="!contextOfferingId || equipmentConfigCopyLoading">
+                <option value="">コピー元年度を選択</option>
+                <option
+                  v-for="o in equipmentConfigCopySourceOfferingOptions"
+                  :key="'equip-copy-source-' + o.id"
+                  :value="o.id"
+                >
+                  {{ o.year }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                :disabled="!canCopyEquipmentConfig"
+                @click="copyEquipmentConfigFromPreviousYear"
+              >
+                {{ equipmentConfigCopyLoading ? 'コピー中...' : 'コピー実行' }}
+              </button>
+            </div>
+            <div class="form-text">同一実験番号が既に登録されている場合はスキップします。</div>
+          </div>
+          <button class="btn btn-primary w-100" :disabled="!canAddEquipmentConfig">追加 / 更新</button>
         </form>
       </div>
       {% endverbatim %}
@@ -365,7 +421,7 @@ body.dark-mode #course-management .form-select option[value=""] {
         </div>
       </div>
 
-      <div v-else>
+      <div v-else-if="selectedSection === 'task_config'">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <h5 class="mb-0">登録済み 実験進捗タスク設定</h5>
           <span class="badge text-bg-light helper-badge">{{ filteredTaskConfigs.length }} 件</span>
@@ -386,6 +442,34 @@ body.dark-mode #course-management .form-select option[value=""] {
                 </td>
               </tr>
               <tr v-if="!filteredTaskConfigs.length">
+                <td colspan="3" class="text-center text-muted">設定がありません</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-else>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h5 class="mb-0">登録済み 実験器具チェック設定</h5>
+          <span class="badge text-bg-light helper-badge">{{ filteredEquipmentConfigs.length }} 件</span>
+        </div>
+        <div class="mb-2">
+          <input type="text" class="form-control form-control-sm" v-model="equipmentConfigSearch" placeholder="実験番号で絞り込み">
+        </div>
+        <div class="panel-table-wrap">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th>実験番号</th><th>器具項目</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="cfg in filteredEquipmentConfigs" :key="'equip-cfg-' + cfg.id">
+                <td>{{ cfg.experiment_number }}</td>
+                <td style="white-space: pre-line;">{{ (cfg.items_json || []).join('\n') }}</td>
+                <td class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-secondary" @click="setEquipmentConfigForm(cfg)">編集</button>
+                  <button class="btn btn-sm btn-outline-danger" @click="deleteEquipmentConfig(cfg.id)">削除</button>
+                </td>
+              </tr>
+              <tr v-if="!filteredEquipmentConfigs.length">
                 <td colspan="3" class="text-center text-muted">設定がありません</td>
               </tr>
             </tbody>

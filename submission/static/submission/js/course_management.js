@@ -7,6 +7,7 @@ new Vue({
         enrollments: [],
         users: [],
         taskConfigs: [],
+        equipmentConfigs: [],
 
         contextCourseId: '',
         contextOfferingId: '',
@@ -15,6 +16,7 @@ new Vue({
         enrollmentListSearch: '',
         enrollmentRoleFilter: '',
         taskConfigSearch: '',
+        equipmentConfigSearch: '',
 
         courseForm: { name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
         weekDays: ['月', '火', '水', '木', '金'],
@@ -23,8 +25,11 @@ new Vue({
         offeringForm: { year: '' },
         enrollmentForm: { user_id: '', offering_id: '', role: 'teacher', experiment_day: '', experiment_group: '' },
         taskConfigForm: { offering_id: '', experiment_number: '', task_list_text: '' },
+        equipmentConfigForm: { offering_id: '', experiment_number: '', items_text: '' },
         taskConfigCopySourceOfferingId: '',
         taskConfigCopyLoading: false,
+        equipmentConfigCopySourceOfferingId: '',
+        equipmentConfigCopyLoading: false,
 
         showCourseEdit: false,
         editCourseForm: { id: null, name: '', code: '', meeting_days: [], experiment_numbers: [], experiment_numbers_text: '' },
@@ -121,6 +126,14 @@ new Vue({
             }
             return list.sort((a, b) => String(a.experiment_number || '').localeCompare(String(b.experiment_number || '')));
         },
+        filteredEquipmentConfigs() {
+            let list = this.equipmentConfigs.filter(cfg => String(cfg.course_offering_id) === String(this.contextOfferingId));
+            const keyword = (this.equipmentConfigSearch || '').trim().toLowerCase();
+            if (keyword) {
+                list = list.filter(cfg => String(cfg.experiment_number || '').toLowerCase().includes(keyword));
+            }
+            return list.sort((a, b) => String(a.experiment_number || '').localeCompare(String(b.experiment_number || '')));
+        },
         enrollmentRoleOptions() {
             return ['teacher', 'course-teacher', 'non-editing teacher', 'admin'];
         },
@@ -133,6 +146,9 @@ new Vue({
         canAddTaskConfig() {
             return !!(this.contextOfferingId && this.taskConfigForm.experiment_number);
         },
+        canAddEquipmentConfig() {
+            return !!(this.contextOfferingId && this.equipmentConfigForm.experiment_number);
+        },
         taskConfigCopySourceOfferingOptions() {
             if (!this.selectedContextOffering) return [];
             const targetYear = Number(this.selectedContextOffering.year);
@@ -142,6 +158,16 @@ new Vue({
         },
         canCopyTaskConfig() {
             return !!(this.contextOfferingId && this.taskConfigCopySourceOfferingId && !this.taskConfigCopyLoading);
+        },
+        equipmentConfigCopySourceOfferingOptions() {
+            if (!this.selectedContextOffering) return [];
+            const targetYear = Number(this.selectedContextOffering.year);
+            return this.offeringsForContextCourse.filter(o =>
+                String(o.id) !== String(this.contextOfferingId) && Number(o.year) < targetYear
+            );
+        },
+        canCopyEquipmentConfig() {
+            return !!(this.contextOfferingId && this.equipmentConfigCopySourceOfferingId && !this.equipmentConfigCopyLoading);
         },
     },
     methods: {
@@ -162,6 +188,7 @@ new Vue({
                     this.enrollments = data.enrollments || [];
                     this.users = data.users || [];
                     this.taskConfigs = data.task_configs || [];
+                    this.equipmentConfigs = data.equipment_configs || [];
                     this.initializeContext();
                 });
         },
@@ -193,9 +220,12 @@ new Vue({
         applyContextToForms() {
             this.enrollmentForm.offering_id = this.contextOfferingId || '';
             this.taskConfigForm.offering_id = this.contextOfferingId || '';
+            this.equipmentConfigForm.offering_id = this.contextOfferingId || '';
             this.syncEnrollmentDay();
             this.syncTaskExperiment();
+            this.syncEquipmentExperiment();
             this.syncTaskConfigCopySource();
+            this.syncEquipmentConfigCopySource();
         },
         addCourse() {
             this.courseForm.experiment_numbers = this.parseExperimentText(this.courseForm.experiment_numbers_text);
@@ -437,6 +467,57 @@ new Vue({
                 }
             });
         },
+        addEquipmentConfig() {
+            if (!this.contextOfferingId) {
+                alert('年度を選択してください');
+                return;
+            }
+            const payload = {
+                offering_id: this.contextOfferingId,
+                experiment_number: this.equipmentConfigForm.experiment_number,
+                items_json: this.parseTaskText(this.equipmentConfigForm.items_text),
+            };
+            fetch('/submission/admin_add_equipment_config/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const cfg = data.equipment_config;
+                    const idx = this.equipmentConfigs.findIndex(item => item.id === cfg.id);
+                    if (idx === -1) {
+                        this.equipmentConfigs.push(cfg);
+                    } else {
+                        this.equipmentConfigs.splice(idx, 1, cfg);
+                    }
+                    this.equipmentConfigForm.items_text = '';
+                } else {
+                    alert(data.message || '追加に失敗しました');
+                }
+            });
+        },
+        setEquipmentConfigForm(cfg) {
+            this.equipmentConfigForm.offering_id = cfg.course_offering_id;
+            this.equipmentConfigForm.experiment_number = cfg.experiment_number;
+            this.equipmentConfigForm.items_text = (cfg.items_json || []).join('\n');
+        },
+        deleteEquipmentConfig(id) {
+            if (!confirm('削除しますか？')) return;
+            fetch(`/submission/admin_delete_equipment_config/${id}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': window.csrfToken }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    this.equipmentConfigs = this.equipmentConfigs.filter(item => item.id !== id);
+                } else {
+                    alert(data.message || '削除に失敗しました');
+                }
+            });
+        },
         copyTaskConfigFromPreviousYear() {
             if (!this.contextOfferingId) {
                 alert('コピー先の年度を選択してください');
@@ -476,6 +557,45 @@ new Vue({
                 this.taskConfigCopyLoading = false;
             });
         },
+        copyEquipmentConfigFromPreviousYear() {
+            if (!this.contextOfferingId) {
+                alert('コピー先の年度を選択してください');
+                return;
+            }
+            if (!this.equipmentConfigCopySourceOfferingId) {
+                alert('コピー元年度を選択してください');
+                return;
+            }
+            if (!confirm('選択した過去年度の実験器具チェック設定をコピーしますか？（既存の実験番号はスキップされます）')) {
+                return;
+            }
+            this.equipmentConfigCopyLoading = true;
+            fetch('/submission/admin_copy_equipment_configs/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.csrfToken },
+                body: JSON.stringify({
+                    target_offering_id: this.contextOfferingId,
+                    source_offering_id: this.equipmentConfigCopySourceOfferingId,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const created = data.created_count || 0;
+                    const skipped = data.skipped_count || 0;
+                    alert(`コピー完了: ${created} 件追加 / ${skipped} 件スキップ`);
+                    this.fetchAll();
+                } else {
+                    alert(data.message || 'コピーに失敗しました');
+                }
+            })
+            .catch(() => {
+                alert('コピーに失敗しました');
+            })
+            .finally(() => {
+                this.equipmentConfigCopyLoading = false;
+            });
+        },
         syncEnrollmentDay() {
             if (this.enrollmentForm.experiment_day && !this.enrollmentDayOptions.includes(this.enrollmentForm.experiment_day)) {
                 this.enrollmentForm.experiment_day = '';
@@ -487,6 +607,12 @@ new Vue({
                 this.taskConfigForm.experiment_number = '';
             }
         },
+        syncEquipmentExperiment() {
+            if (!this.equipmentConfigForm.experiment_number) return;
+            if (!this.contextExperimentOptions.includes(this.equipmentConfigForm.experiment_number)) {
+                this.equipmentConfigForm.experiment_number = '';
+            }
+        },
         syncTaskConfigCopySource() {
             if (!this.taskConfigCopySourceOfferingId) return;
             const exists = this.taskConfigCopySourceOfferingOptions.some(
@@ -494,6 +620,15 @@ new Vue({
             );
             if (!exists) {
                 this.taskConfigCopySourceOfferingId = '';
+            }
+        },
+        syncEquipmentConfigCopySource() {
+            if (!this.equipmentConfigCopySourceOfferingId) return;
+            const exists = this.equipmentConfigCopySourceOfferingOptions.some(
+                o => String(o.id) === String(this.equipmentConfigCopySourceOfferingId)
+            );
+            if (!exists) {
+                this.equipmentConfigCopySourceOfferingId = '';
             }
         }
     },
@@ -509,9 +644,13 @@ new Vue({
         },
         contextExperimentOptions() {
             this.syncTaskExperiment();
+            this.syncEquipmentExperiment();
         },
         taskConfigCopySourceOfferingOptions() {
             this.syncTaskConfigCopySource();
+        },
+        equipmentConfigCopySourceOfferingOptions() {
+            this.syncEquipmentConfigCopySource();
         }
     },
     mounted() {

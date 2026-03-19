@@ -52,6 +52,10 @@ urlpatterns = [
     path('admin_update_task_config/<int:task_config_id>/', views_admin.admin_update_task_config, name='admin_update_task_config'),
     path('admin_delete_task_config/<int:task_config_id>/', views_admin.admin_delete_task_config, name='admin_delete_task_config'),
     path('admin_copy_task_configs/', views_admin.admin_copy_task_configs, name='admin_copy_task_configs'),
+    path('admin_add_equipment_config/', views_admin.admin_add_equipment_config, name='admin_add_equipment_config'),
+    path('admin_update_equipment_config/<int:equipment_config_id>/', views_admin.admin_update_equipment_config, name='admin_update_equipment_config'),
+    path('admin_delete_equipment_config/<int:equipment_config_id>/', views_admin.admin_delete_equipment_config, name='admin_delete_equipment_config'),
+    path('admin_copy_equipment_configs/', views_admin.admin_copy_equipment_configs, name='admin_copy_equipment_configs'),
     path('admin_students_api/', views_admin.get_students_api, name='get_students_api'),
     path('api_student_reports/', views_admin.api_student_reports, name='api_student_reports'),
     path('admin_schedule_api/', views_admin.get_schedule_api, name='get_schedule_api'),
@@ -96,4 +100,6 @@ urlpatterns = [
     path('update_experiment_progress/', views_teacher.update_experiment_progress, name='update_experiment_progress'),
     path('teacher_students_api/', views_teacher.teacher_students_api, name='teacher_students_api'),
     path('teacher_student_reports/', views_teacher.teacher_student_reports, name='teacher_student_reports'),
+    path('teacher_equipment_dashboard_api/', views_teacher.teacher_equipment_dashboard_api, name='teacher_equipment_dashboard_api'),
+    path('teacher_save_equipment_check_api/', views_teacher.teacher_save_equipment_check_api, name='teacher_save_equipment_check_api'),
 ]

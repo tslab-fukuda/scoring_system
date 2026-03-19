@@ -279,3 +279,97 @@ class SimilarityJob(models.Model):
 
     def __str__(self):
         return f"similarity-job:{self.target_submission_id}:{self.algorithm_version}:{self.status}"
+
+
+class ExperimentEquipmentConfig(models.Model):
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_equipment_configs'
+    )
+    experiment_number = models.CharField(max_length=32)
+    items_json = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('course_offering', 'experiment_number')
+        indexes = [
+            models.Index(fields=['course_offering', 'experiment_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.course_offering} / {self.experiment_number}"
+
+
+class ExperimentEquipmentCheckState(models.Model):
+    PHASE_CHOICES = [
+        ('start', 'start'),
+        ('end', 'end'),
+    ]
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_equipment_check_states'
+    )
+    schedule_date = models.DateField()
+    experiment_number = models.CharField(max_length=32)
+    phase = models.CharField(max_length=8, choices=PHASE_CHOICES)
+    checked_items_json = models.JSONField(default=list, blank=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_experiment_equipment_check_states'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('course_offering', 'schedule_date', 'experiment_number', 'phase')
+        indexes = [
+            models.Index(fields=['course_offering', 'schedule_date', 'phase']),
+            models.Index(fields=['course_offering', 'schedule_date', 'experiment_number', 'phase']),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.course_offering} / {self.schedule_date} / "
+            f"{self.experiment_number} / {self.phase}"
+        )
+
+
+class ExperimentEquipmentCheckLog(models.Model):
+    PHASE_CHOICES = [
+        ('start', 'start'),
+        ('end', 'end'),
+    ]
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_equipment_check_logs'
+    )
+    schedule_date = models.DateField()
+    experiment_number = models.CharField(max_length=32)
+    phase = models.CharField(max_length=8, choices=PHASE_CHOICES)
+    checked_items_json = models.JSONField(default=list, blank=True)
+    checked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='experiment_equipment_check_logs'
+    )
+    checked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['course_offering', 'schedule_date', 'phase', 'checked_at']),
+            models.Index(fields=['course_offering', 'schedule_date', 'experiment_number']),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.course_offering} / {self.schedule_date} / "
+            f"{self.experiment_number} / {self.phase}"
+        )

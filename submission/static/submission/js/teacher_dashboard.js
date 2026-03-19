@@ -53,6 +53,16 @@ new Vue({
             selected_task_nos: [],
             loading: false,
         },
+        equipmentLoading: false,
+        equipmentMessage: '',
+        equipmentScheduleDates: [],
+        equipmentSelectedDate: '',
+        equipmentSelectedPhase: 'start',
+        equipmentConfigs: [],
+        equipmentHistory: [],
+        equipmentAlertTotal: 0,
+        equipmentAlertRows: [],
+        equipmentCanEdit: false,
     },
     computed: {
         currentTabComponent() {
@@ -87,6 +97,8 @@ new Vue({
         refreshCurrentTab() {
             if (this.tab === 'experiment_record') {
                 this.fetchStudents();
+            } else if (this.tab === 'equipment_check') {
+                this.fetchEquipmentDashboard();
             } else {
                 this.fetchList();
             }
@@ -248,6 +260,103 @@ new Vue({
                 })
                 .finally(() => {
                     this.taskEditor.loading = false;
+                });
+        },
+        fetchEquipmentDashboard() {
+            this.ensureOfferingSelected();
+            if (!this.selectedOfferingId) {
+                this.equipmentScheduleDates = [];
+                this.equipmentSelectedDate = '';
+                this.equipmentConfigs = [];
+                this.equipmentHistory = [];
+                this.equipmentAlertTotal = 0;
+                this.equipmentAlertRows = [];
+                this.equipmentCanEdit = false;
+                this.equipmentMessage = '';
+                return;
+            }
+            const params = new URLSearchParams({
+                offering_id: String(this.selectedOfferingId),
+                phase: this.equipmentSelectedPhase || 'start',
+            });
+            if (this.equipmentSelectedDate) {
+                params.append('schedule_date', this.equipmentSelectedDate);
+            }
+            this.equipmentLoading = true;
+            this.equipmentMessage = '器具チェック情報を読み込み中...';
+            fetch('/submission/teacher_equipment_dashboard_api/?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status && data.status !== 'ok') {
+                        throw new Error(data.message || '器具チェック情報の取得に失敗しました');
+                    }
+                    this.equipmentScheduleDates = Array.isArray(data.schedule_dates) ? data.schedule_dates : [];
+                    this.equipmentSelectedDate = data.selected_date || '';
+                    this.equipmentSelectedPhase = data.selected_phase || this.equipmentSelectedPhase || 'start';
+                    this.equipmentConfigs = Array.isArray(data.configs)
+                        ? data.configs.map(cfg => ({
+                            ...cfg,
+                            checked_items: Array.isArray(cfg.checked_items) ? cfg.checked_items.map(v => String(v)) : [],
+                            items: Array.isArray(cfg.items) ? cfg.items.map(v => String(v)) : [],
+                        }))
+                        : [];
+                    this.equipmentHistory = Array.isArray(data.history) ? data.history : [];
+                    const alerts = data.alerts || {};
+                    this.equipmentAlertTotal = Number(alerts.total_missing || 0);
+                    this.equipmentAlertRows = Array.isArray(alerts.rows) ? alerts.rows : [];
+                    this.equipmentCanEdit = data.can_edit === true;
+                    this.equipmentMessage = this.equipmentSelectedDate
+                        ? `表示日: ${this.equipmentSelectedDate} / ${this.equipmentSelectedPhase === 'start' ? '開始時' : '終了時'}`
+                        : '授業予定日を登録するとチェック可能になります';
+                })
+                .catch((err) => {
+                    this.equipmentMessage = '';
+                    alert(err.message || '器具チェック情報の取得に失敗しました');
+                })
+                .finally(() => {
+                    this.equipmentLoading = false;
+                });
+        },
+        saveEquipmentCheck(cfg) {
+            if (!this.equipmentCanEdit) return;
+            if (!this.selectedOfferingId || !this.equipmentSelectedDate) {
+                alert('科目/年度と実施日を選択してください');
+                return;
+            }
+            const payload = {
+                offering_id: this.selectedOfferingId,
+                schedule_date: this.equipmentSelectedDate,
+                phase: this.equipmentSelectedPhase || 'start',
+                experiment_number: cfg.experiment_number,
+                checked_items: Array.isArray(cfg.checked_items) ? cfg.checked_items : [],
+            };
+            this.equipmentLoading = true;
+            this.equipmentMessage = `${cfg.experiment_number} を保存中...`;
+            fetch('/submission/teacher_save_equipment_check_api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify(payload),
+            })
+                .then(async (res) => {
+                    const data = await res.json();
+                    if (!res.ok || data.status !== 'ok') {
+                        throw new Error(data.message || '保存に失敗しました');
+                    }
+                    return data;
+                })
+                .then(() => {
+                    this.equipmentMessage = `${cfg.experiment_number} を保存しました`;
+                    this.fetchEquipmentDashboard();
+                })
+                .catch((err) => {
+                    this.equipmentMessage = '';
+                    alert(err.message || '保存に失敗しました');
+                })
+                .finally(() => {
+                    this.equipmentLoading = false;
                 });
         }
     },

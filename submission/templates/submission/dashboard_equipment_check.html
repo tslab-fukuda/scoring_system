@@ -1,0 +1,128 @@
+{% verbatim %}
+<div class="equipment-check-area">
+    <div class="alert alert-warning py-2" v-if="equipmentAlertTotal > 0">
+        <div class="fw-semibold">器具チェック未完了があります（{{ equipmentAlertTotal }} 件）</div>
+        <div class="small" v-for="row in equipmentAlertRows.slice(0, 6)" :key="'eq-alert-' + row.date">
+            {{ row.date }}: {{ row.missing_count }} 件未完了
+            <span v-if="row.missing_labels && row.missing_labels.length">
+                （{{ row.missing_labels.join(' / ') }}）
+            </span>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label mb-1">実施日</label>
+                    <select class="form-select" v-model="equipmentSelectedDate" @change="fetchEquipmentDashboard()">
+                        <option value="">選択</option>
+                        <option v-for="d in equipmentScheduleDates" :key="'eq-date-' + d" :value="d">{{ d }}</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1">フェーズ</label>
+                    <select class="form-select" v-model="equipmentSelectedPhase" @change="fetchEquipmentDashboard()">
+                        <option value="start">開始時</option>
+                        <option value="end">終了時</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-primary w-100" :disabled="equipmentLoading" @click="fetchEquipmentDashboard()">
+                        再読み込み
+                    </button>
+                </div>
+                <div class="col-md-5 text-muted small">
+                    teacher ロールのみ保存できます。履歴は teacher/admin で閲覧できます。
+                </div>
+            </div>
+            <div class="small text-muted mt-2" v-if="equipmentMessage">{{ equipmentMessage }}</div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 120px;">実験番号</th>
+                    <th>チェック項目</th>
+                    <th style="width: 100px;">状態</th>
+                    <th style="width: 190px;">最終更新</th>
+                    <th style="width: 100px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="cfg in equipmentConfigs" :key="'eq-cfg-' + cfg.experiment_number">
+                    <td class="fw-semibold">{{ cfg.experiment_number }}</td>
+                    <td>
+                        <div v-if="!cfg.items || !cfg.items.length" class="text-muted small">器具チェック項目がありません</div>
+                        <div v-else class="d-flex flex-wrap gap-2">
+                            <label v-for="item in cfg.items" :key="'eq-item-' + cfg.experiment_number + '-' + item" class="form-check me-2">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    :value="item"
+                                    v-model="cfg.checked_items"
+                                    :disabled="!equipmentCanEdit || equipmentLoading"
+                                >
+                                <span class="form-check-label">{{ item }}</span>
+                            </label>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge" :class="cfg.completed ? 'text-bg-success' : 'text-bg-secondary'">
+                            {{ cfg.completed ? '完了' : '未完了' }}
+                        </span>
+                        <div class="small text-muted mt-1">{{ cfg.checked_count }} / {{ cfg.item_count }}</div>
+                    </td>
+                    <td class="small">
+                        <div>{{ cfg.updated_by || '-' }}</div>
+                        <div>{{ cfg.updated_at || '-' }}</div>
+                    </td>
+                    <td>
+                        <button
+                            class="btn btn-sm btn-primary"
+                            :disabled="!equipmentCanEdit || equipmentLoading || !equipmentSelectedDate || !cfg.items || !cfg.items.length"
+                            @click="saveEquipmentCheck(cfg)"
+                        >
+                            保存
+                        </button>
+                    </td>
+                </tr>
+                <tr v-if="!equipmentConfigs.length">
+                    <td colspan="5" class="text-center text-muted">器具チェック設定がありません</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-3">
+        <h6 class="mb-2">チェック履歴（{{ equipmentSelectedDate || '-' }}）</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>日時</th>
+                        <th>実験番号</th>
+                        <th>フェーズ</th>
+                        <th>チェック者</th>
+                        <th>達成</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in equipmentHistory" :key="'eq-history-' + row.checked_at + '-' + row.experiment_number + '-' + row.phase">
+                        <td>{{ row.checked_at }}</td>
+                        <td>{{ row.experiment_number }}</td>
+                        <td>{{ row.phase }}</td>
+                        <td>{{ row.checked_by || '-' }}</td>
+                        <td>{{ row.checked_count }} / {{ row.item_count }}</td>
+                    </tr>
+                    <tr v-if="!equipmentHistory.length">
+                        <td colspan="5" class="text-center text-muted">履歴はありません</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endverbatim %}

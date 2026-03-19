@@ -8,6 +8,7 @@ from submission.models import (
     ExperimentCompletion,
     ExperimentProgress,
     ExperimentTaskConfig,
+    ExperimentEquipmentConfig,
     Course,
     CourseOffering,
     Enrollment,
@@ -140,6 +141,22 @@ def _aggregate_score_details(student_id, experiment_number, offering_id=None):
 
 
 def _normalize_task_list(values):
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = values.replace('\r', '').replace(',', '\n').split('\n')
+    normalized = []
+    seen = set()
+    for value in values:
+        token = str(value).strip()
+        if not token or token in seen:
+            continue
+        normalized.append(token)
+        seen.add(token)
+    return normalized
+
+
+def _normalize_equipment_item_list(values):
     if values is None:
         return []
     if isinstance(values, str):
@@ -416,12 +433,27 @@ def admin_course_data_api(request):
             'experiment_number': cfg.experiment_number,
             'task_list': [str(task).strip() for task in task_list if str(task).strip()],
         })
+    equipment_configs = []
+    for cfg in ExperimentEquipmentConfig.objects.select_related('course_offering__course').order_by(
+        'course_offering__year', 'course_offering__course__code', 'experiment_number'
+    ):
+        items = cfg.items_json if isinstance(cfg.items_json, list) else []
+        equipment_configs.append({
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': cfg.course_offering.course.code,
+            'course_name': cfg.course_offering.course.name,
+            'year': cfg.course_offering.year,
+            'experiment_number': cfg.experiment_number,
+            'items_json': [str(item).strip() for item in items if str(item).strip()],
+        })
     return JsonResponse({
         'courses': courses,
         'offerings': offerings,
         'enrollments': enrollments,
         'users': users,
         'task_configs': task_configs,
+        'equipment_configs': equipment_configs,
     })
 
 
@@ -728,6 +760,169 @@ def admin_copy_task_configs(request):
 
     if to_create:
         ExperimentTaskConfig.objects.bulk_create(to_create)
+
+    return JsonResponse({
+        'status': 'success',
+        'created_count': len(to_create),
+        'skipped_count': len(skipped_numbers),
+        'total_count': len(source_configs),
+        'source_year': source.year,
+        'target_year': target.year,
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_add_equipment_config(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    offering_id = data.get('offering_id')
+    experiment_number = str(data.get('experiment_number', '')).strip()
+    items = _normalize_equipment_item_list(data.get('items_json', []))
+    if not offering_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'offering_id と experiment_number は必須です'}, status=400)
+    if not items:
+        return JsonResponse({'status': 'error', 'message': '器具チェック項目は1件以上必要です'}, status=400)
+
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+
+    cfg, created = ExperimentEquipmentConfig.objects.get_or_create(
+        course_offering=offering,
+        experiment_number=experiment_number,
+        defaults={'items_json': items}
+    )
+    if not created:
+        cfg.items_json = items
+        cfg.save(update_fields=['items_json', 'updated_at'])
+
+    return JsonResponse({
+        'status': 'success',
+        'equipment_config': {
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+            'experiment_number': cfg.experiment_number,
+            'items_json': cfg.items_json,
+        }
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_update_equipment_config(request, equipment_config_id):
+    try:
+        cfg = ExperimentEquipmentConfig.objects.select_related('course_offering__course').get(id=equipment_config_id)
+    except ExperimentEquipmentConfig.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    offering_id = data.get('offering_id')
+    experiment_number = str(data.get('experiment_number', cfg.experiment_number)).strip()
+    items = _normalize_equipment_item_list(data.get('items_json', cfg.items_json))
+    if not offering_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'offering_id と experiment_number は必須です'}, status=400)
+    if not items:
+        return JsonResponse({'status': 'error', 'message': '器具チェック項目は1件以上必要です'}, status=400)
+
+    offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
+    if not offering:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+
+    duplicate = ExperimentEquipmentConfig.objects.filter(
+        course_offering=offering,
+        experiment_number=experiment_number
+    ).exclude(id=cfg.id).exists()
+    if duplicate:
+        return JsonResponse({'status': 'error', 'message': '同じ科目/年度・実験番号の設定が既にあります'}, status=400)
+
+    cfg.course_offering = offering
+    cfg.experiment_number = experiment_number
+    cfg.items_json = items
+    cfg.save(update_fields=['course_offering', 'experiment_number', 'items_json', 'updated_at'])
+
+    return JsonResponse({
+        'status': 'success',
+        'equipment_config': {
+            'id': cfg.id,
+            'course_offering_id': cfg.course_offering_id,
+            'course_code': offering.course.code,
+            'course_name': offering.course.name,
+            'year': offering.year,
+            'experiment_number': cfg.experiment_number,
+            'items_json': cfg.items_json,
+        }
+    })
+
+
+@role_required('admin')
+@require_POST
+def admin_delete_equipment_config(request, equipment_config_id):
+    try:
+        ExperimentEquipmentConfig.objects.get(id=equipment_config_id).delete()
+        return JsonResponse({'status': 'success'})
+    except ExperimentEquipmentConfig.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'not found'}, status=404)
+
+
+@role_required('admin')
+@require_POST
+def admin_copy_equipment_configs(request):
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    target_offering_id = data.get('target_offering_id')
+    source_offering_id = data.get('source_offering_id')
+    if not target_offering_id or not source_offering_id:
+        return JsonResponse({'status': 'error', 'message': 'target_offering_id と source_offering_id は必須です'}, status=400)
+    if str(target_offering_id) == str(source_offering_id):
+        return JsonResponse({'status': 'error', 'message': '同じ年度はコピー元に選択できません'}, status=400)
+
+    target = CourseOffering.objects.select_related('course').filter(id=target_offering_id).first()
+    source = CourseOffering.objects.select_related('course').filter(id=source_offering_id).first()
+    if not target or not source:
+        return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=404)
+    if target.course_id != source.course_id:
+        return JsonResponse({'status': 'error', 'message': '同一科目の年度のみコピーできます'}, status=400)
+    if int(source.year) >= int(target.year):
+        return JsonResponse({'status': 'error', 'message': 'コピー元は過去年度のみ選択できます'}, status=400)
+
+    source_configs = list(
+        ExperimentEquipmentConfig.objects.filter(course_offering=source).order_by('experiment_number', 'id')
+    )
+    existing_numbers = set(
+        ExperimentEquipmentConfig.objects.filter(course_offering=target).values_list('experiment_number', flat=True)
+    )
+
+    to_create = []
+    skipped_numbers = []
+    for cfg in source_configs:
+        exp_no = str(cfg.experiment_number or '').strip()
+        if not exp_no or exp_no in existing_numbers:
+            if exp_no:
+                skipped_numbers.append(exp_no)
+            continue
+        to_create.append(ExperimentEquipmentConfig(
+            course_offering=target,
+            experiment_number=exp_no,
+            items_json=_normalize_equipment_item_list(cfg.items_json),
+        ))
+        existing_numbers.add(exp_no)
+
+    if to_create:
+        ExperimentEquipmentConfig.objects.bulk_create(to_create)
 
     return JsonResponse({
         'status': 'success',

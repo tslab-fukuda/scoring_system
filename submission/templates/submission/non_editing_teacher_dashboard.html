@@ -53,9 +53,13 @@
             <a class="nav-link" :class="{ active: tab === 'experiment_record' }" href="#"
                 @click.prevent="tab = 'experiment_record'">学生詳細</a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'equipment_check' }" href="#"
+                @click.prevent="tab = 'equipment_check'">実験器具チェック</a>
+        </li>
     </ul>
 
-    <div class="row mb-2">
+    <div class="row mb-2" v-if="tab !== 'equipment_check'">
         {% verbatim %}
         <div class="col-auto">
             <select class="form-select" v-model="filter.experiment_day">
@@ -178,6 +182,9 @@
                     {% endverbatim %}
                 </div>
             </div>
+        </div>
+        <div v-else-if="tab === 'equipment_check'" key="equipment-check">
+            {% include "submission/dashboard_equipment_check.html" %}
         </div>
     </transition>
 </div>
