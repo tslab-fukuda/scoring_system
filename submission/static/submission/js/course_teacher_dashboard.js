@@ -27,6 +27,7 @@ new Vue({
     data: {
         tab: 'grading',
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
+        studentGroupFilters: [],
         items: [],
         offerings: offeringContext.offerings || [],
         selectedOfferingId: offeringContext.defaultOfferingId || null,
@@ -42,6 +43,9 @@ new Vue({
         studentReports: [],
         attendanceLogs: [],
         absenceCount: 0,
+        discussionBonusRows: [],
+        discussionTotalCount: 0,
+        discussionCanEdit: false,
         experimentNumbers: [],
         completeMap: {},
         scoreDetail: "",
@@ -190,7 +194,11 @@ new Vue({
             let params = [];
             params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
-            if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
+            if (this.studentGroupFilters.length) {
+                this.studentGroupFilters.forEach(group => {
+                    params.push('experiment_group=' + encodeURIComponent(group));
+                });
+            }
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
             let url = '/submission/teacher_students_api/';
             if (params.length) url += '?' + params.join('&');
@@ -204,6 +212,9 @@ new Vue({
             this.showStudentModal = true;
             this.attendanceLogs = [];
             this.absenceCount = 0;
+            this.discussionBonusRows = [];
+            this.discussionTotalCount = 0;
+            this.discussionCanEdit = false;
             const params = new URLSearchParams();
             params.append('student_id', stu.id);
             if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
@@ -213,6 +224,36 @@ new Vue({
                     this.studentReports = data.reports || [];
                     this.attendanceLogs = data.attendance_logs || [];
                     this.absenceCount = Number.isFinite(data.absence_count) ? data.absence_count : 0;
+                    this.discussionBonusRows = Array.isArray(data.discussion_bonus_rows) ? data.discussion_bonus_rows : [];
+                    this.discussionTotalCount = Number.isFinite(data.discussion_total_count) ? data.discussion_total_count : 0;
+                    this.discussionCanEdit = data.discussion_can_edit === true;
+                });
+        },
+        changeDiscussionBonus(row, delta) {
+            if (!this.discussionCanEdit || !this.selectedStudent || !this.selectedStudent.id || !this.selectedOfferingId) return;
+            fetch('/submission/update_discussion_bonus_api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({
+                    student_id: this.selectedStudent.id,
+                    offering_id: this.selectedOfferingId,
+                    experiment_number: row.experiment_number,
+                    delta: delta,
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || 'ディスカッション加点の更新に失敗しました');
+                    }
+                    row.count = Number.isFinite(data.count) ? data.count : row.count;
+                    this.discussionTotalCount = this.discussionBonusRows.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+                })
+                .catch(err => {
+                    alert(err.message || 'ディスカッション加点の更新に失敗しました');
                 });
         },
         fetchEquipmentDashboard() {

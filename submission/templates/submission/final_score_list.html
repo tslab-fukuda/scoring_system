@@ -65,6 +65,7 @@
                     <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
                     <th @click="toggleSort('absence_count')" style="cursor:pointer">欠席回数</th>
                     <th @click="toggleSort('score_details_total')" style="cursor:pointer">減点</th>
+                    <th @click="toggleSort('discussion_count_total')" style="cursor:pointer">ディスカッション</th>
                     <th @click="toggleSort('completed_task_count')" style="cursor:pointer">実施項目数</th>
                     <th @click="toggleSort('final_grade')" style="cursor:pointer">最終成績</th>
                     {% endverbatim %}
@@ -83,6 +84,7 @@
                     </td>
                     <td>{{ stu.absence_count }}</td>
                     <td>{{ stu.score_details_total !== '' ? stu.score_details_total : '-' }}</td>
+                    <td>{{ stu.discussion_count_total != null ? stu.discussion_count_total : 0 }}</td>
                     <td>
                         <a href="#" @click.prevent="openExperimentLogModal(stu)">{{ stu.completed_task_count != null ? stu.completed_task_count : 0 }}</a>
                     </td>
@@ -107,7 +109,7 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <div><b>学生:</b> {{ scoreDetailStudent.name }}（{{ scoreDetailStudent.student_id }}）</div>
-                        <div><b>科目:</b> {{ finalGradeCourse.course_code }} {{ finalGradeCourse.course_name }}（{{ finalGradeCourse.year }}）</div>
+                        <div><b>科目:</b> {{ scoreDetailCourse.course_code }} {{ scoreDetailCourse.course_name }}（{{ scoreDetailCourse.year }}）</div>
                         <div><b>実験番号:</b> {{ scoreDetailExperiment }}</div>
                     </div>
                     <div v-if="scoreDetailLoading" class="text-muted">読み込み中...</div>
@@ -206,13 +208,13 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <div><b>学生:</b> {{ finalGradeDetail.name }}（{{ finalGradeDetail.student_id }}）</div>
-                        <div><b>科目:</b> {{ scoreDetailCourse.course_code }} {{ scoreDetailCourse.course_name }}（{{ scoreDetailCourse.year }}）</div>
+                        <div><b>科目:</b> {{ finalGradeCourse.course_code }} {{ finalGradeCourse.course_name }}（{{ finalGradeCourse.year }}）</div>
                     </div>
                     <div class="mb-3">
                         <div class="fw-semibold">式</div>
                         <div>
-                            ({{ finalGradeDetail.final_score_total }} {{ formatSigned(finalGradeDetail.score_details_avg) }} {{ formatSigned(finalGradeDetail.absence_penalty) }})
-                            / {{ finalGradeDetail.experiment_count }}
+                            ({{ finalGradeDetail.final_score_total }} - {{ finalGradeDetail.score_details_avg }} - {{ finalGradeDetail.absence_penalty }} + {{ finalGradeDetail.discussion_bonus_total }})
+                            / {{ finalGradeDetail.grade_divisor }}
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -239,8 +241,16 @@
                                     <td>{{ finalGradeDetail.absence_penalty }}</td>
                                 </tr>
                                 <tr>
-                                    <th>実験項目数</th>
-                                    <td>{{ finalGradeDetail.experiment_count }}</td>
+                                    <th>ディスカッション件数</th>
+                                    <td>{{ finalGradeDetail.discussion_count_total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>ディスカッション加点</th>
+                                    <td>{{ finalGradeDetail.discussion_bonus_total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>成績計算の割り数</th>
+                                    <td>{{ finalGradeDetail.grade_divisor }}</td>
                                 </tr>
                                 <tr>
                                     <th>最終成績</th>

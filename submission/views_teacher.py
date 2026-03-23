@@ -13,6 +13,7 @@ from submission.decorators import role_required
 from submission.roles import get_effective_role
 from .models import (
     CourseOffering,
+    DiscussionBonus,
     Enrollment,
     ExperimentCompletion,
     ExperimentEquipmentCheckLog,
@@ -108,6 +109,27 @@ def _student_enrollment_info(user, offering_id):
     full_name = up.full_name if up else user.username
     student_id = up.student_id if up else ""
     return experiment_day, experiment_group, full_name, student_id
+
+
+def _collect_requested_groups(request):
+    raw_values = request.GET.getlist('experiment_group')
+    if not raw_values:
+        single = request.GET.get('experiment_group')
+        raw_values = [single] if single else []
+    groups = []
+    seen = set()
+    for raw in raw_values:
+        for token in str(raw or '').split(','):
+            value = token.strip()
+            if not value:
+                continue
+            if value.isdigit():
+                value = value.zfill(2)
+            if value in seen:
+                continue
+            groups.append(value)
+            seen.add(value)
+    return groups
 
 
 def _normalize_task_values(values):
@@ -601,22 +623,26 @@ def update_experiment_progress(request):
 def teacher_students_api(request):
     students = []
     day = request.GET.get('experiment_day')
-    group = request.GET.get('experiment_group')
+    groups = _collect_requested_groups(request)
     student_id_filter = request.GET.get('student_id')
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
     if not offering_id:
         return JsonResponse({'students': students})
-    student_ids = Enrollment.objects.filter(
+    enrollment_qs = Enrollment.objects.filter(
         role='student',
         course_offering_id=offering_id,
-    ).values_list('user_id', flat=True)
-    qs = UserProfile.objects.filter(role='student', user_id__in=student_ids)
+    )
     if day:
-        qs = qs.filter(experiment_day=day)
-    if group:
-        qs = qs.filter(experiment_group=group)
+        enrollment_qs = enrollment_qs.filter(experiment_day=day)
+    if groups:
+        enrollment_qs = enrollment_qs.filter(experiment_group__in=groups)
+    enrollment_map = {
+        enr.user_id: enr
+        for enr in enrollment_qs.only('user_id', 'experiment_day', 'experiment_group')
+    }
+    qs = UserProfile.objects.filter(role='student', user_id__in=enrollment_map.keys())
     if student_id_filter:
         qs = qs.filter(student_id__icontains=student_id_filter)
     for up in  qs:
@@ -626,7 +652,7 @@ def teacher_students_api(request):
             course_offering_id=offering_id
         ).values_list('experiment_number', 'completed')
         completed = {ex: done for ex, done in completions}
-        enr = Enrollment.objects.filter(user=up.user, course_offering_id=offering_id, role='student').first()
+        enr = enrollment_map.get(up.user_id)
         students.append({
             'id': up.id,
             'full_name': up.full_name,
@@ -644,15 +670,36 @@ def teacher_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
     if not student_id or not offering_id:
-        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0})
+        return JsonResponse({
+            'reports': [],
+            'attendance_logs': [],
+            'absence_count': 0,
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': False,
+        })
     try:
         profile = UserProfile.objects.get(id=student_id, role='student')
     except UserProfile.DoesNotExist:
-        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0})
+        return JsonResponse({
+            'reports': [],
+            'attendance_logs': [],
+            'absence_count': 0,
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': False,
+        })
     # アクセスできる科目/年度かチェック
     allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
     if int(offering_id) not in allowed_ids:
-        return JsonResponse({'reports': [], 'attendance_logs': [], 'absence_count': 0}, status=403)
+        return JsonResponse({
+            'reports': [],
+            'attendance_logs': [],
+            'absence_count': 0,
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': False,
+        }, status=403)
     enrollment = Enrollment.objects.filter(
         user=profile.user,
         course_offering_id=offering_id,
@@ -715,10 +762,97 @@ def teacher_student_reports(request):
             'score': rep.final_score if rep.final_score is not None else '',
             'submitted_at': timezone.localtime(rep.submitted_at).strftime('%Y-%m-%d %H:%M'),
         })
+    try:
+        offering = CourseOffering.objects.select_related('course').get(id=offering_id)
+        configured_numbers = (offering.course.experiment_numbers or [])
+    except CourseOffering.DoesNotExist:
+        configured_numbers = []
+    discussion_counts = {
+        exp_no: count
+        for exp_no, count in DiscussionBonus.objects.filter(
+            student=profile.user,
+            course_offering_id=offering_id
+        ).values_list('experiment_number', 'count')
+    }
+    ordered_numbers = []
+    seen_numbers = set()
+    for exp_no in configured_numbers:
+        if exp_no in seen_numbers:
+            continue
+        ordered_numbers.append(exp_no)
+        seen_numbers.add(exp_no)
+    ordered_numbers.extend(sorted(set(discussion_counts.keys()) - set(ordered_numbers)))
+    discussion_bonus_rows = [
+        {
+            'experiment_number': exp_no,
+            'count': int(discussion_counts.get(exp_no, 0) or 0),
+        }
+        for exp_no in ordered_numbers
+    ]
+    effective_role = get_effective_role(request)
     return JsonResponse({
         'reports': data,
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
+        'discussion_bonus_rows': discussion_bonus_rows,
+        'discussion_total_count': sum(row['count'] for row in discussion_bonus_rows),
+        'discussion_can_edit': effective_role in {'course-teacher', 'admin'},
+    })
+
+
+@require_POST
+@role_required('course-teacher', 'admin')
+def update_discussion_bonus_api(request):
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON形式が不正です'}, status=400)
+
+    student_profile_id = payload.get('student_id')
+    offering_id = payload.get('offering_id')
+    experiment_number = str(payload.get('experiment_number') or '').strip()
+    try:
+        delta = int(payload.get('delta', 0))
+    except (TypeError, ValueError):
+        delta = 0
+
+    if not student_profile_id or not offering_id or not experiment_number:
+        return JsonResponse({'status': 'error', 'message': 'student_id, offering_id, experiment_number は必須です'}, status=400)
+    if delta not in (-1, 1):
+        return JsonResponse({'status': 'error', 'message': 'delta は 1 または -1 を指定してください'}, status=400)
+
+    allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
+    if int(offering_id) not in allowed_ids:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度にはアクセスできません'}, status=403)
+
+    try:
+        profile = UserProfile.objects.select_related('user').get(id=student_profile_id, role='student')
+        offering = CourseOffering.objects.select_related('course').get(id=offering_id)
+    except (UserProfile.DoesNotExist, CourseOffering.DoesNotExist):
+        return JsonResponse({'status': 'error', 'message': '対象データが見つかりません'}, status=404)
+
+    if not Enrollment.objects.filter(user=profile.user, course_offering=offering, role='student').exists():
+        return JsonResponse({'status': 'error', 'message': '対象学生はこの科目/年度に紐付いていません'}, status=400)
+
+    with transaction.atomic():
+        bonus, _ = DiscussionBonus.objects.select_for_update().get_or_create(
+            student=profile.user,
+            course_offering=offering,
+            experiment_number=experiment_number,
+            defaults={'count': 0, 'updated_by': request.user},
+        )
+        next_count = max(0, int(bonus.count or 0) + delta)
+        if next_count == 0:
+            bonus.delete()
+        else:
+            bonus.count = next_count
+            bonus.updated_by = request.user
+            bonus.save(update_fields=['count', 'updated_by', 'updated_at'])
+
+    return JsonResponse({
+        'status': 'ok',
+        'experiment_number': experiment_number,
+        'count': next_count,
     })
 
 

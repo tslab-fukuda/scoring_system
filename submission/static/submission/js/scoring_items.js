@@ -1,20 +1,25 @@
+function normalizeItems(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  const normalItems = list.filter(item => !item.is_system);
+  const systemItems = list.filter(item => item.is_system);
+  return normalItems.concat(systemItems);
+}
+
+function createEditableItem(item) {
+  return {
+    label: item.label || '',
+    weight: item.weight ?? 1,
+    code: item.code || '',
+    is_system: !!item.is_system,
+    show_in_grading_form: item.show_in_grading_form !== false,
+  };
+}
+
 new Vue({
     el: "#scoring-items-app",
     data: {
-      pre: (window.initialPre || []).map(item => ({
-        label: item.label || '',
-        weight: item.weight ?? 1,
-        code: item.code || '',
-        is_system: !!item.is_system,
-        show_in_grading_form: item.show_in_grading_form !== false,
-      })),
-      main: (window.initialMain || []).map(item => ({
-        label: item.label || '',
-        weight: item.weight ?? 1,
-        code: item.code || '',
-        is_system: !!item.is_system,
-        show_in_grading_form: item.show_in_grading_form !== false,
-      })),
+      pre: normalizeItems(window.initialPre || []).map(createEditableItem),
+      main: normalizeItems(window.initialMain || []).map(createEditableItem),
       courses: window.courses || [],
       selectedCourseId: window.selectedCourseId || '',
       selectedScope: window.selectedScope || 'common'
@@ -29,6 +34,20 @@ new Vue({
       }
     },
     methods: {
+      insertBeforeSystem(list, item) {
+        const insertAt = list.findIndex(x => x.is_system);
+        if (insertAt === -1) {
+          list.push(item);
+          return;
+        }
+        list.splice(insertAt, 0, item);
+      },
+      addPreItem() {
+        this.insertBeforeSystem(this.pre, createEditableItem({}));
+      },
+      addMainItem() {
+        this.insertBeforeSystem(this.main, createEditableItem({}));
+      },
       changeCourse() {
         if (!this.selectedCourseId) return;
         this.selectedScope = 'common';

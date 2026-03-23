@@ -48,7 +48,7 @@
           <span v-if="!item.is_system" class="delete-btn" @click="pre.splice(i,1)">×</span>
           <span v-else class="badge bg-secondary ms-2">system</span>
         </div>
-        <button class="btn btn-outline-secondary add-btn" @click="pre.push({label:'',weight:1,code:'',is_system:false,show_in_grading_form:true})">＋項目追加</button>
+        <button class="btn btn-outline-secondary add-btn" @click="addPreItem">＋項目追加</button>
       </div>
     </div>
     <div class="board-divider"></div>
@@ -65,7 +65,7 @@
           <span v-if="!item.is_system" class="delete-btn" @click="main.splice(i,1)">×</span>
           <span v-else class="badge bg-secondary ms-2">system</span>
         </div>
-        <button class="btn btn-outline-secondary add-btn" @click="main.push({label:'',weight:1,code:'',is_system:false,show_in_grading_form:true})">＋項目追加</button>
+        <button class="btn btn-outline-secondary add-btn" @click="addMainItem">＋項目追加</button>
       </div>
     </div>
   </div>

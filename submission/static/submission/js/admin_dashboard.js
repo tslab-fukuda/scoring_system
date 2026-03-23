@@ -17,6 +17,7 @@ window.app = new Vue({
         showAddModal: false,
         showEditModal: false,
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
+        studentGroupFilters: [],
         offerings: ADMIN_OFFERINGS || [],
         selectedOfferingId: ADMIN_DEFAULT_OFFERING_ID || null,
         selectedCourseId: null,
@@ -37,6 +38,9 @@ window.app = new Vue({
         experimentLogs: [],
         attendanceLogs: [],
         absenceCount: 0,
+        discussionBonusRows: [],
+        discussionTotalCount: 0,
+        discussionCanEdit: false,
         showPhotoModal: false,
         showScoreModal: false,
         scoreDetailPre: [],
@@ -273,6 +277,10 @@ window.app = new Vue({
         fetchStudens() {
             const params = [];
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
+            if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
+            this.studentGroupFilters.forEach(group => {
+                params.push('experiment_group=' + encodeURIComponent(group));
+            });
             if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             let url = '/submission/admin_students_api/';
             if (params.length) url += '?' + params.join('&');
@@ -601,6 +609,9 @@ window.app = new Vue({
             this.attendanceLogs = [];
             this.absenceCount = 0;
             this.experimentLogs = [];
+            this.discussionBonusRows = [];
+            this.discussionTotalCount = 0;
+            this.discussionCanEdit = false;
             const params = new URLSearchParams();
             params.append('student_id', student.id);
             if (this.selectedOfferingId) params.append('offering_id', this.selectedOfferingId);
@@ -612,7 +623,37 @@ window.app = new Vue({
                     this.experimentLogs = data.experiment_logs || [];
                     this.attendanceLogs = data.attendance_logs || [];
                     this.absenceCount = Number.isFinite(data.absence_count) ? data.absence_count : 0;
+                    this.discussionBonusRows = Array.isArray(data.discussion_bonus_rows) ? data.discussion_bonus_rows : [];
+                    this.discussionTotalCount = Number.isFinite(data.discussion_total_count) ? data.discussion_total_count : 0;
+                    this.discussionCanEdit = data.discussion_can_edit === true;
                     this.showStudentModal = true;
+                });
+        },
+        changeDiscussionBonus(row, delta) {
+            if (!this.discussionCanEdit || !this.selectedStudentId || !this.selectedOfferingId) return;
+            fetch('/submission/update_discussion_bonus_api/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.csrfToken,
+                },
+                body: JSON.stringify({
+                    student_id: this.selectedStudentId,
+                    offering_id: this.selectedOfferingId,
+                    experiment_number: row.experiment_number,
+                    delta: delta,
+                })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || 'ディスカッション加点の更新に失敗しました');
+                    }
+                    row.count = Number.isFinite(data.count) ? data.count : row.count;
+                    this.discussionTotalCount = this.discussionBonusRows.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+                })
+                .catch(err => {
+                    alert(err.message || 'ディスカッション加点の更新に失敗しました');
                 });
         },
         closeStudentModal() {
@@ -621,6 +662,9 @@ window.app = new Vue({
             this.experimentLogs = [];
             this.attendanceLogs = [];
             this.absenceCount = 0;
+            this.discussionBonusRows = [];
+            this.discussionTotalCount = 0;
+            this.discussionCanEdit = false;
         },
         openPhotoModal() {
             this.showPhotoModal = true;

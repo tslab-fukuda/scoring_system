@@ -373,3 +373,36 @@ class ExperimentEquipmentCheckLog(models.Model):
             f"{self.course_offering} / {self.schedule_date} / "
             f"{self.experiment_number} / {self.phase}"
         )
+
+
+class DiscussionBonus(models.Model):
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='discussion_bonuses'
+    )
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='discussion_bonuses'
+    )
+    experiment_number = models.CharField(max_length=32)
+    count = models.PositiveIntegerField(default=0)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_discussion_bonuses'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'course_offering', 'experiment_number')
+        indexes = [
+            models.Index(fields=['course_offering', 'experiment_number']),
+            models.Index(fields=['student', 'course_offering']),
+        ]
+
+    def __str__(self):
+        return f"{self.student.username} / {self.course_offering} / {self.experiment_number}"

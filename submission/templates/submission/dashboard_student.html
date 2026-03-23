@@ -30,7 +30,7 @@
 </div>
 {% endverbatim %}
 <div v-if="showStudentModal" class="modal student-modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered" style="margin-top:calc(var(--ts-header-height, 64px) + 16px);">
     <div class="modal-content">
       <div class="modal-header">
         {% verbatim %}
@@ -61,6 +61,39 @@
                 </tr>
                 <tr v-if="!experimentLogs.length">
                   <td colspan="3" class="text-center text-muted">実験ログがありません</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="fw-semibold">ディスカッション加点</div>
+            <div>合計 {{ discussionTotalCount }} 件</div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>実験番号</th>
+                  <th>件数</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in discussionBonusRows" :key="'discussion-' + row.experiment_number">
+                  <td>{{ row.experiment_number }}</td>
+                  <td>{{ row.count }}</td>
+                  <td>
+                    <div v-if="discussionCanEdit" class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-secondary" @click="changeDiscussionBonus(row, -1)">-</button>
+                      <button class="btn btn-outline-primary" @click="changeDiscussionBonus(row, 1)">+</button>
+                    </div>
+                    <span v-else class="text-muted">閲覧のみ</span>
+                  </td>
+                </tr>
+                <tr v-if="!discussionBonusRows.length">
+                  <td colspan="3" class="text-center text-muted">ディスカッション加点設定がありません</td>
                 </tr>
               </tbody>
             </table>

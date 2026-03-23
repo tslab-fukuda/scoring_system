@@ -30,7 +30,10 @@ new Vue({
             score_details_avg: '',
             absence_count: 0,
             absence_penalty: '',
+            discussion_count_total: 0,
+            discussion_bonus_total: 0,
             experiment_count: '',
+            grade_divisor: 10,
             final_grade: ''
         },
     },
@@ -196,18 +199,12 @@ new Vue({
                 score_details_avg: stu.score_details_avg ?? 0,
                 absence_count: stu.absence_count ?? 0,
                 absence_penalty: stu.absence_penalty ?? 0,
+                discussion_count_total: stu.discussion_count_total ?? 0,
+                discussion_bonus_total: stu.discussion_bonus_total ?? 0,
                 experiment_count: stu.experiment_count ?? '',
+                grade_divisor: stu.grade_divisor ?? 10,
                 final_grade: stu.final_grade
             };
-        },
-        formatSigned(value) {
-            const num = Number(value);
-            if (!Number.isFinite(num)) {
-                return '+ 0';
-            }
-            const absVal = Math.abs(num);
-            const sign = num < 0 ? '-' : '+';
-            return `${sign} ${absVal}`;
         },
 
         closeFinalGradeModal() {
@@ -221,7 +218,10 @@ new Vue({
                 score_details_avg: '',
                 absence_count: 0,
                 absence_penalty: '',
+                discussion_count_total: 0,
+                discussion_bonus_total: 0,
                 experiment_count: '',
+                grade_divisor: 10,
                 final_grade: ''
             };
         },

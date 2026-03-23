@@ -5,6 +5,7 @@ from submission.models import (
     Schedule,
     Stamp,
     ScoringItem,
+    DiscussionBonus,
     ExperimentCompletion,
     ExperimentProgress,
     ExperimentTaskConfig,
@@ -41,6 +42,7 @@ SYSTEM_SCORING_DEFS = [
     {'code': 'late', 'label': '遅刻', 'category': 'main'},
     {'code': 'absence', 'label': '欠席', 'category': 'main'},
     {'code': 'lab_time', 'label': '実験時間', 'category': 'pre'},
+    {'code': 'discussion', 'label': 'ディスカッション', 'category': 'main'},
 ]
 SCHEDULE_DATE_RE = re.compile(
     r'(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日(?:\s*[（(]\s*(?P<weekday>[月火水木金土日])\s*[)）])?'
@@ -52,7 +54,7 @@ def _weekday_label(dt):
     return ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
 
 
-def _absence_penalty_weight(offering_id):
+def _system_item_weight(offering_id, code):
     if not offering_id:
         return 0.0
     offering = CourseOffering.objects.select_related('course').filter(id=offering_id).first()
@@ -62,7 +64,7 @@ def _absence_penalty_weight(offering_id):
         specific = ScoringItem.objects.filter(
             category=category,
             course_offering_id=offering_id,
-            code='absence'
+            code=code
         ).order_by('order').first()
         if specific:
             return float(specific.weight)
@@ -70,11 +72,40 @@ def _absence_penalty_weight(offering_id):
             category=category,
             course_id=offering.course_id,
             course_offering__isnull=True,
-            code='absence'
+            code=code
         ).order_by('order').first()
         if common:
             return float(common.weight)
     return 0.0
+
+
+def _absence_penalty_weight(offering_id):
+    return abs(_system_item_weight(offering_id, 'absence'))
+
+
+def _discussion_bonus_weight(offering_id):
+    return abs(_system_item_weight(offering_id, 'discussion'))
+
+
+def _collect_requested_groups(request):
+    raw_values = request.GET.getlist('experiment_group')
+    if not raw_values:
+        single = request.GET.get('experiment_group')
+        raw_values = [single] if single else []
+    groups = []
+    seen = set()
+    for raw in raw_values:
+        for token in str(raw or '').split(','):
+            value = token.strip()
+            if not value:
+                continue
+            if value.isdigit():
+                value = value.zfill(2)
+            if value in seen:
+                continue
+            groups.append(value)
+            seen.add(value)
+    return groups
 
 
 def _ensure_course_system_items(course):
@@ -936,13 +967,25 @@ def admin_copy_equipment_configs(request):
 
 def get_students_api(request):
     student_id = request.GET.get('student_id')
+    day = request.GET.get('experiment_day')
+    groups = _collect_requested_groups(request)
     offering_id = request.GET.get('offering_id')
     qs = UserProfile.objects.filter(role='student')
     enr_map = {}
     if offering_id:
-        user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', 'experiment_day', 'experiment_group')
+        enr_qs = Enrollment.objects.filter(role='student', course_offering_id=offering_id)
+        if day:
+            enr_qs = enr_qs.filter(experiment_day=day)
+        if groups:
+            enr_qs = enr_qs.filter(experiment_group__in=groups)
+        user_ids = enr_qs.values_list('user_id', 'experiment_day', 'experiment_group')
         enr_map = {u: {'experiment_day': d, 'experiment_group': g} for u, d, g in user_ids}
         qs = qs.filter(user_id__in=enr_map.keys())
+    else:
+        if day:
+            qs = qs.filter(experiment_day=day)
+        if groups:
+            qs = qs.filter(experiment_group__in=groups)
     if student_id:
         qs = qs.filter(student_id__icontains=student_id)
     students = []
@@ -1316,7 +1359,7 @@ def delete_schedule_api(request, schedule_id):
 
 @role_required('admin')
 def scoring_items(request):
-    system_codes = {'late', 'absence', 'lab_time'}
+    system_codes = {'late', 'absence', 'lab_time', 'discussion'}
     courses_data = []
     for course in Course.objects.prefetch_related('offerings').all():
         offerings = list(course.offerings.all().order_by('-year', '-id'))
@@ -1361,6 +1404,9 @@ def scoring_items(request):
     course_offering = None
     if selected_offering_id:
         course_offering = CourseOffering.objects.filter(id=selected_offering_id).first()
+
+    if selected_course:
+        _ensure_course_system_items(selected_course)
 
     if request.method == 'POST':
         data = json.loads(request.body)
@@ -1579,16 +1625,36 @@ def api_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
     if not student_id:
-        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0, 'experiment_logs': []})
+        return JsonResponse({
+            'reports': [],
+            'full_name': '',
+            'attendance_logs': [],
+            'absence_count': 0,
+            'experiment_logs': [],
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': True,
+        })
     try:
         profile = UserProfile.objects.get(id=student_id)
     except UserProfile.DoesNotExist:
-        return JsonResponse({'reports': [], 'full_name': '', 'attendance_logs': [], 'absence_count': 0, 'experiment_logs': []})
+        return JsonResponse({
+            'reports': [],
+            'full_name': '',
+            'attendance_logs': [],
+            'absence_count': 0,
+            'experiment_logs': [],
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': True,
+        })
     full_name = profile.full_name
 
     attendance_logs = []
     absence_count = 0
     experiment_logs = []
+    discussion_bonus_rows = []
+    discussion_total_count = 0
     if offering_id:
         try:
             offering_id_int = int(offering_id)
@@ -1690,6 +1756,31 @@ def api_student_reports(request):
                     'completed_tasks': ', '.join(ordered_done) if ordered_done else '-',
                 })
 
+            discussion_counts = {
+                exp_no: count
+                for exp_no, count in DiscussionBonus.objects.filter(
+                    student=profile.user,
+                    course_offering_id=offering_id_int
+                ).values_list('experiment_number', 'count')
+            }
+            ordered_numbers = []
+            seen_numbers = set()
+            for exp_no in configured_numbers:
+                if exp_no in seen_numbers:
+                    continue
+                ordered_numbers.append(exp_no)
+                seen_numbers.add(exp_no)
+            extra_discussion_numbers = sorted(set(discussion_counts.keys()) - set(ordered_numbers))
+            ordered_numbers.extend(extra_discussion_numbers)
+            discussion_bonus_rows = [
+                {
+                    'experiment_number': exp_no,
+                    'count': int(discussion_counts.get(exp_no, 0) or 0),
+                }
+                for exp_no in ordered_numbers
+            ]
+            discussion_total_count = sum(row['count'] for row in discussion_bonus_rows)
+
     qs = Submission.objects.filter(student__userprofile__id=student_id)
     if offering_id:
         qs = qs.filter(course_offering_id=offering_id)
@@ -1708,6 +1799,9 @@ def api_student_reports(request):
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
         'experiment_logs': experiment_logs,
+        'discussion_bonus_rows': discussion_bonus_rows,
+        'discussion_total_count': discussion_total_count,
+        'discussion_can_edit': True,
     })
 
 @role_required('admin')
@@ -2205,7 +2299,7 @@ def final_score_list_csv(request):
     # Add BOM for Excel compatibility
     response.write('\ufeff')
     writer = csv.writer(response)
-    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', '実施項目数', '最終成績']
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', 'ディスカッション', '実施項目数', '最終成績']
     writer.writerow(header)
 
     for row_data in student_data:
@@ -2219,6 +2313,7 @@ def final_score_list_csv(request):
             row.append(row_data.get(ex, ''))
         row.append(row_data.get('absence_count', 0))
         row.append(row_data.get('score_details_total', ''))
+        row.append(row_data.get('discussion_count_total', 0))
         row.append(row_data.get('completed_task_count', 0))
         row.append(row_data.get('final_grade', ''))
         writer.writerow(row)
@@ -2259,6 +2354,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             students_qs = students_qs.filter(experiment_group=group)
 
     absence_penalty_weight = _absence_penalty_weight(offering_id)
+    discussion_bonus_weight = _discussion_bonus_weight(offering_id)
     schedule_by_day = {}
     attendance_map = {}
     if offering_id and students_qs.exists():
@@ -2291,6 +2387,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
     progress_map = {}
     completion_map = {}
     task_config_map = {}
+    discussion_count_map = {}
     if offering_id:
         target_user_ids = list(students_qs.values_list('user_id', flat=True))
         progress_qs = ExperimentProgress.objects.filter(
@@ -2316,6 +2413,14 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         for exp_no, task_list in task_cfg_qs:
             task_config_map[exp_no] = _normalize_task_list(task_list)
 
+        discussion_qs = DiscussionBonus.objects.filter(
+            course_offering_id=offering_id,
+            student_id__in=target_user_ids,
+            experiment_number__in=unique_experiment_numbers,
+        ).values_list('student_id', 'experiment_number', 'count')
+        for student_id, exp_no, count in discussion_qs:
+            discussion_count_map[(student_id, exp_no)] = int(count or 0)
+
     for up in students_qs:
         enr = enrollment_map.get(up.user_id)
         record = {
@@ -2329,6 +2434,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         total_final_score = 0.0
         score_details_total = 0.0
         completed_task_count = 0
+        discussion_count_total = 0
         experiment_logs = []
         for ex in unique_experiment_numbers:
             sub_qs = Submission.objects.filter(
@@ -2380,6 +2486,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
                 'status': status,
                 'completed_tasks': ', '.join(ordered_done) if ordered_done else '-',
             })
+            discussion_count_total += discussion_count_map.get((up.user_id, ex), 0)
 
         absence_count = 0
         if offering_id:
@@ -2388,25 +2495,30 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             if target_dates:
                 attended_dates = attendance_map.get(up.user_id, set())
                 absence_count = len(target_dates - attended_dates)
-        absence_penalty = absence_count * absence_penalty_weight
-        score_details_total = round(score_details_total, 2)
+        absence_penalty = round(absence_count * absence_penalty_weight, 2)
+        discussion_bonus_total = round(discussion_count_total * discussion_bonus_weight, 2)
+        score_details_total = round(abs(score_details_total), 2)
         absence_penalty = round(absence_penalty, 2)
         total_final_score = round(total_final_score, 2)
 
         final_grade = ''
         score_details_avg = 0.0
-        if experiment_count:
-            score_details_avg = score_details_total / experiment_count
-            final_grade = (total_final_score + score_details_avg + absence_penalty) / experiment_count
+        grade_divisor = 10
+        if grade_divisor:
+            score_details_avg = score_details_total / grade_divisor
+            final_grade = (total_final_score - score_details_avg - absence_penalty + discussion_bonus_total) / grade_divisor
             final_grade = round(final_grade, 2)
             score_details_avg = round(score_details_avg, 2)
 
         record['absence_count'] = absence_count
         record['score_details_total'] = score_details_total
         record['absence_penalty'] = absence_penalty
+        record['discussion_count_total'] = discussion_count_total
+        record['discussion_bonus_total'] = discussion_bonus_total
         record['final_score_total'] = total_final_score
         record['score_details_avg'] = score_details_avg
         record['experiment_count'] = experiment_count
+        record['grade_divisor'] = grade_divisor
         record['completed_task_count'] = completed_task_count
         record['experiment_logs'] = experiment_logs
         record['final_grade'] = final_grade

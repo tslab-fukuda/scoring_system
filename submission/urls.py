@@ -100,6 +100,7 @@ urlpatterns = [
     path('update_experiment_progress/', views_teacher.update_experiment_progress, name='update_experiment_progress'),
     path('teacher_students_api/', views_teacher.teacher_students_api, name='teacher_students_api'),
     path('teacher_student_reports/', views_teacher.teacher_student_reports, name='teacher_student_reports'),
+    path('update_discussion_bonus_api/', views_teacher.update_discussion_bonus_api, name='update_discussion_bonus_api'),
     path('teacher_equipment_dashboard_api/', views_teacher.teacher_equipment_dashboard_api, name='teacher_equipment_dashboard_api'),
     path('teacher_save_equipment_check_api/', views_teacher.teacher_save_equipment_check_api, name='teacher_save_equipment_check_api'),
 ]
