@@ -17,3 +17,6 @@ db_prod.sqlite3.*.bak
 # その他 IDE
 .vscode/
 .idea/
+
+# バックアップ設定
+deploy/.env.box

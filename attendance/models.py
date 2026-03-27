@@ -21,3 +21,50 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.date}"
+
+
+class AttendanceForgetRequest(models.Model):
+    REQUEST_TYPE_CHOICES = [
+        ('check_in', '入室'),
+        ('check_out', '退室'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', '申請中'),
+        ('approved', '承認'),
+        ('rejected', '却下'),
+    ]
+
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='attendance_forget_requests'
+    )
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='attendance_forget_requests'
+    )
+    target_date = models.DateField(default=timezone.localdate)
+    request_type = models.CharField(max_length=16, choices=REQUEST_TYPE_CHOICES)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(default=timezone.now)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_attendance_forget_requests'
+    )
+    student_read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('student', 'course_offering', 'target_date', 'request_type')
+        ordering = ['-requested_at', '-id']
+
+    def __str__(self):
+        return (
+            f"{self.student.username} - {self.course_offering_id} - "
+            f"{self.target_date} - {self.request_type} - {self.status}"
+        )

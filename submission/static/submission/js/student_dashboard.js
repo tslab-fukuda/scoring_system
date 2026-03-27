@@ -161,6 +161,7 @@ new Vue({
             this.selectedOfferingId = numericId;
             this.experimentDay = found.experiment_day || this.experimentDay;
             this.experimentGroup = found.experiment_group || this.experimentGroup;
+            this.syncOfferingState();
             this.fetchSchedule();
         },
         selectCourse(courseId) {
@@ -203,6 +204,13 @@ new Vue({
                         day_of_week: this.getWeekdayLabel(s.date),
                     }));
                 });
+        },
+        syncOfferingState() {
+            if (!this.selectedOfferingId) return;
+            window.currentSelectedOfferingId = String(this.selectedOfferingId);
+            const url = new URL(window.location.href);
+            url.searchParams.set('offering_id', this.selectedOfferingId);
+            window.history.replaceState({}, '', url.toString());
         }
     },
     mounted() {
@@ -212,6 +220,7 @@ new Vue({
                 this.selectedCourseId = found.course_id;
                 this.selectedYear = found.year;
             }
+            this.syncOfferingState();
         }
         if (this.allowOfferingSwitch && this.selectedOfferingId) {
             this.fetchSchedule();

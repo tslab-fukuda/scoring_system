@@ -314,3 +314,47 @@ body.dark-mode .profile-submissions a {
 body.dark-mode .profile-submissions a:hover {
     color: #9ad0ff;
 }
+body.dark-mode .notification-toggle {
+    color: #f4f4f4;
+}
+body.dark-mode .header-modal-card {
+    background: #1f1f1f;
+    color: #e0e0e0;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+body.dark-mode .header-modal-head {
+    border-bottom-color: #343434;
+}
+body.dark-mode .header-modal-close {
+    color: #d0d0d0;
+}
+body.dark-mode .header-modal-empty,
+body.dark-mode .notification-item-meta,
+body.dark-mode .forget-request-existing-item {
+    color: #bdbdbd;
+}
+body.dark-mode .notification-item {
+    background: #262626;
+    border-color: #3a3a3a;
+}
+body.dark-mode .notification-item.unread {
+    border-color: #4c8dff;
+    box-shadow: 0 0 0 1px rgba(76, 141, 255, 0.22);
+}
+body.dark-mode .forget-request-summary {
+    background: #282828;
+    color: #e0e0e0;
+}
+body.dark-mode .header-modal-card .form-control,
+body.dark-mode .header-modal-card .form-select {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    border-color: #3a3a3a;
+}
+body.dark-mode .header-modal-card .form-control:focus,
+body.dark-mode .header-modal-card .form-select:focus {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    border-color: #6aa9ff;
+    box-shadow: 0 0 0 0.2rem rgba(106, 169, 255, 0.15);
+}

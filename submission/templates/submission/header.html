@@ -5,8 +5,12 @@
     <span :class="{ open: showMenu }"></span>
   </button>
   <span class="ts-header-title">情報工学実験　管理システム</span>
-  <span v-if="overrideActive" class="view-as-indicator">閲覧ロール: {{ viewRoleLabel }}</span>
+  <span v-if="overrideActive" class="view-as-indicator">閲覧ロール: [[ viewRoleLabel ]]</span>
   <!-- <sub class="subtitle">presented by TSlab</sub> -->
+  <button class="notification-toggle" type="button" @click="openNotifications" aria-label="お知らせ">
+    <span>🔔</span>
+    <span v-if="notificationUnreadCount > 0" class="notification-badge">[[ notificationBadgeText ]]</span>
+  </button>
   <button class="dark-toggle" type="button" @click="toggleDark">
     <span v-if="isDark">🌞</span>
     <span v-else>🌙</span>
@@ -48,6 +52,11 @@
               <span class="menu-ico">🙍</span> プロフィール
             </a>
           </li>
+          <li v-if="actualRole === 'student'">
+            <button type="button" class="menu-link menu-link-button" @click="openForgetRequestModal">
+              <span class="menu-ico">🪪</span> 学生証忘れ申請
+            </button>
+          </li>
           {% endif %}
           {% if not attendance_only %}
           <li v-if="actualRole === 'admin'" class="view-as-section">
@@ -62,7 +71,7 @@
               </select>
               <button class="btn btn-sm btn-outline-primary" @click="applyViewRole">切替</button>
             </div>
-            <div v-if="overrideActive" class="view-as-note">現在: {{ viewRoleLabel }}</div>
+            <div v-if="overrideActive" class="view-as-note">現在: [[ viewRoleLabel ]]</div>
           </li>
           <li v-else-if="actualRole === 'course-teacher'" class="view-as-section">
             <div class="view-as-label">閲覧ロール切替</div>
@@ -73,7 +82,7 @@
               </select>
               <button class="btn btn-sm btn-outline-primary" @click="applyViewRole">切替</button>
             </div>
-            <div v-if="overrideActive" class="view-as-note">現在: {{ viewRoleLabel }}</div>
+            <div v-if="overrideActive" class="view-as-note">現在: [[ viewRoleLabel ]]</div>
           </li>
           {% endif %}
           <li>
@@ -87,6 +96,112 @@
           </li>
         </ul>
       </aside>
+    </div>
+  </transition>
+
+  <transition name="fade">
+    <div v-if="showNotifications" class="header-modal-overlay" @click="closeNotifications">
+      <div class="header-modal-card" @click.stop>
+        <div class="header-modal-head">
+          <h3>お知らせ一覧</h3>
+          <button type="button" class="header-modal-close" @click="closeNotifications">×</button>
+        </div>
+        <div class="header-modal-body">
+          <div v-if="notificationLoading" class="header-modal-empty">読み込み中です</div>
+          <template v-else>
+            <div v-if="notificationItems.length === 0" class="header-modal-empty">現在のお知らせはありません</div>
+            <div v-else class="notification-list">
+              <div v-for="item in notificationItems" :key="item.id" class="notification-item" :class="{ unread: item.is_unread }">
+                <div class="notification-item-main">
+                  <div class="notification-item-title">
+                    <span class="notification-status" :class="'status-' + item.status">[[ item.status_label ]]</span>
+                    <span>[[ item.request_type_label ]]申請</span>
+                  </div>
+                  <div class="notification-item-meta">[[ item.offering.label ]]</div>
+                  <div class="notification-item-meta">
+                    <template v-if="canManageNotifications">
+                      [[ item.student_name ]]（[[ item.student_id || '学籍番号なし' ]]） / [[ item.student_email || 'メール未登録' ]]
+                    </template>
+                    <template v-else>
+                      申請時刻: [[ item.requested_at ]]
+                    </template>
+                  </div>
+                  <div class="notification-item-meta">
+                    <template v-if="canManageNotifications">
+                      申請時刻: [[ item.requested_at ]]
+                    </template>
+                    <template v-else>
+                      処理結果: [[ item.status_label ]]
+                    </template>
+                  </div>
+                </div>
+                <div v-if="canManageNotifications && item.status === 'pending'" class="notification-actions">
+                  <button type="button" class="btn btn-success btn-sm" @click="processForgetRequest(item, 'approve')">承認</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" @click="processForgetRequest(item, 'reject')">却下</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+  <transition name="fade">
+    <div v-if="showForgetRequestModal" class="header-modal-overlay" @click="closeForgetRequestModal">
+      <div class="header-modal-card" @click.stop>
+        <div class="header-modal-head">
+          <h3>学生証忘れ申請</h3>
+          <button type="button" class="header-modal-close" @click="closeForgetRequestModal">×</button>
+        </div>
+        <div class="header-modal-body">
+          <div v-if="forgetRequestLoading" class="header-modal-empty">読み込み中です</div>
+          <template v-else>
+            <div v-if="forgetRequestError" class="alert alert-danger py-2 mb-3">[[ forgetRequestError ]]</div>
+            <template v-if="forgetRequestContext.offering">
+              <div class="forget-request-summary">
+                <div><strong>科目/年度:</strong> [[ forgetRequestContext.offering.label ]]</div>
+                <div><strong>申請日:</strong> [[ forgetRequestContext.target_date ]]</div>
+                <div><strong>入室記録:</strong> [[ forgetRequestContext.attendanceState.check_in_time || '未記録' ]]</div>
+                <div><strong>退室記録:</strong> [[ forgetRequestContext.attendanceState.check_out_time || '未記録' ]]</div>
+              </div>
+              <div v-if="forgetRequestContext.existing_requests.length" class="forget-request-existing">
+                <div class="forget-request-existing-title">本日の申請状況</div>
+                <div v-for="item in forgetRequestContext.existing_requests" :key="item.id" class="forget-request-existing-item">
+                  [[ item.request_type_label ]]: [[ item.status_label ]]（[[ item.requested_at ]]）
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">申請種別</label>
+                <select v-model="forgetRequestForm.requestType" class="form-select">
+                  <option value="check_in" :disabled="isRequestTypeDisabled('check_in')">入室</option>
+                  <option value="check_out" :disabled="isRequestTypeDisabled('check_out')">退室</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">学籍番号</label>
+                <input v-model.trim="forgetRequestForm.studentIdInput" type="text" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">氏名</label>
+                <input v-model.trim="forgetRequestForm.fullNameInput" type="text" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">メールアドレス</label>
+                <input v-model.trim="forgetRequestForm.emailInput" type="email" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">[[ forgetRequestDetailLabel ]]</label>
+                <textarea v-model.trim="forgetRequestForm.detailText" class="form-control" rows="4"></textarea>
+              </div>
+              <div class="header-modal-actions">
+                <button type="button" class="btn btn-success" :disabled="forgetRequestSubmitting || !canSubmitForgetRequest" @click="submitForgetRequest">送信</button>
+                <button type="button" class="btn btn-outline-secondary" @click="closeForgetRequestModal">閉じる</button>
+              </div>
+            </template>
+          </template>
+        </div>
+      </div>
     </div>
   </transition>
 </nav>

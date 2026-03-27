@@ -7,10 +7,11 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import AttendanceRecord
+from .models import AttendanceRecord, AttendanceForgetRequest
 from .permissions import (
     allowed_offering_ids,
     can_access_offering,
@@ -25,6 +26,7 @@ JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 20)
 CLASS_END = time(16, 40)
 MAX_EARLY_MINUTES = 30
+FORGET_REQUEST_ALLOWED_ROLES = {'admin', 'course-teacher'}
 
 
 def _finalize_previous_day():
@@ -39,6 +41,82 @@ def _finalize_previous_day():
     default_dt = datetime.combine(yesterday, time(23, 59))
     aware_dt = timezone.make_aware(default_dt, JST)
     incomplete.update(check_out=aware_dt)
+
+
+def _user_actual_role(user):
+    if not user.is_authenticated or not hasattr(user, 'userprofile'):
+        return ''
+    return (user.userprofile.role or '').strip()
+
+
+def _can_manage_forget_requests(user):
+    return _user_actual_role(user) in FORGET_REQUEST_ALLOWED_ROLES
+
+
+def _manageable_offering_ids(user):
+    actual_role = _user_actual_role(user)
+    if actual_role == 'admin':
+        return None
+    if actual_role == 'course-teacher':
+        return list(
+            Enrollment.objects.filter(user=user, role='course-teacher')
+            .values_list('course_offering_id', flat=True)
+            .distinct()
+        )
+    return []
+
+
+def _can_manage_forget_request_for_offering(user, offering_id):
+    manageable_ids = _manageable_offering_ids(user)
+    if manageable_ids is None:
+        return True
+    return offering_id in manageable_ids
+
+
+def _serialize_offering(course_offering):
+    return {
+        'id': course_offering.id,
+        'course_code': course_offering.course.code,
+        'course_name': course_offering.course.name,
+        'year': course_offering.year,
+        'label': f"{course_offering.course.code} {course_offering.course.name} / {course_offering.year}",
+    }
+
+
+def _resolve_student_selected_offering(user, requested_offering_id=None):
+    enrollments = list(
+        Enrollment.objects.filter(user=user, role='student')
+        .select_related('course_offering__course')
+    )
+    if not enrollments:
+        return None
+
+    selected = max(enrollments, key=lambda enr: (enr.course_offering.year, enr.course_offering_id))
+    if requested_offering_id:
+        try:
+            requested_offering_id = int(requested_offering_id)
+        except (TypeError, ValueError):
+            requested_offering_id = None
+        if requested_offering_id:
+            selected = next(
+                (enr for enr in enrollments if enr.course_offering_id == requested_offering_id),
+                selected,
+            )
+    return selected.course_offering
+
+
+def _submission_date_for(action_at):
+    return timezone.localtime(action_at, JST).date()
+
+
+def _class_end_diff_minutes(local_dt):
+    target_dt = local_dt.replace(
+        hour=CLASS_END.hour,
+        minute=CLASS_END.minute,
+        second=0,
+        microsecond=0,
+    )
+    return (local_dt - target_dt).total_seconds() / 60
 
 def _resolve_scoring_item(course_offering, category, code):
     if not course_offering or not code:
@@ -95,6 +173,99 @@ def _calc_lab_time_points(diff_minutes):
         return early_minutes
     return 0
 
+
+def _apply_check_in_effects(user, course_offering, action_at):
+    local_action = timezone.localtime(action_at, JST)
+    if local_action.time() <= CLASS_START:
+        return
+    submissions = Submission.objects.filter(
+        student=user,
+        graded=False,
+        course_offering=course_offering,
+    )
+    _increment_score(submissions, "late", 1, course_offering)
+
+
+def _apply_check_out_effects(user, course_offering, action_at, previous_out):
+    prev_points = 0
+    if previous_out:
+        prev_local = timezone.localtime(previous_out, JST)
+        prev_points = _calc_lab_time_points(_class_end_diff_minutes(prev_local))
+
+    local_action = timezone.localtime(action_at, JST)
+    new_points = _calc_lab_time_points(_class_end_diff_minutes(local_action))
+    delta_points = new_points - prev_points
+    if delta_points == 0:
+        return
+
+    submissions = Submission.objects.filter(
+        student=user,
+        graded=True,
+        report_type='prep',
+        date=_submission_date_for(action_at),
+        course_offering=course_offering,
+    )
+    _increment_score(submissions, "lab_time", delta_points, course_offering)
+
+
+def _apply_attendance_action(user, course_offering, action, action_at, overwrite_checkout=False):
+    record, _ = AttendanceRecord.objects.get_or_create(
+        user=user,
+        date=_submission_date_for(action_at),
+        course_offering=course_offering,
+    )
+
+    if action == 'check_in':
+        if record.check_in is not None:
+            return record, False
+        record.check_in = action_at
+        _apply_check_in_effects(user, course_offering, action_at)
+        record.save(update_fields=['check_in'])
+        return record, True
+
+    if action == 'check_out':
+        if record.check_out is not None and not overwrite_checkout:
+            return record, False
+        previous_out = record.check_out
+        record.check_out = action_at
+        _apply_check_out_effects(user, course_offering, action_at, previous_out)
+        record.save(update_fields=['check_out'])
+        return record, True
+
+    raise ValueError("invalid action")
+
+
+def _build_forget_request_payload(forget_request):
+    student_profile = getattr(forget_request.student, 'userprofile', None)
+    offering = forget_request.course_offering
+    return {
+        'id': forget_request.id,
+        'request_type': forget_request.request_type,
+        'request_type_label': forget_request.get_request_type_display(),
+        'status': forget_request.status,
+        'status_label': forget_request.get_status_display(),
+        'requested_at': timezone.localtime(forget_request.requested_at).strftime('%Y-%m-%d %H:%M'),
+        'target_date': forget_request.target_date.strftime('%Y-%m-%d'),
+        'offering': _serialize_offering(offering),
+        'student_name': student_profile.full_name if student_profile else forget_request.student.get_full_name() or forget_request.student.username,
+        'student_id': student_profile.student_id if student_profile else '',
+        'student_email': forget_request.student.email or (student_profile.email if student_profile else ''),
+    }
+
+
+def _build_attendance_update_payload(user, record, action):
+    user_profile = getattr(user, 'userprofile', None)
+    return {
+        'action': action,
+        'student_id': user_profile.student_id if user_profile else '',
+        'full_name': user_profile.full_name if user_profile else (user.get_full_name() or user.username),
+        'experiment_day': user_profile.experiment_day if user_profile else '',
+        'experiment_group': user_profile.experiment_group if user_profile else '',
+        'user_id': user.id,
+        'check_in_time': timezone.localtime(record.check_in, JST).strftime('%H:%M') if record.check_in else '',
+        'check_out_time': timezone.localtime(record.check_out, JST).strftime('%H:%M') if record.check_out else '',
+    }
+
 @login_required
 def scan_card(request, student_id):
     _finalize_previous_day()
@@ -111,44 +282,19 @@ def scan_card(request, student_id):
         return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=400)
     if not can_access_offering(request.user, course_offering.id):
         return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=403)
-    record, created = AttendanceRecord.objects.get_or_create(
+    today_record = AttendanceRecord.objects.filter(
         user=user,
-        date=date.today(),
-        course_offering=course_offering
+        date=timezone.localdate(),
+        course_offering=course_offering,
+    ).first()
+    action = 'check_in' if not today_record or today_record.check_in is None else 'check_out'
+    _apply_attendance_action(
+        user,
+        course_offering,
+        action,
+        timezone.now(),
+        overwrite_checkout=True,
     )
-    now = timezone.now()
-    local_now = timezone.localtime(now, JST)
-
-    if record.check_in is None:
-        record.check_in = now
-        if local_now.time() > CLASS_START:
-            submissions = Submission.objects.filter(
-                student=user,
-                graded=False,
-                course_offering=course_offering
-            )
-            _increment_score(submissions, "late", 1, course_offering)
-    else:
-        previous_out = record.check_out
-        record.check_out = now
-        prev_points = 0
-        if previous_out:
-            prev_local = timezone.localtime(previous_out, JST)
-            prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-            prev_points = _calc_lab_time_points(prev_diff)
-        diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-        new_points = _calc_lab_time_points(diff)
-        delta_points = new_points - prev_points
-        if delta_points != 0:
-            submissions = Submission.objects.filter(
-                student=user,
-                graded=True,
-                report_type='prep',
-                date=date.today(),
-                course_offering=course_offering,
-            )
-            _increment_score(submissions, "lab_time", delta_points, course_offering)
-    record.save()
     return JsonResponse({'status': 'ok'})
 
 @login_required
@@ -184,45 +330,20 @@ def scan_nfc(request):
             return JsonResponse({'status': 'error', 'message': '選択中の科目/年度に登録されていません'}, status=403)
 
         user = user_profile.user
-        record, created = AttendanceRecord.objects.get_or_create(
-            user=user,
-            date=date.today(),
-            course_offering=course_offering
-        )
         now = timezone.now()
-        local_now = timezone.localtime(now, JST)
-        action = 'check_in' if record.check_in is None else 'check_out'
-
-        if record.check_in is None:
-            record.check_in = now
-            if local_now.time() > CLASS_START:
-                submissions = Submission.objects.filter(
-                    student=user,
-                    graded=False,
-                    course_offering=course_offering
-                )
-                _increment_score(submissions, "late", 1, course_offering)
-        else:
-            previous_out = record.check_out
-            record.check_out = now
-        prev_points = 0
-        if previous_out:
-            prev_local = timezone.localtime(previous_out, JST)
-            prev_diff = (prev_local - prev_local.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-            prev_points = _calc_lab_time_points(prev_diff)
-        diff = (local_now - local_now.replace(hour=CLASS_END.hour, minute=CLASS_END.minute, second=0, microsecond=0)).total_seconds() / 60
-        new_points = _calc_lab_time_points(diff)
-        delta_points = new_points - prev_points
-        if delta_points != 0:
-            submissions = Submission.objects.filter(
-                student=user,
-                graded=True,
-                report_type='prep',
-                date=date.today(),
-                course_offering=course_offering,
-            )
-            _increment_score(submissions, "lab_time", delta_points, course_offering)
-        record.save()
+        today_record = AttendanceRecord.objects.filter(
+            user=user,
+            date=timezone.localdate(),
+            course_offering=course_offering,
+        ).first()
+        action = 'check_in' if not today_record or today_record.check_in is None else 'check_out'
+        record, _ = _apply_attendance_action(
+            user,
+            course_offering,
+            action,
+            now,
+            overwrite_checkout=True,
+        )
         check_in_time = ''
         check_out_time = ''
         if record.check_in:
@@ -242,6 +363,244 @@ def scan_nfc(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@login_required
+def forget_request_context(request):
+    if _user_actual_role(request.user) != 'student':
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    course_offering = _resolve_student_selected_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    if not course_offering:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
+
+    today = timezone.localdate()
+    attendance_record = AttendanceRecord.objects.filter(
+        user=request.user,
+        date=today,
+        course_offering=course_offering,
+    ).first()
+    existing_requests = AttendanceForgetRequest.objects.filter(
+        student=request.user,
+        course_offering=course_offering,
+        target_date=today,
+    ).order_by('request_type', '-requested_at')
+
+    return JsonResponse({
+        'status': 'ok',
+        'offering': _serialize_offering(course_offering),
+        'target_date': today.strftime('%Y-%m-%d'),
+        'attendance_state': {
+            'has_check_in': bool(attendance_record and attendance_record.check_in),
+            'has_check_out': bool(attendance_record and attendance_record.check_out),
+            'check_in_time': timezone.localtime(attendance_record.check_in).strftime('%H:%M')
+            if attendance_record and attendance_record.check_in else '',
+            'check_out_time': timezone.localtime(attendance_record.check_out).strftime('%H:%M')
+            if attendance_record and attendance_record.check_out else '',
+        },
+        'existing_requests': [
+            {
+                'id': forget_request.id,
+                'request_type': forget_request.request_type,
+                'request_type_label': forget_request.get_request_type_display(),
+                'status': forget_request.status,
+                'status_label': forget_request.get_status_display(),
+                'requested_at': timezone.localtime(forget_request.requested_at).strftime('%H:%M'),
+            }
+            for forget_request in existing_requests
+        ],
+    })
+
+
+@login_required
+@require_POST
+def create_forget_request(request):
+    if _user_actual_role(request.user) != 'student':
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'リクエストが不正です'}, status=400)
+
+    request_type = (data.get('request_type') or '').strip()
+    if request_type not in {'check_in', 'check_out'}:
+        return JsonResponse({'status': 'error', 'message': '申請種別が不正です'}, status=400)
+
+    required_fields = {
+        'student_id_input': '学籍番号',
+        'full_name_input': '氏名',
+        'email_input': 'メールアドレス',
+        'detail_text': '入力内容',
+    }
+    for field, label in required_fields.items():
+        if not (data.get(field) or '').strip():
+            return JsonResponse({'status': 'error', 'message': f'{label}を入力してください'}, status=400)
+
+    user_profile = getattr(request.user, 'userprofile', None)
+    input_student_id = (data.get('student_id_input') or '').strip()
+    input_email = (data.get('email_input') or '').strip().lower()
+    expected_student_id = (user_profile.student_id if user_profile else '').strip()
+    expected_email = ((request.user.email or '') or (user_profile.email if user_profile else '')).strip().lower()
+
+    if input_student_id != expected_student_id:
+        return JsonResponse({'status': 'error', 'message': '学籍番号がログイン中のユーザ情報と一致しません'}, status=400)
+    if input_email != expected_email:
+        return JsonResponse({'status': 'error', 'message': 'メールアドレスがログイン中のユーザ情報と一致しません'}, status=400)
+
+    course_offering = _resolve_student_selected_offering(
+        request.user,
+        data.get('offering_id'),
+    )
+    if not course_offering:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
+
+    today = timezone.localdate()
+    if request_type == 'check_out':
+        attendance_record = AttendanceRecord.objects.filter(
+            user=request.user,
+            date=today,
+            course_offering=course_offering,
+        ).first()
+        if not attendance_record or attendance_record.check_in is None:
+            return JsonResponse({'status': 'error', 'message': '入室記録が無いため退室申請はできません'}, status=400)
+
+    try:
+        forget_request = AttendanceForgetRequest.objects.create(
+            student=request.user,
+            course_offering=course_offering,
+            target_date=today,
+            request_type=request_type,
+        )
+    except IntegrityError:
+        return JsonResponse({'status': 'error', 'message': '同じ申請種別は本日すでに送信されています'}, status=400)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': '申請を送信しました',
+        'request': _build_forget_request_payload(forget_request),
+    })
+
+
+@login_required
+def notification_list(request):
+    actual_role = _user_actual_role(request.user)
+    response = {
+        'status': 'ok',
+        'actual_role': actual_role,
+        'unread_count': 0,
+        'can_manage_requests': _can_manage_forget_requests(request.user),
+        'can_request_forget': actual_role == 'student',
+        'notifications': [],
+    }
+
+    if actual_role == 'student':
+        base_qs = AttendanceForgetRequest.objects.filter(
+            student=request.user,
+            status__in=['approved', 'rejected'],
+        ).select_related('course_offering__course')
+        notifications = list(base_qs.order_by('-processed_at', '-requested_at')[:30])
+        response['unread_count'] = base_qs.filter(student_read_at__isnull=True).count()
+        response['notifications'] = [
+            {
+                **_build_forget_request_payload(item),
+                'processed_at': timezone.localtime(item.processed_at).strftime('%Y-%m-%d %H:%M') if item.processed_at else '',
+                'is_unread': item.student_read_at is None,
+            }
+            for item in notifications
+        ]
+        return JsonResponse(response)
+
+    if _can_manage_forget_requests(request.user):
+        notifications_qs = AttendanceForgetRequest.objects.filter(status='pending').select_related(
+            'student__userprofile',
+            'course_offering__course',
+        )
+        manageable_ids = _manageable_offering_ids(request.user)
+        if manageable_ids is not None:
+            notifications_qs = notifications_qs.filter(course_offering_id__in=manageable_ids)
+        response['unread_count'] = notifications_qs.count()
+        notifications = list(notifications_qs.order_by('-requested_at')[:50])
+        response['notifications'] = [_build_forget_request_payload(item) for item in notifications]
+
+    return JsonResponse(response)
+
+
+@login_required
+@require_POST
+def mark_notifications_read(request):
+    if _user_actual_role(request.user) == 'student':
+        AttendanceForgetRequest.objects.filter(
+            student=request.user,
+            status__in=['approved', 'rejected'],
+            student_read_at__isnull=True,
+        ).update(student_read_at=timezone.now())
+    return JsonResponse({'status': 'ok'})
+
+
+@login_required
+@require_POST
+def process_forget_request(request, request_id):
+    if not _can_manage_forget_requests(request.user):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+    decision = (data.get('decision') or '').strip()
+    if decision not in {'approve', 'reject'}:
+        return JsonResponse({'status': 'error', 'message': '処理内容が不正です'}, status=400)
+
+    try:
+        with transaction.atomic():
+            forget_request = AttendanceForgetRequest.objects.select_for_update().select_related(
+                'student',
+                'student__userprofile',
+                'course_offering__course',
+            ).get(id=request_id)
+
+            if not _can_manage_forget_request_for_offering(request.user, forget_request.course_offering_id):
+                return JsonResponse({'status': 'error', 'message': '対象の科目/年度を処理できません'}, status=403)
+            if forget_request.target_date != timezone.localdate():
+                return JsonResponse({'status': 'error', 'message': '当日分のみ処理できます'}, status=400)
+            if forget_request.status != 'pending':
+                return JsonResponse({'status': 'error', 'message': 'この申請はすでに処理済みです'}, status=400)
+
+            attendance_update = None
+            if decision == 'approve':
+                record, _ = _apply_attendance_action(
+                    forget_request.student,
+                    forget_request.course_offering,
+                    forget_request.request_type,
+                    forget_request.requested_at,
+                    overwrite_checkout=False,
+                )
+                attendance_update = _build_attendance_update_payload(
+                    forget_request.student,
+                    record,
+                    forget_request.request_type,
+                )
+                forget_request.status = 'approved'
+            else:
+                forget_request.status = 'rejected'
+
+            forget_request.processed_at = timezone.now()
+            forget_request.processed_by = request.user
+            forget_request.student_read_at = None
+            forget_request.save(update_fields=['status', 'processed_at', 'processed_by', 'student_read_at'])
+    except AttendanceForgetRequest.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '申請が見つかりません'}, status=404)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': '処理を更新しました',
+        'request': _build_forget_request_payload(forget_request),
+        'attendance_update': attendance_update,
+    })
 
 @login_required
 def attendance_list(request):

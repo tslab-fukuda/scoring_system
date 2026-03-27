@@ -328,6 +328,13 @@ async function startPolling() {
 document.addEventListener('DOMContentLoaded', () => {
     setStatus('NFC未接続');
     updateConnectionState(false);
+    window.addEventListener('attendance-record-updated', event => {
+        const data = event.detail || null;
+        if (!data) return;
+        applyAttendanceUpdate(data);
+        const actionLabel = data.action === 'check_in' ? '入室' : '退室';
+        setStatus(`${data.student_id || ''} ${data.full_name || ''} ${actionLabel}（承認反映）`.trim());
+    });
     document.addEventListener('click', event => {
         const target = event.target.closest('#nfc-connect-btn');
         if (!target) return;
