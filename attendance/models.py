@@ -68,3 +68,50 @@ class AttendanceForgetRequest(models.Model):
             f"{self.student.username} - {self.course_offering_id} - "
             f"{self.target_date} - {self.request_type} - {self.status}"
         )
+
+
+class ExperimentHelpTicket(models.Model):
+    REQUEST_TYPE_CHOICES = [
+        ('call', '呼び出し'),
+        ('question', '質問'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', '未対応'),
+        ('in_progress', '対応中'),
+        ('resolved', '対応済み'),
+    ]
+
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='experiment_help_tickets'
+    )
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='experiment_help_tickets'
+    )
+    experiment_group = models.CharField(max_length=16)
+    experiment_number = models.CharField(max_length=32)
+    request_type = models.CharField(max_length=16, choices=REQUEST_TYPE_CHOICES)
+    message = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    handled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='handled_experiment_help_tickets'
+    )
+    student_read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return (
+            f"{self.student.username} - {self.course_offering_id} - "
+            f"{self.experiment_group} - {self.experiment_number} - {self.status}"
+        )

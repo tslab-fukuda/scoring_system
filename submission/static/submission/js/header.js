@@ -12,6 +12,8 @@ new Vue({
         notificationLoading: false,
         notificationItems: [],
         notificationUnreadCount: 0,
+        selectedNotification: null,
+        showNotificationDetail: false,
         showForgetRequestModal: false,
         forgetRequestLoading: false,
         forgetRequestSubmitting: false,
@@ -34,6 +36,22 @@ new Vue({
             emailInput: '',
             detailText: ''
         },
+        showHelpTicketModal: false,
+        helpTicketLoading: false,
+        helpTicketSubmitting: false,
+        helpTicketError: '',
+        helpTicketContext: {
+            offering: null,
+            experiment_group: '',
+            experiment_numbers: [],
+            active_group_ticket: null,
+            recent_tickets: []
+        },
+        helpTicketForm: {
+            requestType: 'question',
+            experimentNumber: '',
+            message: ''
+        },
         notificationPollTimer: null
     },
     computed: {
@@ -51,7 +69,7 @@ new Vue({
             return labels[this.viewRole] || this.viewRole;
         },
         canManageNotifications() {
-            return ['admin', 'course-teacher'].includes(this.actualRole);
+            return ['admin', 'course-teacher', 'teacher'].includes(this.actualRole);
         },
         notificationBadgeText() {
             return this.notificationUnreadCount > 99 ? '99+' : String(this.notificationUnreadCount);
@@ -61,6 +79,20 @@ new Vue({
         },
         canSubmitForgetRequest() {
             return !this.isRequestTypeDisabled(this.forgetRequestForm.requestType);
+        },
+        helpTicketDetailLabel() {
+            return this.helpTicketForm.requestType === 'call' ? '呼び出し内容' : '質問内容';
+        },
+        canSubmitHelpTicket() {
+            return (
+                !!this.helpTicketContext.offering
+                && !this.helpTicketContext.active_group_ticket
+                && !!String(this.helpTicketForm.experimentNumber || '').trim()
+                && !!String(this.helpTicketForm.message || '').trim()
+            );
+        },
+        helpTicketHasPresetOptions() {
+            return Array.isArray(this.helpTicketContext.experiment_numbers) && this.helpTicketContext.experiment_numbers.length > 0;
         }
     },
     methods: {
@@ -106,25 +138,8 @@ new Vue({
             const url = new URL(window.location.href);
             return url.searchParams.get('offering_id') || '';
         },
-        refreshNotificationState() {
-            fetch('/attendance/notifications/', {
-                credentials: 'same-origin'
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status !== 'ok') return;
-                    this.notificationUnreadCount = data.unread_count || 0;
-                    if (this.showNotifications) {
-                        this.notificationItems = data.notifications || [];
-                    }
-                })
-                .catch(() => {});
-        },
-        openNotifications() {
-            this.showNotifications = true;
-            this.notificationLoading = true;
-            this.closeMenu();
-            fetch('/attendance/notifications/', {
+        fetchNotifications(includeList = false) {
+            return fetch('/attendance/notifications/', {
                 credentials: 'same-origin'
             })
                 .then(res => res.json())
@@ -132,9 +147,23 @@ new Vue({
                     if (data.status !== 'ok') {
                         throw new Error(data.message || 'お知らせの取得に失敗しました');
                     }
-                    this.notificationItems = data.notifications || [];
                     this.notificationUnreadCount = data.unread_count || 0;
-                    if (this.actualRole === 'student' && this.notificationUnreadCount > 0) {
+                    if (includeList || this.showNotifications) {
+                        this.notificationItems = data.notifications || [];
+                    }
+                    return data;
+                });
+        },
+        refreshNotificationState() {
+            this.fetchNotifications(false).catch(() => {});
+        },
+        openNotifications() {
+            this.showNotifications = true;
+            this.notificationLoading = true;
+            this.closeMenu();
+            this.fetchNotifications(true)
+                .then(data => {
+                    if (this.actualRole === 'student' && (data.unread_count || 0) > 0) {
                         this.markNotificationsRead();
                     }
                 })
@@ -170,14 +199,69 @@ new Vue({
                 })
                 .catch(() => {});
         },
-        openForgetRequestModal() {
-            if (this.actualRole !== 'student') return;
-            this.closeMenu();
-            this.showForgetRequestModal = true;
-            this.loadForgetRequestContext();
+        notificationKindText(item) {
+            if (!item) return '';
+            if (item.kind === 'attendance_forget') {
+                return `${item.request_type_label}申請`;
+            }
+            if (item.kind === 'experiment_help') {
+                return `${item.request_type_label}`;
+            }
+            return '';
         },
-        closeForgetRequestModal() {
-            this.showForgetRequestModal = false;
+        notificationTitle(item) {
+            if (!item) return '';
+            if (item.kind === 'attendance_forget') {
+                return item.offering ? item.offering.label : '';
+            }
+            if (item.kind === 'experiment_help') {
+                return `${item.experiment_group}班 / ${item.experiment_number}`;
+            }
+            return '';
+        },
+        notificationMetaPrimary(item) {
+            if (!item) return '';
+            if (item.kind === 'attendance_forget') {
+                return this.canManageForgetItem(item)
+                    ? `${item.student_name}（${item.student_id || '学籍番号なし'}）`
+                    : `申請時刻: ${item.requested_at}`;
+            }
+            if (item.kind === 'experiment_help') {
+                if (this.canManageHelpItem(item)) {
+                    return `${item.student_name}（${item.student_id || '学籍番号なし'}） / ${item.student_email || 'メール未登録'}`;
+                }
+                return `質問時刻: ${item.created_at}`;
+            }
+            return '';
+        },
+        notificationMetaSecondary(item) {
+            if (!item) return '';
+            if (item.kind === 'attendance_forget') {
+                return this.canManageForgetItem(item)
+                    ? `申請時刻: ${item.requested_at}`
+                    : `処理結果: ${item.status_label}`;
+            }
+            if (item.kind === 'experiment_help') {
+                if (this.canManageHelpItem(item)) {
+                    return `${item.offering ? item.offering.label : ''}`;
+                }
+                return `対応状況: ${item.status_label}`;
+            }
+            return '';
+        },
+        openNotificationDetail(item) {
+            this.selectedNotification = item;
+            this.showNotificationDetail = true;
+        },
+        closeNotificationDetail() {
+            this.showNotificationDetail = false;
+            this.selectedNotification = null;
+        },
+        canManageForgetItem(item) {
+            return item && item.kind === 'attendance_forget' && ['admin', 'course-teacher'].includes(this.actualRole);
+        },
+        canManageHelpItem(item) {
+            return item && item.kind === 'experiment_help' && ['admin', 'teacher'].includes(this.actualRole);
         },
         isRequestTypeDisabled(type) {
             const state = this.forgetRequestContext.attendanceState || {};
@@ -199,6 +283,15 @@ new Vue({
             if (!this.isRequestTypeDisabled('check_out')) {
                 this.forgetRequestForm.requestType = 'check_out';
             }
+        },
+        openForgetRequestModal() {
+            if (this.actualRole !== 'student') return;
+            this.closeMenu();
+            this.showForgetRequestModal = true;
+            this.loadForgetRequestContext();
+        },
+        closeForgetRequestModal() {
+            this.showForgetRequestModal = false;
         },
         loadForgetRequestContext() {
             this.forgetRequestLoading = true;
@@ -285,6 +378,98 @@ new Vue({
                     this.forgetRequestSubmitting = false;
                 });
         },
+        openHelpTicketModal() {
+            if (this.actualRole !== 'student') return;
+            this.closeMenu();
+            this.showHelpTicketModal = true;
+            this.loadHelpTicketContext();
+        },
+        closeHelpTicketModal() {
+            this.showHelpTicketModal = false;
+        },
+        normalizeHelpTicketExperimentNumber() {
+            if (!this.helpTicketHasPresetOptions) return;
+            const valid = new Set((this.helpTicketContext.experiment_numbers || []).map(v => String(v)));
+            if (!valid.has(String(this.helpTicketForm.experimentNumber || ''))) {
+                this.helpTicketForm.experimentNumber = '';
+            }
+        },
+        loadHelpTicketContext() {
+            this.helpTicketLoading = true;
+            this.helpTicketError = '';
+            const offeringId = this.currentOfferingId();
+            const query = offeringId ? `?offering_id=${encodeURIComponent(offeringId)}` : '';
+            fetch(`/attendance/help_ticket_context/${query}`, {
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || '依頼情報の取得に失敗しました');
+                    }
+                    this.helpTicketContext = {
+                        offering: data.offering || null,
+                        experiment_group: data.experiment_group || '',
+                        experiment_numbers: data.experiment_numbers || [],
+                        active_group_ticket: data.active_group_ticket || null,
+                        recent_tickets: data.recent_tickets || []
+                    };
+                    this.normalizeHelpTicketExperimentNumber();
+                })
+                .catch(err => {
+                    this.helpTicketError = err.message || '依頼情報の取得に失敗しました';
+                    this.helpTicketContext = {
+                        offering: null,
+                        experiment_group: '',
+                        experiment_numbers: [],
+                        active_group_ticket: null,
+                        recent_tickets: []
+                    };
+                })
+                .finally(() => {
+                    this.helpTicketLoading = false;
+                });
+        },
+        submitHelpTicket() {
+            if (!this.helpTicketContext.offering) return;
+            if (this.helpTicketContext.active_group_ticket) {
+                this.helpTicketError = '同じ実験班で未対応の依頼があるため送信できません';
+                return;
+            }
+            this.helpTicketSubmitting = true;
+            this.helpTicketError = '';
+            fetch('/attendance/help_tickets/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    offering_id: this.helpTicketContext.offering.id,
+                    request_type: this.helpTicketForm.requestType,
+                    experiment_number: this.helpTicketForm.experimentNumber,
+                    message: this.helpTicketForm.message
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || '依頼の送信に失敗しました');
+                    }
+                    alert(data.message || '依頼を送信しました');
+                    this.helpTicketForm.message = '';
+                    this.helpTicketForm.experimentNumber = '';
+                    this.loadHelpTicketContext();
+                    this.refreshNotificationState();
+                })
+                .catch(err => {
+                    this.helpTicketError = err.message || '依頼の送信に失敗しました';
+                })
+                .finally(() => {
+                    this.helpTicketSubmitting = false;
+                });
+        },
         processForgetRequest(item, decision) {
             fetch(`/attendance/forget_requests/${item.id}/process/`, {
                 method: 'POST',
@@ -305,11 +490,37 @@ new Vue({
                             detail: data.attendance_update
                         }));
                     }
-                    this.notificationItems = this.notificationItems.filter(entry => entry.id !== item.id);
-                    this.notificationUnreadCount = Math.max(0, this.notificationUnreadCount - 1);
+                    return this.fetchNotifications(true);
+                })
+                .then(() => {
+                    this.closeNotificationDetail();
                 })
                 .catch(err => {
                     alert(err.message || '処理に失敗しました');
+                });
+        },
+        processHelpTicket(item, status) {
+            fetch(`/attendance/help_tickets/${item.id}/process/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ status })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || '状態更新に失敗しました');
+                    }
+                    return this.fetchNotifications(true);
+                })
+                .then(() => {
+                    this.closeNotificationDetail();
+                })
+                .catch(err => {
+                    alert(err.message || '状態更新に失敗しました');
                 });
         }
     },

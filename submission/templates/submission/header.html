@@ -57,6 +57,11 @@
               <span class="menu-ico">🪪</span> 学生証忘れ申請
             </button>
           </li>
+          <li v-if="actualRole === 'student'">
+            <button type="button" class="menu-link menu-link-button" @click="openHelpTicketModal">
+              <span class="menu-ico">❓</span> 質問/呼び出し
+            </button>
+          </li>
           {% endif %}
           {% if not attendance_only %}
           <li v-if="actualRole === 'admin'" class="view-as-section">
@@ -111,37 +116,71 @@
           <template v-else>
             <div v-if="notificationItems.length === 0" class="header-modal-empty">現在のお知らせはありません</div>
             <div v-else class="notification-list">
-              <div v-for="item in notificationItems" :key="item.id" class="notification-item" :class="{ unread: item.is_unread }">
+              <div
+                v-for="item in notificationItems"
+                :key="item.kind + '-' + item.id"
+                class="notification-item"
+                :class="{ unread: item.is_unread, clickable: true }"
+                @click="openNotificationDetail(item)"
+              >
                 <div class="notification-item-main">
                   <div class="notification-item-title">
                     <span class="notification-status" :class="'status-' + item.status">[[ item.status_label ]]</span>
-                    <span>[[ item.request_type_label ]]申請</span>
+                    <span>[[ notificationKindText(item) ]]</span>
                   </div>
-                  <div class="notification-item-meta">[[ item.offering.label ]]</div>
-                  <div class="notification-item-meta">
-                    <template v-if="canManageNotifications">
-                      [[ item.student_name ]]（[[ item.student_id || '学籍番号なし' ]]） / [[ item.student_email || 'メール未登録' ]]
-                    </template>
-                    <template v-else>
-                      申請時刻: [[ item.requested_at ]]
-                    </template>
-                  </div>
-                  <div class="notification-item-meta">
-                    <template v-if="canManageNotifications">
-                      申請時刻: [[ item.requested_at ]]
-                    </template>
-                    <template v-else>
-                      処理結果: [[ item.status_label ]]
-                    </template>
-                  </div>
+                  <div class="notification-item-meta">[[ notificationTitle(item) ]]</div>
+                  <div class="notification-item-meta">[[ notificationMetaPrimary(item) ]]</div>
+                  <div class="notification-item-meta">[[ notificationMetaSecondary(item) ]]</div>
                 </div>
-                <div v-if="canManageNotifications && item.status === 'pending'" class="notification-actions">
-                  <button type="button" class="btn btn-success btn-sm" @click="processForgetRequest(item, 'approve')">承認</button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" @click="processForgetRequest(item, 'reject')">却下</button>
+                <div class="notification-actions">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" @click.stop="openNotificationDetail(item)">詳細</button>
                 </div>
               </div>
             </div>
           </template>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+  <transition name="fade">
+    <div v-if="showNotificationDetail" class="header-modal-overlay" @click="closeNotificationDetail">
+      <div class="header-modal-card" @click.stop>
+        <div class="header-modal-head">
+          <h3>通知詳細</h3>
+          <button type="button" class="header-modal-close" @click="closeNotificationDetail">×</button>
+        </div>
+        <div v-if="selectedNotification" class="header-modal-body">
+          <div class="notification-detail-block">
+            <div><strong>種別:</strong> [[ notificationKindText(selectedNotification) ]]</div>
+            <div><strong>状態:</strong> [[ selectedNotification.status_label ]]</div>
+            <div v-if="selectedNotification.kind === 'attendance_forget'"><strong>科目/年度:</strong> [[ selectedNotification.offering.label ]]</div>
+            <template v-if="selectedNotification.kind === 'attendance_forget'">
+              <div><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
+              <div><strong>申請時刻:</strong> [[ selectedNotification.requested_at ]]</div>
+            </template>
+            <template v-else-if="selectedNotification.kind === 'experiment_help'">
+              <div><strong>科目/年度:</strong> [[ selectedNotification.offering.label ]]</div>
+              <div><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
+              <div><strong>実験班番号:</strong> [[ selectedNotification.experiment_group ]]</div>
+              <div><strong>実験番号:</strong> [[ selectedNotification.experiment_number ]]</div>
+              <div><strong>依頼時刻:</strong> [[ selectedNotification.created_at ]]</div>
+              <div v-if="selectedNotification.handled_by_name"><strong>対応者:</strong> [[ selectedNotification.handled_by_name ]]</div>
+              <div class="notification-detail-message">
+                <strong>質問内容:</strong>
+                <div class="notification-detail-message-body">[[ selectedNotification.message ]]</div>
+              </div>
+            </template>
+          </div>
+          <div v-if="canManageForgetItem(selectedNotification) && selectedNotification.status === 'pending'" class="header-modal-actions">
+            <button type="button" class="btn btn-success" @click="processForgetRequest(selectedNotification, 'approve')">承認</button>
+            <button type="button" class="btn btn-outline-secondary" @click="processForgetRequest(selectedNotification, 'reject')">却下</button>
+          </div>
+          <div v-if="canManageHelpItem(selectedNotification)" class="header-modal-actions">
+            <button type="button" class="btn btn-outline-secondary" @click="processHelpTicket(selectedNotification, 'pending')">未対応</button>
+            <button type="button" class="btn btn-primary" @click="processHelpTicket(selectedNotification, 'in_progress')">対応中</button>
+            <button type="button" class="btn btn-success" @click="processHelpTicket(selectedNotification, 'resolved')">対応済み</button>
+          </div>
         </div>
       </div>
     </div>
@@ -197,6 +236,63 @@
               <div class="header-modal-actions">
                 <button type="button" class="btn btn-success" :disabled="forgetRequestSubmitting || !canSubmitForgetRequest" @click="submitForgetRequest">送信</button>
                 <button type="button" class="btn btn-outline-secondary" @click="closeForgetRequestModal">閉じる</button>
+              </div>
+            </template>
+          </template>
+        </div>
+      </div>
+    </div>
+  </transition>
+
+  <transition name="fade">
+    <div v-if="showHelpTicketModal" class="header-modal-overlay" @click="closeHelpTicketModal">
+      <div class="header-modal-card" @click.stop>
+        <div class="header-modal-head">
+          <h3>質問/呼び出し</h3>
+          <button type="button" class="header-modal-close" @click="closeHelpTicketModal">×</button>
+        </div>
+        <div class="header-modal-body">
+          <div v-if="helpTicketLoading" class="header-modal-empty">読み込み中です</div>
+          <template v-else>
+            <div v-if="helpTicketError" class="alert alert-danger py-2 mb-3">[[ helpTicketError ]]</div>
+            <template v-if="helpTicketContext.offering">
+              <div class="forget-request-summary">
+                <div><strong>科目/年度:</strong> [[ helpTicketContext.offering.label ]]</div>
+                <div><strong>実験班番号:</strong> [[ helpTicketContext.experiment_group || '-' ]]</div>
+              </div>
+              <div v-if="helpTicketContext.active_group_ticket" class="alert alert-warning py-2">
+                この実験班では未対応の依頼があります。
+                [[ helpTicketContext.active_group_ticket.experiment_group ]]班 / [[ helpTicketContext.active_group_ticket.experiment_number ]] /
+                [[ helpTicketContext.active_group_ticket.status_label ]]
+              </div>
+              <div class="mb-3">
+                <label class="form-label">依頼種別</label>
+                <select v-model="helpTicketForm.requestType" class="form-select">
+                  <option value="question">質問</option>
+                  <option value="call">呼び出し</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">実験番号</label>
+                <select v-if="helpTicketHasPresetOptions" v-model="helpTicketForm.experimentNumber" class="form-select">
+                  <option value="">選択してください</option>
+                  <option v-for="exp in helpTicketContext.experiment_numbers" :key="'exp-' + exp" :value="String(exp)">[[ exp ]]</option>
+                </select>
+                <input v-else v-model.trim="helpTicketForm.experimentNumber" type="text" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">[[ helpTicketDetailLabel ]]</label>
+                <textarea v-model.trim="helpTicketForm.message" class="form-control" rows="5"></textarea>
+              </div>
+              <div class="header-modal-actions">
+                <button type="button" class="btn btn-success" :disabled="helpTicketSubmitting || !canSubmitHelpTicket" @click="submitHelpTicket">送信</button>
+                <button type="button" class="btn btn-outline-secondary" @click="closeHelpTicketModal">閉じる</button>
+              </div>
+              <div v-if="helpTicketContext.recent_tickets.length" class="forget-request-existing mt-3">
+                <div class="forget-request-existing-title">最近の依頼</div>
+                <div v-for="item in helpTicketContext.recent_tickets" :key="'recent-help-' + item.id" class="forget-request-existing-item">
+                  [[ item.experiment_group ]]班 / [[ item.experiment_number ]] / [[ item.status_label ]] / [[ item.created_at ]]
+                </div>
               </div>
             </template>
           </template>

@@ -11,7 +11,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import AttendanceRecord, AttendanceForgetRequest
+from .models import AttendanceRecord, AttendanceForgetRequest, ExperimentHelpTicket
 from .permissions import (
     allowed_offering_ids,
     can_access_offering,
@@ -27,6 +27,7 @@ CLASS_START = time(13, 20)
 CLASS_END = time(16, 40)
 MAX_EARLY_MINUTES = 30
 FORGET_REQUEST_ALLOWED_ROLES = {'admin', 'course-teacher'}
+HELP_TICKET_ALLOWED_ROLES = {'admin', 'teacher'}
 
 
 def _finalize_previous_day():
@@ -53,6 +54,10 @@ def _can_manage_forget_requests(user):
     return _user_actual_role(user) in FORGET_REQUEST_ALLOWED_ROLES
 
 
+def _can_manage_help_tickets(user):
+    return _user_actual_role(user) in HELP_TICKET_ALLOWED_ROLES
+
+
 def _manageable_offering_ids(user):
     actual_role = _user_actual_role(user)
     if actual_role == 'admin':
@@ -68,6 +73,26 @@ def _manageable_offering_ids(user):
 
 def _can_manage_forget_request_for_offering(user, offering_id):
     manageable_ids = _manageable_offering_ids(user)
+    if manageable_ids is None:
+        return True
+    return offering_id in manageable_ids
+
+
+def _help_manageable_offering_ids(user):
+    actual_role = _user_actual_role(user)
+    if actual_role == 'admin':
+        return None
+    if actual_role == 'teacher':
+        return list(
+            Enrollment.objects.filter(user=user, role='teacher')
+            .values_list('course_offering_id', flat=True)
+            .distinct()
+        )
+    return []
+
+
+def _can_manage_help_ticket_for_offering(user, offering_id):
+    manageable_ids = _help_manageable_offering_ids(user)
     if manageable_ids is None:
         return True
     return offering_id in manageable_ids
@@ -103,6 +128,28 @@ def _resolve_student_selected_offering(user, requested_offering_id=None):
                 selected,
             )
     return selected.course_offering
+
+
+def _resolve_student_selected_enrollment(user, requested_offering_id=None):
+    enrollments = list(
+        Enrollment.objects.filter(user=user, role='student')
+        .select_related('course_offering__course')
+    )
+    if not enrollments:
+        return None
+
+    selected = max(enrollments, key=lambda enr: (enr.course_offering.year, enr.course_offering_id))
+    if requested_offering_id:
+        try:
+            requested_offering_id = int(requested_offering_id)
+        except (TypeError, ValueError):
+            requested_offering_id = None
+        if requested_offering_id:
+            selected = next(
+                (enr for enr in enrollments if enr.course_offering_id == requested_offering_id),
+                selected,
+            )
+    return selected
 
 
 def _submission_date_for(action_at):
@@ -240,6 +287,7 @@ def _build_forget_request_payload(forget_request):
     offering = forget_request.course_offering
     return {
         'id': forget_request.id,
+        'kind': 'attendance_forget',
         'request_type': forget_request.request_type,
         'request_type_label': forget_request.get_request_type_display(),
         'status': forget_request.status,
@@ -250,6 +298,34 @@ def _build_forget_request_payload(forget_request):
         'student_name': student_profile.full_name if student_profile else forget_request.student.get_full_name() or forget_request.student.username,
         'student_id': student_profile.student_id if student_profile else '',
         'student_email': forget_request.student.email or (student_profile.email if student_profile else ''),
+    }
+
+
+def _build_help_ticket_payload(ticket):
+    student_profile = getattr(ticket.student, 'userprofile', None)
+    handled_by_profile = getattr(ticket.handled_by, 'userprofile', None) if ticket.handled_by else None
+    return {
+        'id': ticket.id,
+        'kind': 'experiment_help',
+        'request_type': ticket.request_type,
+        'request_type_label': ticket.get_request_type_display(),
+        'status': ticket.status,
+        'status_label': ticket.get_status_display(),
+        'experiment_group': ticket.experiment_group,
+        'experiment_number': ticket.experiment_number,
+        'message': ticket.message,
+        'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
+        'updated_at': timezone.localtime(ticket.updated_at).strftime('%Y-%m-%d %H:%M'),
+        'student_name': student_profile.full_name if student_profile else ticket.student.get_full_name() or ticket.student.username,
+        'student_id': student_profile.student_id if student_profile else '',
+        'student_email': ticket.student.email or (student_profile.email if student_profile else ''),
+        'handled_by_name': (
+            handled_by_profile.full_name if handled_by_profile else (
+                ticket.handled_by.get_full_name() if ticket.handled_by else ''
+            )
+        ) or (ticket.handled_by.username if ticket.handled_by else ''),
+        'offering': _serialize_offering(ticket.course_offering),
+        'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
     }
 
 
@@ -486,6 +562,151 @@ def create_forget_request(request):
 
 
 @login_required
+def help_ticket_context(request):
+    if _user_actual_role(request.user) != 'student':
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    enrollment = _resolve_student_selected_enrollment(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    if not enrollment:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
+
+    course_offering = enrollment.course_offering
+    experiment_group = (enrollment.experiment_group or '').strip() or getattr(request.user.userprofile, 'experiment_group', '')
+    unresolved_ticket = (
+        ExperimentHelpTicket.objects.filter(
+            course_offering=course_offering,
+            experiment_group=experiment_group,
+            status__in=['pending', 'in_progress'],
+        )
+        .select_related('student__userprofile', 'handled_by__userprofile', 'course_offering__course')
+        .order_by('-created_at')
+        .first()
+    )
+    recent_own_tickets = ExperimentHelpTicket.objects.filter(
+        student=request.user,
+        course_offering=course_offering,
+    ).order_by('-created_at')[:10]
+
+    return JsonResponse({
+        'status': 'ok',
+        'offering': _serialize_offering(course_offering),
+        'experiment_group': experiment_group,
+        'experiment_numbers': course_offering.course.experiment_numbers or [],
+        'active_group_ticket': _build_help_ticket_payload(unresolved_ticket) if unresolved_ticket else None,
+        'recent_tickets': [_build_help_ticket_payload(ticket) for ticket in recent_own_tickets],
+    })
+
+
+@login_required
+@require_POST
+def create_help_ticket(request):
+    if _user_actual_role(request.user) != 'student':
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'リクエストが不正です'}, status=400)
+
+    request_type = (data.get('request_type') or '').strip()
+    if request_type not in {'call', 'question'}:
+        return JsonResponse({'status': 'error', 'message': '依頼種別が不正です'}, status=400)
+
+    experiment_number = str(data.get('experiment_number') or '').strip()
+    message = str(data.get('message') or '').strip()
+    if not experiment_number:
+        return JsonResponse({'status': 'error', 'message': '実験番号を選択してください'}, status=400)
+    if not message:
+        return JsonResponse({'status': 'error', 'message': '質問内容を入力してください'}, status=400)
+
+    enrollment = _resolve_student_selected_enrollment(
+        request.user,
+        data.get('offering_id'),
+    )
+    if not enrollment:
+        return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
+
+    course_offering = enrollment.course_offering
+    valid_numbers = {str(number).strip() for number in (course_offering.course.experiment_numbers or []) if str(number).strip()}
+    if valid_numbers and experiment_number not in valid_numbers:
+        return JsonResponse({'status': 'error', 'message': '実験番号が不正です'}, status=400)
+
+    experiment_group = (enrollment.experiment_group or '').strip() or getattr(request.user.userprofile, 'experiment_group', '')
+    if not experiment_group:
+        return JsonResponse({'status': 'error', 'message': '実験班情報が見つかりません'}, status=400)
+
+    with transaction.atomic():
+        unresolved_qs = ExperimentHelpTicket.objects.filter(
+            course_offering=course_offering,
+            experiment_group=experiment_group,
+            status__in=['pending', 'in_progress'],
+        )
+        if unresolved_qs.exists():
+            return JsonResponse({'status': 'error', 'message': '同じ実験班で未対応の依頼があるため送信できません'}, status=400)
+
+        ticket = ExperimentHelpTicket.objects.create(
+            student=request.user,
+            course_offering=course_offering,
+            experiment_group=experiment_group,
+            experiment_number=experiment_number,
+            request_type=request_type,
+            message=message,
+        )
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': '依頼を送信しました',
+        'ticket': _build_help_ticket_payload(ticket),
+    })
+
+
+@login_required
+@require_POST
+def process_help_ticket(request, ticket_id):
+    if not _can_manage_help_tickets(request.user):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+    next_status = (data.get('status') or '').strip()
+    if next_status not in {'pending', 'in_progress', 'resolved'}:
+        return JsonResponse({'status': 'error', 'message': '状態が不正です'}, status=400)
+
+    try:
+        with transaction.atomic():
+            ticket = ExperimentHelpTicket.objects.select_for_update().select_related(
+                'student__userprofile',
+                'course_offering__course',
+                'handled_by__userprofile',
+            ).get(id=ticket_id)
+
+            if not _can_manage_help_ticket_for_offering(request.user, ticket.course_offering_id):
+                return JsonResponse({'status': 'error', 'message': '対象の科目/年度を処理できません'}, status=403)
+
+            if next_status == 'pending':
+                ticket.handled_by = None
+            else:
+                ticket.handled_by = request.user
+            ticket.status = next_status
+            if next_status in {'in_progress', 'resolved'}:
+                ticket.student_read_at = None
+            ticket.save(update_fields=['status', 'handled_by', 'student_read_at', 'updated_at'])
+    except ExperimentHelpTicket.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': '依頼が見つかりません'}, status=404)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': '対応状況を更新しました',
+        'ticket': _build_help_ticket_payload(ticket),
+    })
+
+
+@login_required
 def notification_list(request):
     actual_role = _user_actual_role(request.user)
     response = {
@@ -494,25 +715,69 @@ def notification_list(request):
         'unread_count': 0,
         'can_manage_requests': _can_manage_forget_requests(request.user),
         'can_request_forget': actual_role == 'student',
+        'can_manage_help_tickets': _can_manage_help_tickets(request.user),
+        'can_create_help_ticket': actual_role == 'student',
         'notifications': [],
     }
 
     if actual_role == 'student':
-        base_qs = AttendanceForgetRequest.objects.filter(
+        forget_qs = AttendanceForgetRequest.objects.filter(
             student=request.user,
             status__in=['approved', 'rejected'],
         ).select_related('course_offering__course')
-        notifications = list(base_qs.order_by('-processed_at', '-requested_at')[:30])
-        response['unread_count'] = base_qs.filter(student_read_at__isnull=True).count()
-        response['notifications'] = [
+        forget_notifications = [
             {
                 **_build_forget_request_payload(item),
                 'processed_at': timezone.localtime(item.processed_at).strftime('%Y-%m-%d %H:%M') if item.processed_at else '',
                 'is_unread': item.student_read_at is None,
             }
-            for item in notifications
+            for item in forget_qs.order_by('-processed_at', '-requested_at')[:20]
         ]
+        help_qs = ExperimentHelpTicket.objects.filter(
+            student=request.user
+        ).select_related('course_offering__course', 'handled_by__userprofile')
+        help_notifications = [
+            _build_help_ticket_payload(item)
+            for item in help_qs.order_by('-updated_at', '-created_at')[:20]
+        ]
+        response['unread_count'] = (
+            forget_qs.filter(student_read_at__isnull=True).count()
+            + help_qs.filter(status__in=['in_progress', 'resolved'], student_read_at__isnull=True).count()
+        )
+        notifications = forget_notifications + help_notifications
+        notifications.sort(
+            key=lambda item: item.get('processed_at') or item.get('updated_at') or item.get('requested_at') or item.get('created_at') or '',
+            reverse=True,
+        )
+        response['notifications'] = notifications[:40]
         return JsonResponse(response)
+
+    notifications = []
+    unread_count = 0
+
+    if _can_manage_help_tickets(request.user):
+        help_qs = ExperimentHelpTicket.objects.select_related(
+            'student__userprofile',
+            'course_offering__course',
+            'handled_by__userprofile',
+        )
+        manageable_help_ids = _help_manageable_offering_ids(request.user)
+        if manageable_help_ids is not None:
+            help_qs = help_qs.filter(course_offering_id__in=manageable_help_ids)
+        if actual_role == 'teacher':
+            help_qs = help_qs.filter(status__in=['pending', 'in_progress'])
+            unread_count += help_qs.count()
+            notifications.extend(
+                _build_help_ticket_payload(item)
+                for item in help_qs.order_by('-created_at')[:50]
+            )
+        else:
+            unresolved_help_count = help_qs.filter(status__in=['pending', 'in_progress']).count()
+            unread_count += unresolved_help_count
+            notifications.extend(
+                _build_help_ticket_payload(item)
+                for item in help_qs.order_by('-updated_at', '-created_at')[:80]
+            )
 
     if _can_manage_forget_requests(request.user):
         notifications_qs = AttendanceForgetRequest.objects.filter(status='pending').select_related(
@@ -522,9 +787,18 @@ def notification_list(request):
         manageable_ids = _manageable_offering_ids(request.user)
         if manageable_ids is not None:
             notifications_qs = notifications_qs.filter(course_offering_id__in=manageable_ids)
-        response['unread_count'] = notifications_qs.count()
-        notifications = list(notifications_qs.order_by('-requested_at')[:50])
-        response['notifications'] = [_build_forget_request_payload(item) for item in notifications]
+        unread_count += notifications_qs.count()
+        notifications.extend(
+            _build_forget_request_payload(item)
+            for item in notifications_qs.order_by('-requested_at')[:50]
+        )
+
+    notifications.sort(
+        key=lambda item: item.get('updated_at') or item.get('processed_at') or item.get('requested_at') or item.get('created_at') or '',
+        reverse=True,
+    )
+    response['unread_count'] = unread_count
+    response['notifications'] = notifications[:100]
 
     return JsonResponse(response)
 
@@ -536,6 +810,11 @@ def mark_notifications_read(request):
         AttendanceForgetRequest.objects.filter(
             student=request.user,
             status__in=['approved', 'rejected'],
+            student_read_at__isnull=True,
+        ).update(student_read_at=timezone.now())
+        ExperimentHelpTicket.objects.filter(
+            student=request.user,
+            status__in=['in_progress', 'resolved'],
             student_read_at__isnull=True,
         ).update(student_read_at=timezone.now())
     return JsonResponse({'status': 'ok'})

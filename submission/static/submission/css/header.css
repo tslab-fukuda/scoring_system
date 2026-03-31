@@ -295,6 +295,13 @@ body {
     gap: 1rem;
     justify-content: space-between;
 }
+.notification-item.clickable {
+    cursor: pointer;
+}
+.notification-item-main {
+    min-width: 0;
+    flex: 1 1 auto;
+}
 .notification-item.unread {
     border-color: #4b78ff;
     box-shadow: 0 0 0 1px rgba(75, 120, 255, 0.15);
@@ -332,11 +339,35 @@ body {
     background: #fff1f0;
     color: #c13d3d;
 }
+.notification-status.status-in_progress {
+    background: #fff7e6;
+    color: #a06100;
+}
+.notification-status.status-resolved {
+    background: #e7f8ee;
+    color: #1c7c45;
+}
 .notification-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
     flex-shrink: 0;
+}
+.notification-detail-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+.notification-detail-message {
+    margin-top: 0.35rem;
+}
+.notification-detail-message-body {
+    margin-top: 0.35rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    background: #f7f9fc;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 .forget-request-summary {
     margin-bottom: 1rem;
