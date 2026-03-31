@@ -314,6 +314,11 @@ def _build_help_ticket_payload(ticket):
         'experiment_group': ticket.experiment_group,
         'experiment_number': ticket.experiment_number,
         'message': ticket.message,
+        'teacher_response': ticket.teacher_response,
+        'internal_note': ticket.internal_note,
+        'resolution_category': ticket.resolution_category,
+        'resolution_category_label': ticket.get_resolution_category_display() if ticket.resolution_category else '',
+        'resolved_at': timezone.localtime(ticket.resolved_at).strftime('%Y-%m-%d %H:%M') if ticket.resolved_at else '',
         'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
         'updated_at': timezone.localtime(ticket.updated_at).strftime('%Y-%m-%d %H:%M'),
         'student_name': student_profile.full_name if student_profile else ticket.student.get_full_name() or ticket.student.username,
@@ -676,6 +681,15 @@ def process_help_ticket(request, ticket_id):
     next_status = (data.get('status') or '').strip()
     if next_status not in {'pending', 'in_progress', 'resolved'}:
         return JsonResponse({'status': 'error', 'message': '状態が不正です'}, status=400)
+    resolution_category = (data.get('resolution_category') or '').strip()
+    teacher_response = str(data.get('teacher_response') or '').strip()
+    internal_note = str(data.get('internal_note') or '').strip()
+    valid_categories = {choice[0] for choice in ExperimentHelpTicket.RESOLUTION_CATEGORY_CHOICES}
+    if resolution_category and resolution_category not in valid_categories:
+        return JsonResponse({'status': 'error', 'message': '対応分類が不正です'}, status=400)
+    if next_status == 'resolved':
+        if not resolution_category:
+            return JsonResponse({'status': 'error', 'message': '対応分類を選択してください'}, status=400)
 
     try:
         with transaction.atomic():
@@ -690,12 +704,29 @@ def process_help_ticket(request, ticket_id):
 
             if next_status == 'pending':
                 ticket.handled_by = None
+                ticket.resolved_at = None
             else:
                 ticket.handled_by = request.user
+                if next_status == 'resolved':
+                    ticket.resolved_at = timezone.now()
+                else:
+                    ticket.resolved_at = None
             ticket.status = next_status
+            ticket.resolution_category = resolution_category
+            ticket.teacher_response = teacher_response
+            ticket.internal_note = internal_note
             if next_status in {'in_progress', 'resolved'}:
                 ticket.student_read_at = None
-            ticket.save(update_fields=['status', 'handled_by', 'student_read_at', 'updated_at'])
+            ticket.save(update_fields=[
+                'status',
+                'handled_by',
+                'student_read_at',
+                'resolution_category',
+                'teacher_response',
+                'internal_note',
+                'resolved_at',
+                'updated_at',
+            ])
     except ExperimentHelpTicket.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': '依頼が見つかりません'}, status=404)
 

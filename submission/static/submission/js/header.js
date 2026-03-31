@@ -39,6 +39,7 @@ new Vue({
         showHelpTicketModal: false,
         helpTicketLoading: false,
         helpTicketSubmitting: false,
+        helpTicketProcessing: false,
         helpTicketError: '',
         helpTicketContext: {
             offering: null,
@@ -51,6 +52,11 @@ new Vue({
             requestType: 'question',
             experimentNumber: '',
             message: ''
+        },
+        helpTicketDetailForm: {
+            resolutionCategory: '',
+            teacherResponse: '',
+            internalNote: ''
         },
         notificationPollTimer: null
     },
@@ -251,6 +257,19 @@ new Vue({
         },
         openNotificationDetail(item) {
             this.selectedNotification = item;
+            if (item && item.kind === 'experiment_help') {
+                this.helpTicketDetailForm = {
+                    resolutionCategory: item.resolution_category || '',
+                    teacherResponse: item.teacher_response || '',
+                    internalNote: item.internal_note || ''
+                };
+            } else {
+                this.helpTicketDetailForm = {
+                    resolutionCategory: '',
+                    teacherResponse: '',
+                    internalNote: ''
+                };
+            }
             this.showNotificationDetail = true;
         },
         closeNotificationDetail() {
@@ -500,6 +519,13 @@ new Vue({
                 });
         },
         processHelpTicket(item, status) {
+            if (status === 'resolved') {
+                if (!this.helpTicketDetailForm.resolutionCategory) {
+                    alert('対応分類を選択してください');
+                    return;
+                }
+            }
+            this.helpTicketProcessing = true;
             fetch(`/attendance/help_tickets/${item.id}/process/`, {
                 method: 'POST',
                 headers: {
@@ -507,7 +533,12 @@ new Vue({
                     'X-CSRFToken': CSRF_TOKEN
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({ status })
+                body: JSON.stringify({
+                    status,
+                    resolution_category: this.helpTicketDetailForm.resolutionCategory,
+                    teacher_response: this.helpTicketDetailForm.teacherResponse,
+                    internal_note: this.helpTicketDetailForm.internalNote
+                })
             })
                 .then(res => res.json())
                 .then(data => {
@@ -521,6 +552,9 @@ new Vue({
                 })
                 .catch(err => {
                     alert(err.message || '状態更新に失敗しました');
+                })
+                .finally(() => {
+                    this.helpTicketProcessing = false;
                 });
         }
     },

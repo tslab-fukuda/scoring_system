@@ -369,6 +369,12 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
 }
+.notification-detail-form {
+    margin-top: 0.8rem;
+    padding: 1rem;
+    border-radius: 12px;
+    background: #f7f9fc;
+}
 .forget-request-summary {
     margin-bottom: 1rem;
     padding: 0.85rem 1rem;

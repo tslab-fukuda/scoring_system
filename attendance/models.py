@@ -75,6 +75,11 @@ class ExperimentHelpTicket(models.Model):
         ('call', '呼び出し'),
         ('question', '質問'),
     ]
+    RESOLUTION_CATEGORY_CHOICES = [
+        ('experiment', '実験内容'),
+        ('device_trouble', '機器トラブル'),
+        ('other', 'その他'),
+    ]
     STATUS_CHOICES = [
         ('pending', '未対応'),
         ('in_progress', '対応中'),
@@ -95,6 +100,13 @@ class ExperimentHelpTicket(models.Model):
     experiment_number = models.CharField(max_length=32)
     request_type = models.CharField(max_length=16, choices=REQUEST_TYPE_CHOICES)
     message = models.TextField()
+    teacher_response = models.TextField(blank=True)
+    internal_note = models.TextField(blank=True)
+    resolution_category = models.CharField(
+        max_length=32,
+        choices=RESOLUTION_CATEGORY_CHOICES,
+        blank=True,
+    )
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
     handled_by = models.ForeignKey(
         User,
@@ -103,6 +115,7 @@ class ExperimentHelpTicket(models.Model):
         blank=True,
         related_name='handled_experiment_help_tickets'
     )
+    resolved_at = models.DateTimeField(null=True, blank=True)
     student_read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

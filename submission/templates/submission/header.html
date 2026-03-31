@@ -165,11 +165,38 @@
               <div><strong>実験班番号:</strong> [[ selectedNotification.experiment_group ]]</div>
               <div><strong>実験番号:</strong> [[ selectedNotification.experiment_number ]]</div>
               <div><strong>依頼時刻:</strong> [[ selectedNotification.created_at ]]</div>
+              <div v-if="selectedNotification.resolution_category_label"><strong>対応分類:</strong> [[ selectedNotification.resolution_category_label ]]</div>
+              <div v-if="selectedNotification.resolved_at"><strong>対応完了時刻:</strong> [[ selectedNotification.resolved_at ]]</div>
               <div v-if="selectedNotification.handled_by_name"><strong>対応者:</strong> [[ selectedNotification.handled_by_name ]]</div>
               <div class="notification-detail-message">
                 <strong>質問内容:</strong>
                 <div class="notification-detail-message-body">[[ selectedNotification.message ]]</div>
               </div>
+              <div v-if="!canManageHelpItem(selectedNotification) && selectedNotification.teacher_response" class="notification-detail-message">
+                <strong>回答:</strong>
+                <div class="notification-detail-message-body">[[ selectedNotification.teacher_response ]]</div>
+              </div>
+              <template v-if="canManageHelpItem(selectedNotification)">
+                <div class="notification-detail-form">
+                  <div class="mb-3">
+                    <label class="form-label">対応分類</label>
+                    <select v-model="helpTicketDetailForm.resolutionCategory" class="form-select">
+                      <option value="">選択してください</option>
+                      <option value="experiment">実験内容</option>
+                      <option value="device_trouble">機器トラブル</option>
+                      <option value="other">その他</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">学生向け回答</label>
+                    <textarea v-model.trim="helpTicketDetailForm.teacherResponse" class="form-control" rows="4"></textarea>
+                  </div>
+                  <div class="mb-3 mb-0">
+                    <label class="form-label">内部向け対応メモ</label>
+                    <textarea v-model.trim="helpTicketDetailForm.internalNote" class="form-control" rows="4"></textarea>
+                  </div>
+                </div>
+              </template>
             </template>
           </div>
           <div v-if="canManageForgetItem(selectedNotification) && selectedNotification.status === 'pending'" class="header-modal-actions">
@@ -177,9 +204,9 @@
             <button type="button" class="btn btn-outline-secondary" @click="processForgetRequest(selectedNotification, 'reject')">却下</button>
           </div>
           <div v-if="canManageHelpItem(selectedNotification)" class="header-modal-actions">
-            <button type="button" class="btn btn-outline-secondary" @click="processHelpTicket(selectedNotification, 'pending')">未対応</button>
-            <button type="button" class="btn btn-primary" @click="processHelpTicket(selectedNotification, 'in_progress')">対応中</button>
-            <button type="button" class="btn btn-success" @click="processHelpTicket(selectedNotification, 'resolved')">対応済み</button>
+            <button type="button" class="btn btn-outline-secondary" :disabled="helpTicketProcessing" @click="processHelpTicket(selectedNotification, 'pending')">未対応</button>
+            <button type="button" class="btn btn-primary" :disabled="helpTicketProcessing" @click="processHelpTicket(selectedNotification, 'in_progress')">対応中</button>
+            <button type="button" class="btn btn-success" :disabled="helpTicketProcessing" @click="processHelpTicket(selectedNotification, 'resolved')">対応済み</button>
           </div>
         </div>
       </div>

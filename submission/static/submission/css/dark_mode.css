@@ -349,6 +349,9 @@ body.dark-mode .notification-detail-message-body {
     background: #282828;
     color: #e0e0e0;
 }
+body.dark-mode .notification-detail-form {
+    background: #282828;
+}
 body.dark-mode .header-modal-card .form-control,
 body.dark-mode .header-modal-card .form-select {
     background: #2a2a2a;
