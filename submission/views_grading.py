@@ -7,6 +7,8 @@ from submission.models import (
     CourseOffering,
     SubmissionTextIndex,
     SimilarityJob,
+    ExperimentProgress,
+    ExperimentTaskConfig,
 )
 from submission.models import Stamp
 from django.http import JsonResponse
@@ -306,6 +308,24 @@ def final_grading_form(request, submission_id):
             'student_id': up.student_id if up else '',
         })
 
+    completed_tasks = set(
+        str(task_no)
+        for task_no in ExperimentProgress.objects.filter(
+            student=submission.student,
+            course_offering=submission.course_offering,
+            experiment_number=submission.experiment_number,
+        ).values_list('task_no', flat=True)
+    )
+    task_config = ExperimentTaskConfig.objects.filter(
+        course_offering=submission.course_offering,
+        experiment_number=submission.experiment_number,
+    ).first()
+    configured_tasks = []
+    if task_config and isinstance(task_config.task_list, list):
+        configured_tasks = [str(task).strip() for task in task_config.task_list if str(task).strip()]
+    ordered_completed_tasks = [task for task in configured_tasks if task in completed_tasks]
+    ordered_completed_tasks.extend(sorted(completed_tasks - set(ordered_completed_tasks)))
+
     return render(request, 'submission/final_grading_form.html', {
         'submission': submission,
         'total_score': total_score,
@@ -313,6 +333,7 @@ def final_grading_form(request, submission_id):
         'pre_items': pre_items,
         'main_items': main_items,
         'final_comment': submission.final_comment or '',
+        'completed_tasks_text': ', '.join(ordered_completed_tasks) if ordered_completed_tasks else '-',
         'compare_candidates': json.dumps(candidates, ensure_ascii=False),
     })
 

@@ -20,6 +20,10 @@
             <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
             <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
           </div>
+          <div class="mt-2">
+            <span class="me-2">完了例題:</span>
+            <span>{{ completed_tasks_text }}</span>
+          </div>
         </div>
         {% verbatim %}
         <div class="compare-controls mb-2">
