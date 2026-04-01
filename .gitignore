@@ -13,6 +13,7 @@ db.sqlite3
 db_prod.sqlite3
 db.sqlite3.*.bak
 db_prod.sqlite3.*.bak
+班決め用ファイル群/
 
 # その他 IDE
 .vscode/
