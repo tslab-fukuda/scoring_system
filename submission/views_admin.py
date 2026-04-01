@@ -2140,7 +2140,14 @@ def bulk_create_users(request):
         decoded = csv_file.read().decode('utf-8-sig').splitlines()
         reader = csv.DictReader(decoded)
         required_fields = ['名前', 'メールアドレス', '学生番号', '曜日', '班']
-        if not reader.fieldnames or any(f not in reader.fieldnames for f in required_fields):
+        normalized_fieldnames = []
+        if reader.fieldnames:
+            normalized_fieldnames = [
+                str(field or '').replace('\ufeff', '').strip()
+                for field in reader.fieldnames
+            ]
+            reader.fieldnames = normalized_fieldnames
+        if not normalized_fieldnames or any(f not in normalized_fieldnames for f in required_fields):
             return JsonResponse({
                 'status': 'error',
                 'message': 'CSVのカラムは「名前，メールアドレス，学生番号，曜日，班」にしてください'
@@ -2153,14 +2160,18 @@ def bulk_create_users(request):
                 if email_val:
                     existing_emails.add(email_val)
         for row in reader:
-            email = (row.get('メールアドレス') or '').strip()
+            normalized_row = {
+                str(key or '').replace('\ufeff', '').strip(): value
+                for key, value in row.items()
+            }
+            email = (normalized_row.get('メールアドレス') or '').strip()
             if not email:
                 skipped += 1
                 continue
-            full_name = (row.get('名前', '') or '').strip()
-            student_id_val = (row.get('学生番号', '') or '').strip()
-            day_val = (row.get('曜日', '') or '').strip()
-            group_val = (row.get('班', row.get('班番号', '')) or '').strip()
+            full_name = (normalized_row.get('名前', '') or '').strip()
+            student_id_val = (normalized_row.get('学生番号', '') or '').strip()
+            day_val = (normalized_row.get('曜日', '') or '').strip()
+            group_val = (normalized_row.get('班', normalized_row.get('班番号', '')) or '').strip()
             email_lower = email.lower()
             # まず、選択中科目/年度で同メールのEnrollmentが既にある場合は重複扱い（ロール問わず）
             if offering and Enrollment.objects.filter(
