@@ -152,6 +152,22 @@ body.dark-mode .ts-user-table-wrapper,
 body.dark-mode .ts-attendance-wrapper {
     background: #1e1e1e;
 }
+body.dark-mode .ts-guide-lead,
+body.dark-mode .ts-guide-list,
+body.dark-mode .ts-guide-list li {
+    color: #d8d8d8;
+}
+body.dark-mode .ts-guide-title {
+    color: #9dbdff;
+}
+body.dark-mode .ts-guide-example {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+    color: #e0e0e0;
+}
+body.dark-mode .ts-guide-download-link {
+    color: #fff;
+}
 body.dark-mode tr.clickable-row:hover {
     background: #333;
 }

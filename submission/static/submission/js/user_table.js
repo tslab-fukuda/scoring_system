@@ -16,6 +16,7 @@ new Vue({
         bulkOfferingId: "",
         showModal: false,
         showEditModal: false,
+        showTemplateGuideModal: false,
         filters: { role: '', group: '' },
         sortField: '',
         sortAsc: true,
@@ -132,6 +133,12 @@ new Vue({
             if (!this.ensureOfferingSelected()) return;
             this.syncNewUserDay();
             this.showModal = true;
+        },
+        openTemplateGuideModal() {
+            this.showTemplateGuideModal = true;
+        },
+        closeTemplateGuideModal() {
+            this.showTemplateGuideModal = false;
         },
         openEditModal(user) {
             let experiment_day = '';

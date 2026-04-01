@@ -2115,7 +2115,7 @@ def update_user_view(request, user_id):
 def bulk_create_users(request):
     """Create multiple users from uploaded CSV file.
 
-    Expected CSV columns: 名前, メールアドレス, 学生番号, 曜日, 班番号
+    Expected CSV columns: 名前, メールアドレス, 学生番号, 曜日, 班
     Password will be set to 学生番号.
     """
     if request.method != 'POST':
@@ -2221,6 +2221,16 @@ def bulk_create_users(request):
         return JsonResponse({'status': 'success', 'created': created, 'skipped': skipped, 'duplicates': duplicates})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@role_required('admin')
+def bulk_user_template_csv(request):
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="user_bulk_import_template.csv"'
+    response.write('\ufeff')
+    writer = csv.writer(response)
+    writer.writerow(['名前', 'メールアドレス', '学生番号', '曜日', '班'])
+    return response
 
 
 @role_required('admin')

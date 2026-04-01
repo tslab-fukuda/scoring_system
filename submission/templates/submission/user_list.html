@@ -33,8 +33,51 @@
     <div class="d-flex gap-2 mb-3">
         <button class="btn btn-primary" @click="openCreateModal">＋ 新規ユーザー登録</button>
         <button class="btn btn-secondary" @click="triggerFileInput">ユーザ一括登録</button>
+        <button class="btn btn-outline-secondary" @click="openTemplateGuideModal">テンプレートDL / 記入方法</button>
     </div>
     <input type="file" ref="csvInput" accept=".csv" @change="uploadCsv" style="display:none">
+
+    <div v-if="showTemplateGuideModal" class="ts-modal-overlay" @click.self="closeTemplateGuideModal">
+        <div class="ts-modal ts-guide-modal">
+            <h3>一括登録テンプレートと記入方法</h3>
+            <p class="ts-guide-lead">一括登録は CSV 形式です。テンプレートをダウンロードして、1 行目の見出しは変更せずに入力してください。</p>
+            <div class="ts-guide-section">
+                <div class="ts-guide-title">必須列</div>
+                <ul class="ts-guide-list">
+                    <li><strong>名前</strong>: 列見出しとして必要です。値は空でも登録できます</li>
+                    <li><strong>メールアドレス</strong>: 列見出しとして必要です。ログインIDとして使用し、値も必須です</li>
+                    <li><strong>学生番号</strong>: 列見出しとして必要です。値は空でも登録できます</li>
+                    <li><strong>曜日</strong>: 列見出しとして必要です。値は空でも登録できます</li>
+                    <li><strong>班</strong>: 列見出しとして必要です。値は空でも登録できます</li>
+                </ul>
+            </div>
+            <div class="ts-guide-section">
+                <div class="ts-guide-title">必須入力 / 任意入力</div>
+                <ul class="ts-guide-list">
+                    <li><strong>必須</strong>: メールアドレス</li>
+                    <li><strong>任意</strong>: 名前, 学生番号, 曜日, 班</li>
+                </ul>
+            </div>
+            <div class="ts-guide-section">
+                <div class="ts-guide-title">入力上の注意</div>
+                <ul class="ts-guide-list">
+                    <li>先に上部で科目と年度を選択してから一括登録してください</li>
+                    <li>既に同じ科目/年度に登録済みのメールアドレスはスキップされます</li>
+                    <li>CSV は UTF-8 のまま保存してください</li>
+                </ul>
+            </div>
+            {% verbatim %}
+            <div class="ts-guide-section">
+                <div class="ts-guide-title">入力例</div>
+                <div class="ts-guide-example">山田太郎, yamada@example.com, 1234, {{ bulkDayOptions[0] || '火' }}, 01</div>
+            </div>
+            {% endverbatim %}
+            <div class="ts-modal-actions mt-3">
+                <a class="ts-create-btn ts-guide-download-link" href="{% url 'bulk_user_template_csv' %}" download>テンプレートCSVをダウンロード</a>
+                <button type="button" class="ts-cancel-btn" @click="closeTemplateGuideModal">閉じる</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 新規ユーザー登録モーダル -->
     {% verbatim %}

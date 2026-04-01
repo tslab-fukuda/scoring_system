@@ -82,6 +82,42 @@
     min-width: 340px;
     max-width: 97vw;
 }
+.ts-guide-modal {
+    max-width: 680px;
+}
+.ts-guide-lead {
+    margin-bottom: 14px;
+    color: #555;
+}
+.ts-guide-section {
+    margin-bottom: 14px;
+}
+.ts-guide-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: #3c2669;
+}
+.ts-guide-list {
+    margin: 0;
+    padding-left: 1.2rem;
+}
+.ts-guide-list li {
+    margin-bottom: 4px;
+}
+.ts-guide-example {
+    background: #f7f6fb;
+    border: 1px solid #e1d9f3;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: monospace;
+    word-break: break-all;
+}
+.ts-guide-download-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
 .ts-form-group { margin-bottom: 15px; }
 .ts-form-group label { font-size: 15px; font-weight: 500; margin-bottom: 4px; display: block; }
 .ts-form-group input,
