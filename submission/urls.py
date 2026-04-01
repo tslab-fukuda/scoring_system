@@ -35,6 +35,11 @@ urlpatterns = [
     path('create/', views_admin.create_user_view, name='create_user'),
     path('bulk_create/', views_admin.bulk_create_users, name='bulk_create_users'),
     path('bulk_create/template/', views_admin.bulk_user_template_csv, name='bulk_user_template_csv'),
+    path('group_assignment/', views_admin.group_assignment_builder, name='group_assignment_builder'),
+    path('group_assignment/preview/', views_admin.group_assignment_preview_api, name='group_assignment_preview_api'),
+    path('group_assignment/finalize/', views_admin.group_assignment_finalize_api, name='group_assignment_finalize_api'),
+    path('group_assignment/download/csv/', views_admin.group_assignment_download_csv, name='group_assignment_download_csv'),
+    path('group_assignment/download/pdf/', views_admin.group_assignment_download_pdf, name='group_assignment_download_pdf'),
     
     path('admin_dashboard/', views_admin.admin_dashboard, name='admin_dashboard'),
     path('admin_submissions_api/', views_admin.admin_get_submissions_api, name='admin_get_submissions_api'),

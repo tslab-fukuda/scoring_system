@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}班分け作成{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'submission/css/group_assignment.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="group-assignment-app" class="group-assignment-page p-4">
+  <h2 class="mb-3">班分け作成</h2>
+  <p class="group-assignment-lead">
+    4つの入力ファイルを読み込み、必要情報の突合、曜日案、班分け案、最終出力の順で確認します。
+  </p>
+
+  <div class="group-assignment-card mb-4">
+    <h3 class="group-assignment-section-title">入力</h3>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">対象学年</label>
+        <select class="form-select" v-model="targetGrade">
+          <option value="">選択してください</option>
+          <option value="1">1年</option>
+          <option value="2">2年</option>
+          <option value="3">3年</option>
+          <option value="4">4年</option>
+        </select>
+      </div>
+      <div class="col-md-9"></div>
+      <div class="col-md-6">
+        <label class="form-label">履修予定者ファイル（courseid_*.csv）</label>
+        <input ref="participantsFile" type="file" class="form-control" accept=".csv">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Google Form回答一覧（.csv）</label>
+        <input ref="surveyFile" type="file" class="form-control" accept=".csv">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">名簿ファイル（.xls / .xlsx）</label>
+        <input ref="rosterFile" type="file" class="form-control" accept=".xls,.xlsx">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">成績ファイル（.xlsx）</label>
+        <input ref="gradesFile" type="file" class="form-control" accept=".xlsx,.xls">
+      </div>
+    </div>
+    <div class="group-assignment-actions mt-3">
+      <button type="button" class="btn btn-primary" :disabled="loading" @click="generatePreview">
+        [[ loading ? '生成中...' : '班分け案を作成' ]]
+      </button>
+    </div>
+    <div v-if="errorMessage" class="alert alert-danger mt-3 mb-0">[[ errorMessage ]]</div>
+  </div>
+
+  <div v-if="preview" class="group-assignment-card">
+    <div class="group-stepper mb-4">
+      <button
+        v-for="step in steps"
+        :key="step.id"
+        type="button"
+        class="group-stepper-item"
+        :class="{ active: currentStep === step.id, done: currentStep > step.id }"
+        @click="currentStep = step.id"
+      >
+        [[ step.id ]]. [[ step.label ]]
+      </button>
+    </div>
+
+    <div v-if="preview.warnings && preview.warnings.length" class="alert alert-warning">
+      <div class="fw-bold mb-2">確認事項</div>
+      <ul class="mb-0">
+        <li v-for="warning in preview.warnings" :key="warning">[[ warning ]]</li>
+      </ul>
+    </div>
+
+    <template v-if="currentStep === 1">
+      <h3 class="group-assignment-section-title">1. 突合結果</h3>
+      <div class="group-assignment-summary mb-3">
+        <div>対象学年: [[ preview.target_grade ]]年</div>
+        <div>対象人数: [[ preview.merged_rows.length ]]名</div>
+        <div>生成日時: [[ preview.generated_at ]]</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle group-assignment-table">
+          <thead>
+            <tr>
+              <th>氏名</th>
+              <th>メール</th>
+              <th>学生番号</th>
+              <th>性別</th>
+              <th>学年</th>
+              <th>過年度</th>
+              <th>GPA</th>
+              <th>希望曜日</th>
+              <th>希望理由</th>
+              <th>突合状況</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in preview.merged_rows" :key="row.email">
+              <td>[[ row.name ]]</td>
+              <td>[[ row.email ]]</td>
+              <td>[[ row.student_id || '-' ]]</td>
+              <td>[[ row.sex || '-' ]]</td>
+              <td>[[ row.grade_level || '-' ]]</td>
+              <td>[[ row.is_repeater ? '過年度' : '-' ]]</td>
+              <td>[[ row.gpa_display || (row.gpa == null ? '-' : String(row.gpa)) ]]</td>
+              <td>[[ row.preferred_day_label ]]</td>
+              <td class="group-assignment-reason">[[ row.preferred_reason || '-' ]]</td>
+              <td>
+                <span class="match-badge" :class="{ ok: row.has_survey }">調査</span>
+                <span class="match-badge" :class="{ ok: row.has_roster }">名簿</span>
+                <span class="match-badge" :class="{ ok: row.has_grade || row.is_repeater }">成績</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <template v-if="currentStep === 2">
+      <h3 class="group-assignment-section-title">2. 曜日振り分け案</h3>
+      <div class="row g-3">
+        <div v-for="panel in preview.day_panels" :key="panel.day" class="col-lg-6">
+          <div class="group-panel">
+            <div class="group-panel-head">
+              <div class="group-panel-title">[[ panel.day_label ]]</div>
+              <div class="group-panel-count">[[ panel.count ]]名</div>
+            </div>
+            <div class="group-panel-body">
+              <div v-for="student in panel.students" :key="panel.day + '-' + student.email" class="group-student-row">
+                <div class="group-student-main">
+                  <div class="group-student-name">[[ student.name ]]</div>
+                  <div class="group-student-meta">
+                    [[ student.student_id || '-' ]] / [[ student.is_repeater ? '過年度' : '在学生' ]] / GPA [[ student.gpa_display || '-' ]]
+                  </div>
+                </div>
+                <div class="group-student-side">
+                  <span class="group-student-pref">希望: [[ student.preferred_day_label ]]</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template v-if="currentStep === 3">
+      <h3 class="group-assignment-section-title">3. 班分け案</h3>
+      <div class="row g-3">
+        <div v-for="plan in preview.group_plans" :key="plan.day" class="col-lg-6">
+          <div class="group-panel">
+            <div class="group-panel-head">
+              <div class="group-panel-title">[[ plan.day_label ]]</div>
+              <div class="group-panel-count">[[ plan.student_count ]]名 / 過年度 [[ plan.repeater_count ]]名</div>
+            </div>
+            <div class="group-plan-list">
+              <div v-for="group in plan.groups" :key="plan.day + '-' + group.group_no" class="group-card">
+                <div class="group-card-head">
+                  <div>[[ plan.day_label ]] [[ group.group_no ]]班</div>
+                  <div>[[ group.count ]]名</div>
+                </div>
+                <div v-if="group.gpa_average != null" class="group-card-sub">GPA平均: [[ group.gpa_average.toFixed(2) ]]</div>
+                <ul class="group-card-members">
+                  <li v-for="student in group.students" :key="group.group_no + '-' + student.email">
+                    [[ student.student_id || '-' ]] / [[ student.name ]]<span v-if="student.sex"> / [[ student.sex ]]</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template v-if="currentStep === 4">
+      <h3 class="group-assignment-section-title">4. 承認と出力</h3>
+      <p class="mb-3">内容を確認し、問題なければ承認して CSV / PDF を出力してください。</p>
+      <div class="group-assignment-actions">
+        <button type="button" class="btn btn-success" :disabled="finalizing || approved" @click="finalizePlan">
+          [[ approved ? '承認済み' : (finalizing ? '承認中...' : '承認して出力を有効化') ]]
+        </button>
+        <a v-if="approved" class="btn btn-outline-primary" :href="downloadUrls.csv">一括登録CSVをダウンロード</a>
+        <a v-if="approved" class="btn btn-outline-primary" :href="downloadUrls.pdf">班分けPDFをダウンロード</a>
+      </div>
+    </template>
+
+    <div class="group-assignment-actions mt-4">
+      <button type="button" class="btn btn-outline-secondary" :disabled="currentStep <= 1" @click="currentStep -= 1">戻る</button>
+      <button type="button" class="btn btn-primary" :disabled="currentStep >= 4" @click="currentStep += 1">次へ</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  var GROUP_ASSIGNMENT_PREVIEW_URL = "{% url 'group_assignment_preview_api' %}";
+  var GROUP_ASSIGNMENT_FINALIZE_URL = "{% url 'group_assignment_finalize_api' %}";
+</script>
+<script src="{% static 'submission/js/group_assignment.js' %}"></script>
+{% endblock %}

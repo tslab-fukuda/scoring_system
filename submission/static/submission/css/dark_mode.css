@@ -168,6 +168,45 @@ body.dark-mode .ts-guide-example {
 body.dark-mode .ts-guide-download-link {
     color: #fff;
 }
+body.dark-mode .group-assignment-card,
+body.dark-mode .group-card,
+body.dark-mode .group-panel {
+    background: #1f1f1f;
+    border-color: #3a3a3a;
+    color: #ededed;
+}
+body.dark-mode .group-assignment-lead,
+body.dark-mode .group-student-meta,
+body.dark-mode .group-student-pref,
+body.dark-mode .group-card-sub,
+body.dark-mode .group-panel-count {
+    color: #cfcfcf;
+}
+body.dark-mode .group-panel-head {
+    background: #2a2a2a;
+    border-bottom-color: #3a3a3a;
+}
+body.dark-mode .group-stepper-item {
+    background: #262626;
+    border-color: #424242;
+    color: #ededed;
+}
+body.dark-mode .group-stepper-item.active {
+    background: #2457ba;
+    border-color: #2457ba;
+}
+body.dark-mode .group-stepper-item.done {
+    background: #22324d;
+}
+body.dark-mode .group-student-row {
+    border-bottom-color: #333;
+}
+body.dark-mode .group-assignment-table th,
+body.dark-mode .group-assignment-table td {
+    background: #242424;
+    color: #ededed;
+    border-color: #3a3a3a;
+}
 body.dark-mode tr.clickable-row:hover {
     background: #333;
 }
