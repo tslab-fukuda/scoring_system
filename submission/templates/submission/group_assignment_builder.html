@@ -11,7 +11,7 @@
 <div id="group-assignment-app" class="group-assignment-page p-4">
   <h2 class="mb-3">班分け作成</h2>
   <p class="group-assignment-lead">
-    4つの入力ファイルを読み込み、必要情報の突合、曜日案、班分け案、最終出力の順で確認します。
+    入力ファイルを読み込み、必要情報の突合、曜日案、班分け案、最終出力の順で確認します。
   </p>
 
   <div class="group-assignment-card mb-4">
@@ -43,6 +43,11 @@
       <div class="col-md-6">
         <label class="form-label">成績ファイル（.xlsx）</label>
         <input ref="gradesFile" type="file" class="form-control" accept=".xlsx,.xls">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">既存班分けCSV（任意）</label>
+        <input ref="existingAssignmentFile" type="file" class="form-control" accept=".csv">
+        <div class="form-text">指定すると、既存学生の曜日を固定して差分学生のみ追加割当します。</div>
       </div>
     </div>
     <div class="group-assignment-actions mt-3">

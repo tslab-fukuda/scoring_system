@@ -31,6 +31,7 @@ new Vue({
             const surveyFile = this.$refs.surveyFile.files[0];
             const rosterFile = this.$refs.rosterFile.files[0];
             const gradesFile = this.$refs.gradesFile.files[0];
+            const existingAssignmentFile = this.$refs.existingAssignmentFile.files[0];
             if (!participantsFile || !surveyFile || !rosterFile || !gradesFile) {
                 this.errorMessage = '4つのファイルをすべて選択してください。';
                 return;
@@ -42,6 +43,9 @@ new Vue({
             formData.append('survey_file', surveyFile);
             formData.append('roster_file', rosterFile);
             formData.append('grades_file', gradesFile);
+            if (existingAssignmentFile) {
+                formData.append('existing_assignment_file', existingAssignmentFile);
+            }
 
             this.loading = true;
             fetch(GROUP_ASSIGNMENT_PREVIEW_URL, {

@@ -57,7 +57,44 @@
                     </select>
                     {% if effective_role != 'non-editing teacher' %}
                     <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                    {% verbatim %}
+                    <div v-if="tool==='pen'" class="tool-color-palette ms-2">
+                        <button
+                            v-for="color in penColors"
+                            :key="'pen-' + color"
+                            type="button"
+                            class="tool-color-chip"
+                            :class="{ active: penColor === color }"
+                            :style="{ backgroundColor: color }"
+                            @click="penColor = color"
+                        ></button>
+                    </div>
+                    {% endverbatim %}
                     <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                    {% verbatim %}
+                    <div v-if="tool==='highlight'" class="tool-color-palette ms-2">
+                        <button
+                            v-for="color in highlightColors"
+                            :key="'highlight-' + color"
+                            type="button"
+                            class="tool-color-chip tool-color-chip-highlight"
+                            :class="{ active: highlightBaseColor === color }"
+                            :style="{ backgroundColor: color }"
+                            @click="highlightBaseColor = color"
+                        ></button>
+                    </div>
+                    <input
+                        v-if="tool==='highlight'"
+                        type="range"
+                        min="15"
+                        max="60"
+                        step="5"
+                        v-model.number="highlightOpacity"
+                        class="form-range d-inline-block ms-2"
+                        style="width:100px;"
+                    >
+                    {% endverbatim %}
+                    <input v-if="tool==='eraser'" type="range" min="1" max="60" step="5" v-model.number="eraserWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                     <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
                     <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
                     {% endif %}

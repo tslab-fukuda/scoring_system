@@ -55,9 +55,7 @@ GROUP_ASSIGNMENT_SESSION_KEY = 'group_assignment_preview_v1'
 GROUP_ASSIGNMENT_DEFAULT_DAYS = ('火', '木')
 GROUP_ASSIGNMENT_GROUPS_PER_DAY = 20
 GROUP_ASSIGNMENT_REASON_KEYWORDS = (
-    '就活', 'インターン', '研究室', 'ゼミ', '部活', 'サークル', 'バイト', 'アルバイト',
-    '通院', '病院', '実習', '留学', '留学生', '家庭', '介護', '通学', '通勤', '資格',
-    '公務員', '教職', '面接', '説明会'
+    '教職', '教養', '教育', '専門'
 )
 GROUP_ASSIGNMENT_JP_FONT = '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf'
 
@@ -282,6 +280,20 @@ def _ga_reason_priority(preferred_day, reason):
     return 2
 
 
+def _ga_credit_assignment_priority(student):
+    credits = student.get('liberal_arts_credits')
+    if credits is None:
+        return float('-inf')
+    return -credits
+
+
+def _ga_credit_rebalance_priority(student):
+    credits = student.get('liberal_arts_credits')
+    if credits is None:
+        return float('inf')
+    return -credits
+
+
 def _ga_read_csv_dicts(uploaded_file):
     raw = uploaded_file.read()
     uploaded_file.seek(0)
@@ -347,6 +359,29 @@ def _ga_parse_participants(uploaded_file):
     if not participants:
         raise ValueError('履修予定者ファイルに有効なデータがありません。')
     return participants
+
+
+def _ga_parse_existing_assignments(uploaded_file):
+    rows = _ga_read_csv_dicts(uploaded_file)
+    assignments = []
+    for row in rows:
+        normalized = {(_ga_normalize_text(key).replace('\ufeff', '').strip()): value for key, value in (row or {}).items()}
+        email = _ga_normalize_email(normalized.get('メールアドレス'))
+        student_id = _ga_extract_student_id(normalized.get('学生番号'))
+        name = _ga_normalize_text(normalized.get('名前') or normalized.get('氏名'))
+        day = _ga_day_char_from_text(normalized.get('曜日'))
+        group_no_raw = _ga_normalize_text(normalized.get('班'))
+        if not any([email, student_id, name]) or not day:
+            continue
+        assignments.append({
+            'email': email,
+            'student_id': student_id,
+            'name': name,
+            'name_key': _ga_normalize_name(name),
+            'day': day,
+            'group_no': group_no_raw,
+        })
+    return assignments
 
 
 def _ga_parse_survey(uploaded_file):
@@ -429,6 +464,8 @@ def _ga_parse_grade_rows(uploaded_file):
 
             total_gpa_index = None
             total_block_start = None
+            liberal_arts_credit_index = None
+            liberal_arts_block_start = None
             for col_index in range(width):
                 if top_only[col_index] == '合計':
                     total_block_start = col_index
@@ -437,6 +474,14 @@ def _ga_parse_grade_rows(uploaded_file):
                 for col_index in range(total_block_start, width):
                     if bottom_only[col_index] == 'GPA':
                         total_gpa_index = col_index
+            for col_index in range(width):
+                if top_only[col_index] == '教養計':
+                    liberal_arts_block_start = col_index
+                    break
+            if liberal_arts_block_start is not None:
+                for col_index in range(liberal_arts_block_start, width):
+                    if bottom_only[col_index] == '取得単位':
+                        liberal_arts_credit_index = col_index
 
             fallback_gpa_index = compact_pairs.index('GPA') if 'GPA' in compact_pairs else None
             gpa_index = total_gpa_index if total_gpa_index is not None else fallback_gpa_index
@@ -448,6 +493,7 @@ def _ga_parse_grade_rows(uploaded_file):
                 '学生番号': student_id_index,
                 '学生氏名': student_name_index,
                 'GPA': gpa_index,
+                '教養計取得単位': liberal_arts_credit_index,
             }
             header_row = row_index + 1
             break
@@ -458,6 +504,12 @@ def _ga_parse_grade_rows(uploaded_file):
             name = _ga_normalize_text(row[mapping['学生氏名']] if mapping['学生氏名'] < len(row) else '')
             gpa_source = row[mapping['GPA']] if mapping['GPA'] < len(row) else ''
             gpa = _ga_parse_float(gpa_source)
+            liberal_arts_credit_source = ''
+            liberal_arts_credit = None
+            credit_index = mapping.get('教養計取得単位')
+            if credit_index is not None and credit_index < len(row):
+                liberal_arts_credit_source = row[credit_index]
+                liberal_arts_credit = _ga_parse_float(liberal_arts_credit_source)
             if not student_id and not name:
                 continue
             records.append({
@@ -466,6 +518,8 @@ def _ga_parse_grade_rows(uploaded_file):
                 'name_key': _ga_normalize_name(name),
                 'gpa': gpa,
                 'gpa_display': _ga_normalize_text(gpa_source),
+                'liberal_arts_credits': liberal_arts_credit,
+                'liberal_arts_credits_display': _ga_normalize_text(liberal_arts_credit_source),
                 'sheet_name': sheet_name,
             })
     if not records:
@@ -527,10 +581,11 @@ def _ga_rebalance_days(assignments, day_labels, desired_counts):
         high_day = day_a if len(assignments[day_a]) > len(assignments[day_b]) else day_b
         low_day = day_b if high_day == day_a else day_a
         movable = sorted(
-            assignments[high_day],
+            [item for item in assignments[high_day] if not item.get('day_fixed')],
             key=lambda item: (
                 0 if not item.get('preferred_day') else 1,
                 item.get('reason_priority', 0),
+                _ga_credit_rebalance_priority(item),
                 0 if item.get('preferred_day') == low_day else 1,
                 0 if item.get('is_repeater') else 1,
             )
@@ -552,6 +607,7 @@ def _ga_assign_days(merged_rows, day_labels):
         key=lambda item: (
             1 if item.get('is_repeater') else 0,
             item.get('reason_priority', 0),
+            _ga_credit_assignment_priority(item),
             1 if item.get('preferred_day') else 0,
             1 if item.get('sex') == '女' else 0,
             1 if item.get('gpa') is not None else 0,
@@ -565,6 +621,61 @@ def _ga_assign_days(merged_rows, day_labels):
         counts[chosen_day] += 1
         student['assigned_day'] = chosen_day
         student['assigned_day_label'] = _ga_day_label(chosen_day)
+    _ga_rebalance_days(assignments, day_labels, desired_counts)
+    for day in day_labels:
+        assignments[day].sort(key=lambda item: _ga_student_sort_value(item.get('student_id')))
+    return assignments, desired_counts
+
+
+def _ga_assign_days_with_existing(merged_rows, day_labels, existing_assignments):
+    desired_counts = _ga_desired_day_counts(len(merged_rows), day_labels)
+    assignments = {day: [] for day in day_labels}
+    counts = {day: 0 for day in day_labels}
+    existing_by_email = {item['email']: item for item in existing_assignments if item.get('email')}
+    existing_by_student_id = {item['student_id']: item for item in existing_assignments if item.get('student_id')}
+    existing_by_name = _ga_build_unique_name_map(existing_assignments)
+    pending_students = []
+
+    for student in merged_rows:
+        existing = None
+        if student.get('email'):
+            existing = existing_by_email.get(student['email'])
+        if not existing and student.get('student_id'):
+            existing = existing_by_student_id.get(student['student_id'])
+        if not existing:
+            existing = existing_by_name.get(_ga_normalize_name(student.get('name')))
+
+        fixed_day = existing.get('day') if existing else ''
+        if fixed_day in day_labels:
+            student['assigned_day'] = fixed_day
+            student['assigned_day_label'] = _ga_day_label(fixed_day)
+            student['day_fixed'] = True
+            assignments[fixed_day].append(student)
+            counts[fixed_day] += 1
+        else:
+            student['day_fixed'] = False
+            pending_students.append(student)
+
+    ordered_students = sorted(
+        pending_students,
+        key=lambda item: (
+            1 if item.get('is_repeater') else 0,
+            item.get('reason_priority', 0),
+            _ga_credit_assignment_priority(item),
+            1 if item.get('preferred_day') else 0,
+            1 if item.get('sex') == '女' else 0,
+            1 if item.get('gpa') is not None else 0,
+        ),
+        reverse=True,
+    )
+    for student in ordered_students:
+        chosen_day = _ga_choose_day(student, counts, desired_counts, day_labels)
+        assignments[chosen_day].append(student)
+        counts[chosen_day] += 1
+        student['assigned_day'] = chosen_day
+        student['assigned_day_label'] = _ga_day_label(chosen_day)
+        student['day_fixed'] = False
+
     _ga_rebalance_days(assignments, day_labels, desired_counts)
     for day in day_labels:
         assignments[day].sort(key=lambda item: _ga_student_sort_value(item.get('student_id')))
@@ -610,14 +721,16 @@ def _ga_build_group_sizes(student_count, group_count, minimum_size=2, maximum_si
     return sizes
 
 
-def _ga_group_sizes_support_gender_rules(group_sizes, female_count):
+def _ga_group_sizes_support_gender_rules(group_sizes, female_count, allow_multiple_females=False):
+    if allow_multiple_females:
+        return True
     if female_count <= 0:
         return True
     eligible_groups = sum(1 for size in group_sizes if size >= 3)
     return female_count <= eligible_groups
 
 
-def _ga_choose_repeater_group_count(repeater_count, regular_count, total_group_count, female_count=0):
+def _ga_choose_repeater_group_count(repeater_count, regular_count, total_group_count, female_count=0, maximum_size=5, allow_multiple_females=False):
     if repeater_count <= 0:
         return 0
     best_group_count = None
@@ -628,16 +741,16 @@ def _ga_choose_repeater_group_count(repeater_count, regular_count, total_group_c
         regular_group_count = total_group_count - repeater_group_count
         if regular_count > 0 and regular_group_count <= 0:
             continue
-        repeater_ok = (2 * repeater_group_count) <= repeater_count <= (5 * repeater_group_count)
-        regular_ok = True if regular_count == 0 else (2 * regular_group_count) <= regular_count <= (5 * regular_group_count)
+        repeater_ok = (2 * repeater_group_count) <= repeater_count <= (maximum_size * repeater_group_count)
+        regular_ok = True if regular_count == 0 else (2 * regular_group_count) <= regular_count <= (maximum_size * regular_group_count)
         if not repeater_ok or not regular_ok:
             continue
         penalty = abs(repeater_count - (3 * repeater_group_count)) + abs(regular_count - (3 * regular_group_count))
         if best_penalty is None or penalty < best_penalty:
             best_penalty = penalty
             best_group_count = repeater_group_count
-        repeater_group_sizes = _ga_build_group_sizes(repeater_count, repeater_group_count)
-        if not _ga_group_sizes_support_gender_rules(repeater_group_sizes, female_count):
+        repeater_group_sizes = _ga_build_group_sizes(repeater_count, repeater_group_count, maximum_size=maximum_size)
+        if not _ga_group_sizes_support_gender_rules(repeater_group_sizes, female_count, allow_multiple_females=allow_multiple_females):
             continue
         if best_feasible_penalty is None or penalty < best_feasible_penalty:
             best_feasible_penalty = penalty
@@ -677,11 +790,11 @@ def _ga_order_students_for_grouping(students, target_gpa):
     return woven + no_gpa_students
 
 
-def _ga_select_best_group(student, groups, target_gpa):
+def _ga_select_best_group(student, groups, target_gpa, allow_multiple_females=False):
     def is_valid_candidate(group):
         if len(group['students']) >= group['target_size']:
             return False
-        if student.get('sex') == '女' and group['female_count'] > 0:
+        if not allow_multiple_females and student.get('sex') == '女' and group['female_count'] > 0:
             return False
         if (
             group['target_size'] == 2
@@ -720,7 +833,7 @@ def _ga_select_best_group(student, groups, target_gpa):
     return best_group or groups[0]
 
 
-def _ga_assign_students_to_groups(students, group_labels, group_sizes, target_gpa=None):
+def _ga_assign_students_to_groups(students, group_labels, group_sizes, target_gpa=None, allow_multiple_females=False):
     groups = []
     for label, size in zip(group_labels, group_sizes):
         groups.append({
@@ -734,7 +847,7 @@ def _ga_assign_students_to_groups(students, group_labels, group_sizes, target_gp
         })
     ordered_students = _ga_order_students_for_grouping(students, target_gpa)
     for student in ordered_students:
-        group = _ga_select_best_group(student, groups, target_gpa)
+        group = _ga_select_best_group(student, groups, target_gpa, allow_multiple_females=allow_multiple_females)
         group['students'].append(student)
         if student.get('sex') == '女':
             group['female_count'] += 1
@@ -766,22 +879,22 @@ def _ga_has_mixed_two_person_group(group):
     return len(sexes) >= 2
 
 
-def _ga_group_gender_valid(group):
-    if group['female_count'] > 1:
+def _ga_group_gender_valid(group, allow_multiple_females=False):
+    if not allow_multiple_females and group['female_count'] > 1:
         return False
     if _ga_has_mixed_two_person_group(group):
         return False
     return True
 
 
-def _ga_try_swap_students(group_a, group_b, student_a, student_b):
+def _ga_try_swap_students(group_a, group_b, student_a, student_b, allow_multiple_females=False):
     group_a['students'].remove(student_a)
     group_b['students'].remove(student_b)
     group_a['students'].append(student_b)
     group_b['students'].append(student_a)
     _ga_recalculate_group_metrics(group_a)
     _ga_recalculate_group_metrics(group_b)
-    if _ga_group_gender_valid(group_a) and _ga_group_gender_valid(group_b):
+    if _ga_group_gender_valid(group_a, allow_multiple_females=allow_multiple_females) and _ga_group_gender_valid(group_b, allow_multiple_females=allow_multiple_females):
         return True
     group_a['students'].remove(student_b)
     group_b['students'].remove(student_a)
@@ -792,7 +905,7 @@ def _ga_try_swap_students(group_a, group_b, student_a, student_b):
     return False
 
 
-def _ga_fix_mixed_two_person_groups(groups):
+def _ga_fix_mixed_two_person_groups(groups, allow_multiple_females=False):
     changed = True
     while changed:
         changed = False
@@ -813,7 +926,7 @@ def _ga_fix_mixed_two_person_groups(groups):
                     for candidate in list(other_group['students']):
                         if candidate.get('sex') != needed_sex:
                             continue
-                        if _ga_try_swap_students(group, other_group, student_to_replace, candidate):
+                        if _ga_try_swap_students(group, other_group, student_to_replace, candidate, allow_multiple_females=allow_multiple_females):
                             changed = True
                             resolved = True
                             break
@@ -823,7 +936,9 @@ def _ga_fix_mixed_two_person_groups(groups):
                     break
 
 
-def _ga_fix_female_collisions(groups):
+def _ga_fix_female_collisions(groups, allow_multiple_females=False):
+    if allow_multiple_females:
+        return
     changed = True
     while changed:
         changed = False
@@ -842,7 +957,7 @@ def _ga_fix_female_collisions(groups):
                     for candidate in list(other_group['students']):
                         if candidate.get('sex') == '女':
                             continue
-                        if _ga_try_swap_students(group, other_group, student_to_move, candidate):
+                        if _ga_try_swap_students(group, other_group, student_to_move, candidate, allow_multiple_females=allow_multiple_females):
                             changed = True
                             resolved = True
                             break
@@ -852,7 +967,9 @@ def _ga_fix_female_collisions(groups):
                     break
 
 
-def _ga_fix_two_person_female_groups(groups):
+def _ga_fix_two_person_female_groups(groups, allow_multiple_females=False):
+    if allow_multiple_females:
+        return
     changed = True
     while changed:
         changed = False
@@ -888,7 +1005,11 @@ def _ga_fix_two_person_female_groups(groups):
                     _ga_recalculate_group_metrics(group)
                     _ga_recalculate_group_metrics(donor_a)
                     _ga_recalculate_group_metrics(donor_b)
-                    valid = _ga_group_gender_valid(group) and _ga_group_gender_valid(donor_a) and _ga_group_gender_valid(donor_b)
+                    valid = (
+                        _ga_group_gender_valid(group, allow_multiple_females=allow_multiple_females)
+                        and _ga_group_gender_valid(donor_a, allow_multiple_females=allow_multiple_females)
+                        and _ga_group_gender_valid(donor_b, allow_multiple_females=allow_multiple_females)
+                    )
                     if valid:
                         changed = True
                         resolved = True
@@ -967,7 +1088,7 @@ def _ga_spread_two_person_group_labels(groups):
             student['assigned_group'] = group['group_no']
 
 
-def _ga_balance_group_gpas(groups, max_diff=0.5):
+def _ga_balance_group_gpas(groups, max_diff=0.5, allow_multiple_females=False):
     if len(groups) < 2:
         return
     def current_diff():
@@ -1019,7 +1140,10 @@ def _ga_balance_group_gpas(groups, max_diff=0.5):
                         group_b['students'].append(student_a)
                         _ga_recalculate_group_metrics(group_a)
                         _ga_recalculate_group_metrics(group_b)
-                        valid = _ga_group_gender_valid(group_a) and _ga_group_gender_valid(group_b)
+                        valid = (
+                            _ga_group_gender_valid(group_a, allow_multiple_females=allow_multiple_females)
+                            and _ga_group_gender_valid(group_b, allow_multiple_females=allow_multiple_females)
+                        )
                         candidate_key = current_key()
                         if valid and candidate_key < best_key:
                             best_key = candidate_key
@@ -1041,16 +1165,16 @@ def _ga_balance_group_gpas(groups, max_diff=0.5):
         _ga_recalculate_group_metrics(group_b)
 
 
-def _ga_build_day_group_plan(day, day_students):
+def _ga_build_day_group_plan(day, day_students, max_group_size=5, max_gpa_diff=0.5, allow_multiple_females=False):
     repeaters = [student for student in day_students if student.get('is_repeater')]
     regulars = [student for student in day_students if not student.get('is_repeater')]
     warnings = []
     total_group_count = GROUP_ASSIGNMENT_GROUPS_PER_DAY
     student_count = len(day_students)
-    if student_count < total_group_count * 2 or student_count > total_group_count * 5:
+    if student_count < total_group_count * 2 or student_count > total_group_count * max_group_size:
         raise ValueError(
             f'{_ga_day_label(day)}の人数 {student_count} 名では、'
-            f'{total_group_count}班を各班2〜5名で構成できません。'
+            f'{total_group_count}班を各班2〜{max_group_size}名で構成できません。'
         )
 
     repeater_group_count = _ga_choose_repeater_group_count(
@@ -1058,6 +1182,8 @@ def _ga_build_day_group_plan(day, day_students):
         len(regulars),
         total_group_count,
         female_count=sum(1 for student in repeaters if student.get('sex') == '女'),
+        maximum_size=max_group_size,
+        allow_multiple_females=allow_multiple_females,
     )
     regular_group_count = total_group_count - repeater_group_count
     if len(repeaters) == 0:
@@ -1068,8 +1194,8 @@ def _ga_build_day_group_plan(day, day_students):
 
     regular_group_labels = [str(index).zfill(2) for index in range(1, regular_group_count + 1)]
     repeater_group_labels = [str(index).zfill(2) for index in range(regular_group_count + 1, total_group_count + 1)]
-    regular_group_sizes = _ga_build_group_sizes(len(regulars), regular_group_count) if regular_group_count else []
-    repeater_group_sizes = _ga_build_group_sizes(len(repeaters), repeater_group_count) if repeater_group_count else []
+    regular_group_sizes = _ga_build_group_sizes(len(regulars), regular_group_count, maximum_size=max_group_size) if regular_group_count else []
+    repeater_group_sizes = _ga_build_group_sizes(len(repeaters), repeater_group_count, maximum_size=max_group_size) if repeater_group_count else []
 
     if any(size == 2 for size in regular_group_sizes + repeater_group_sizes):
         warnings.append(f'{_ga_day_label(day)}は人数条件の都合で2名班が含まれます。')
@@ -1078,22 +1204,34 @@ def _ga_build_day_group_plan(day, day_students):
 
     regular_gpas = [student['gpa'] for student in regulars if student.get('gpa') is not None]
     regular_target_gpa = sum(regular_gpas) / len(regular_gpas) if regular_gpas else None
-    regular_groups = _ga_assign_students_to_groups(regulars, regular_group_labels, regular_group_sizes, target_gpa=regular_target_gpa) if regular_group_count else []
-    repeater_groups = _ga_assign_students_to_groups(repeaters, repeater_group_labels, repeater_group_sizes, target_gpa=None) if repeater_group_count else []
-    _ga_fix_female_collisions(regular_groups)
-    _ga_fix_female_collisions(repeater_groups)
-    _ga_fix_two_person_female_groups(regular_groups)
-    _ga_fix_two_person_female_groups(repeater_groups)
-    _ga_fix_mixed_two_person_groups(regular_groups)
-    _ga_fix_mixed_two_person_groups(repeater_groups)
+    regular_groups = _ga_assign_students_to_groups(
+        regulars,
+        regular_group_labels,
+        regular_group_sizes,
+        target_gpa=regular_target_gpa,
+        allow_multiple_females=allow_multiple_females,
+    ) if regular_group_count else []
+    repeater_groups = _ga_assign_students_to_groups(
+        repeaters,
+        repeater_group_labels,
+        repeater_group_sizes,
+        target_gpa=None,
+        allow_multiple_females=allow_multiple_females,
+    ) if repeater_group_count else []
+    _ga_fix_female_collisions(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_female_collisions(repeater_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_two_person_female_groups(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_two_person_female_groups(repeater_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_mixed_two_person_groups(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_mixed_two_person_groups(repeater_groups, allow_multiple_females=allow_multiple_females)
     if regular_groups:
-        _ga_balance_group_gpas(regular_groups, max_diff=0.5)
-    _ga_fix_female_collisions(regular_groups)
-    _ga_fix_female_collisions(repeater_groups)
-    _ga_fix_two_person_female_groups(regular_groups)
-    _ga_fix_two_person_female_groups(repeater_groups)
-    _ga_fix_mixed_two_person_groups(regular_groups)
-    _ga_fix_mixed_two_person_groups(repeater_groups)
+        _ga_balance_group_gpas(regular_groups, max_diff=max_gpa_diff, allow_multiple_females=allow_multiple_females)
+    _ga_fix_female_collisions(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_female_collisions(repeater_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_two_person_female_groups(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_two_person_female_groups(repeater_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_mixed_two_person_groups(regular_groups, allow_multiple_females=allow_multiple_females)
+    _ga_fix_mixed_two_person_groups(repeater_groups, allow_multiple_females=allow_multiple_females)
 
     all_groups = regular_groups + repeater_groups
     _ga_spread_two_person_group_labels(all_groups)
@@ -1105,8 +1243,9 @@ def _ga_build_day_group_plan(day, day_students):
         if _ga_has_mixed_two_person_group(group):
             warnings.append(f'{_ga_day_label(day)} {group["group_no"]}班 は男女2名班になっています。')
     regular_gpa_values = [group['gpa_average'] for group in regular_groups if group.get('gpa_average') is not None]
-    if len(regular_gpa_values) >= 2 and (max(regular_gpa_values) - min(regular_gpa_values)) >= 0.5:
-        warnings.append(f'{_ga_day_label(day)}の通常班でGPA平均差が0.5以上残っています。')
+    gpa_diff_exceeded = len(regular_gpa_values) >= 2 and (max(regular_gpa_values) - min(regular_gpa_values)) >= max_gpa_diff
+    if gpa_diff_exceeded:
+        warnings.append(f'{_ga_day_label(day)}の通常班でGPA平均差が{max_gpa_diff:.2f}以上残っています。')
     return {
         'day': day,
         'day_label': _ga_day_label(day),
@@ -1114,14 +1253,71 @@ def _ga_build_day_group_plan(day, day_students):
         'warnings': warnings,
         'student_count': len(day_students),
         'repeater_count': len(repeaters),
+        'constraints': {
+            'max_group_size': max_group_size,
+            'max_gpa_diff': max_gpa_diff,
+            'allow_multiple_females': allow_multiple_females,
+            'gpa_diff_exceeded': gpa_diff_exceeded,
+        },
     }
 
 
-def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_file, target_grade):
+def _ga_build_day_group_plan_with_relaxation(day, day_students, diff_mode=False):
+    if not diff_mode:
+        plan = _ga_build_day_group_plan(day, day_students)
+        plan['relaxations'] = []
+        return plan
+
+    required_max_group_size = max(5, math.ceil(len(day_students) / GROUP_ASSIGNMENT_GROUPS_PER_DAY))
+    profiles = [
+        {'max_gpa_diff': 0.50, 'max_group_size': 5, 'allow_multiple_females': False, 'relaxations': []},
+        {'max_gpa_diff': 0.75, 'max_group_size': 5, 'allow_multiple_females': False, 'relaxations': ['GPA平均差許容を0.75に緩和']},
+        {'max_gpa_diff': 1.00, 'max_group_size': 5, 'allow_multiple_females': False, 'relaxations': ['GPA平均差許容を1.00に緩和']},
+    ]
+    if required_max_group_size > 5:
+        profiles.append({
+            'max_gpa_diff': 1.00,
+            'max_group_size': required_max_group_size,
+            'allow_multiple_females': False,
+            'relaxations': [f'GPA平均差許容を1.00に緩和', f'班員人数上限を{required_max_group_size}名に緩和'],
+        })
+    profiles.append({
+        'max_gpa_diff': max(1.00, profiles[-1]['max_gpa_diff']),
+        'max_group_size': max(required_max_group_size, profiles[-1]['max_group_size']),
+        'allow_multiple_females': True,
+        'relaxations': profiles[-1]['relaxations'] + ['女子2名同班禁止を撤廃'],
+    })
+
+    last_error = None
+    for profile in profiles:
+        try:
+            plan = _ga_build_day_group_plan(
+                day,
+                day_students,
+                max_group_size=profile['max_group_size'],
+                max_gpa_diff=profile['max_gpa_diff'],
+                allow_multiple_females=profile['allow_multiple_females'],
+            )
+            if plan['constraints'].get('gpa_diff_exceeded') and not profile['allow_multiple_females']:
+                continue
+            plan['relaxations'] = profile['relaxations']
+            for relaxation in profile['relaxations']:
+                plan['warnings'].append(f'{_ga_day_label(day)}は差分割当のため {relaxation} しました。')
+            return plan
+        except ValueError as exc:
+            last_error = exc
+            continue
+    if last_error is not None:
+        raise last_error
+    raise ValueError(f'{_ga_day_label(day)}の差分割当案を作成できませんでした。')
+
+
+def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_file, target_grade, existing_assignment_file=None):
     participants = _ga_parse_participants(participants_file)
     survey_map = _ga_parse_survey(survey_file)
     roster_records = _ga_parse_roster(roster_file)
     grade_records = _ga_parse_grade_rows(grades_file)
+    existing_assignments = _ga_parse_existing_assignments(existing_assignment_file) if existing_assignment_file else []
 
     roster_by_student_id = {record['student_id']: record for record in roster_records if record.get('student_id')}
     roster_by_name = _ga_build_unique_name_map(roster_records)
@@ -1162,12 +1358,15 @@ def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_f
             'is_repeater': is_repeater,
             'gpa': grade.get('gpa') if grade else None,
             'gpa_display': grade.get('gpa_display') if grade else '',
+            'liberal_arts_credits': grade.get('liberal_arts_credits') if grade else None,
+            'liberal_arts_credits_display': grade.get('liberal_arts_credits_display') if grade else '',
             'has_survey': survey is not None,
             'has_roster': roster is not None,
             'has_grade': grade is not None,
             'assigned_day': '',
             'assigned_day_label': '',
             'assigned_group': '',
+            'day_fixed': False,
         }
         if not row['has_survey']:
             warnings.append(f'{row["name"]}（{email}）は希望調査の回答が見つかりませんでした。')
@@ -1179,7 +1378,12 @@ def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_f
 
     merged_rows.sort(key=lambda item: _ga_student_sort_value(item.get('student_id')))
     day_labels = _ga_select_days(merged_rows)
-    assignments, desired_counts = _ga_assign_days(merged_rows, day_labels)
+    diff_mode = bool(existing_assignments)
+    if diff_mode:
+        assignments, desired_counts = _ga_assign_days_with_existing(merged_rows, day_labels, existing_assignments)
+        warnings.append('既存班分けCSVを参照し、既存学生の曜日を固定した差分割当モードで処理しました。')
+    else:
+        assignments, desired_counts = _ga_assign_days(merged_rows, day_labels)
     day_panels = []
     group_plans = []
     for day in day_labels:
@@ -1196,7 +1400,9 @@ def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_f
                 for student in day_students
             ],
         })
-        group_plans.append(_ga_build_day_group_plan(day, day_students))
+        group_plans.append(_ga_build_day_group_plan_with_relaxation(day, day_students, diff_mode=diff_mode))
+    for plan in group_plans:
+        warnings.extend(plan.get('warnings', []))
 
     return {
         'target_grade': target_grade,
@@ -1208,6 +1414,7 @@ def _ga_build_preview_data(participants_file, survey_file, roster_file, grades_f
         'day_labels': day_labels,
         'desired_counts': desired_counts,
         'approved': False,
+        'diff_mode': diff_mode,
     }
 
 
@@ -3440,6 +3647,7 @@ def group_assignment_preview_api(request):
     survey_file = request.FILES.get('survey_file')
     roster_file = request.FILES.get('roster_file')
     grades_file = request.FILES.get('grades_file')
+    existing_assignment_file = request.FILES.get('existing_assignment_file')
     target_grade_raw = request.POST.get('target_grade', '').strip()
 
     if not all([participants_file, survey_file, roster_file, grades_file, target_grade_raw]):
@@ -3457,6 +3665,7 @@ def group_assignment_preview_api(request):
             roster_file=roster_file,
             grades_file=grades_file,
             target_grade=target_grade,
+            existing_assignment_file=existing_assignment_file,
         )
         request.session[GROUP_ASSIGNMENT_SESSION_KEY] = preview
         request.session.modified = True

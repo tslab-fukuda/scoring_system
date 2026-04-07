@@ -12,11 +12,20 @@ new Vue({
         lastY: 0,
         currentPage: null,
         drawData: [],
+        historyStack: [],
         undoStack: [],
         stamps: [],
         selectedStamp: "",
         penWidth: 2,
+        defaultPenColor: '#ff0000',
+        penColor: '#ff0000',
+        penColors: ['#ff0000', '#1d4ed8', '#16a34a', '#111827'],
         highlightWidth: 10,
+        defaultHighlightColor: 'rgba(255, 241, 87, 0.30)',
+        highlightBaseColor: '#ffeb3b',
+        highlightOpacity: 38,
+        highlightColors: ['#ffeb3b', '#a3e635', '#67e8f9', '#f9a8d4'],
+        eraserWidth: 1,
         showCompare: false,
         syncScroll: true,
         comparePdfUrl: window.comparePdfUrl || "",
@@ -53,6 +62,9 @@ new Vue({
         zoomMax: 200,
         zoomStep: 5,
         pdfDoc: null,
+        currentEraserPoint: null,
+        highlightStraightMode: false,
+        highlightStraightTimer: null,
     },
     computed: {
         totalScore() {
@@ -80,6 +92,24 @@ new Vue({
                 cssHeight: meta.cssHeight || rect.height,
                 dpr: meta.dpr || 1,
             };
+        },
+        hexToRgba(hex, alpha) {
+            const normalized = (hex || '').replace('#', '');
+            if (normalized.length !== 6) return this.defaultHighlightColor;
+            const r = parseInt(normalized.slice(0, 2), 16);
+            const g = parseInt(normalized.slice(2, 4), 16);
+            const b = parseInt(normalized.slice(4, 6), 16);
+            if ([r, g, b].some(Number.isNaN)) return this.defaultHighlightColor;
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        },
+        getCurrentHighlightColor() {
+            const alpha = Math.max(0.1, Math.min(0.6, (this.highlightOpacity || 0) / 100));
+            return this.hexToRgba(this.highlightBaseColor, alpha);
+        },
+        getStrokeColor(stroke) {
+            if (!stroke) return this.defaultPenColor;
+            if (stroke.tool === 'highlight') return stroke.color || this.defaultHighlightColor;
+            return stroke.color || this.defaultPenColor;
         },
         getTouchAverageY() {
             const points = Object.values(this.touchPoints || {});
@@ -214,6 +244,272 @@ new Vue({
             const meta = this.pageMeta[idx];
             const dpr = meta ? meta.dpr || 1 : 1;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        },
+        ensurePageState(idx) {
+            if (!this.drawData[idx]) this.drawData[idx] = [];
+            if (!this.historyStack[idx]) this.historyStack[idx] = [];
+            if (!this.undoStack[idx]) this.undoStack[idx] = [];
+        },
+        cloneStroke(stroke) {
+            return {
+                ...stroke,
+                points: (stroke.points || []).map(point => ({ ...point })),
+            };
+        },
+        clonePageDrawData(idx) {
+            return (this.drawData[idx] || []).map(stroke => this.cloneStroke(stroke));
+        },
+        snapshotForHistory(idx) {
+            this.ensurePageState(idx);
+            this.historyStack[idx].push(this.clonePageDrawData(idx));
+            if (this.historyStack[idx].length > 100) {
+                this.historyStack[idx].shift();
+            }
+        },
+        clearRedoHistory(idx) {
+            this.ensurePageState(idx);
+            this.undoStack[idx] = [];
+        },
+        restorePageDrawData(idx, snapshot) {
+            this.$set(this.drawData, idx, (snapshot || []).map(stroke => this.cloneStroke(stroke)));
+            this.redraw(idx);
+        },
+        clearHighlightStraightTimer() {
+            if (this.highlightStraightTimer) {
+                clearTimeout(this.highlightStraightTimer);
+                this.highlightStraightTimer = null;
+            }
+        },
+        shouldUseHighlightStraightAssist(pointerType) {
+            return this.tool === 'highlight' && pointerType === 'mouse';
+        },
+        startHighlightStraightTimer(idx) {
+            this.clearHighlightStraightTimer();
+            if (!this.shouldUseHighlightStraightAssist(this.activePointerType)) return;
+            if (!this.drawing || this.currentPage !== idx || this.highlightStraightMode) return;
+            this.highlightStraightTimer = setTimeout(() => {
+                if (!this.drawing || this.currentPage !== idx || !this.shouldUseHighlightStraightAssist(this.activePointerType)) return;
+                const strokes = this.drawData[idx] || [];
+                const stroke = strokes[strokes.length - 1];
+                if (!stroke || stroke.tool !== 'highlight' || !stroke.points || stroke.points.length === 0) return;
+                const startPoint = { ...stroke.points[0] };
+                const lastPoint = { ...(stroke.points[stroke.points.length - 1] || stroke.points[0]) };
+                stroke.points = [startPoint, lastPoint];
+                this.highlightStraightMode = true;
+                this.redraw(idx);
+            }, 1000);
+        },
+        appendPointToCurrentStroke(idx, point, options = {}) {
+            const strokes = this.drawData[idx] || [];
+            const stroke = strokes[strokes.length - 1];
+            if (!stroke) return false;
+            const newPoint = {
+                xRatio: point.x / point.cssWidth,
+                yRatio: point.y / point.cssHeight
+            };
+            const points = stroke.points || [];
+            if (points.length === 0) {
+                stroke.points = [newPoint];
+                return true;
+            }
+            const lastPoint = points[points.length - 1];
+            const lastX = lastPoint.xRatio * point.cssWidth;
+            const lastY = lastPoint.yRatio * point.cssHeight;
+            const dx = point.x - lastX;
+            const dy = point.y - lastY;
+            const distance = Math.sqrt((dx * dx) + (dy * dy));
+            const replaceThreshold = options.replaceThreshold || 0;
+            if (replaceThreshold > 0 && distance <= replaceThreshold) {
+                points[points.length - 1] = newPoint;
+                return false;
+            }
+            points.push(newPoint);
+            return true;
+        },
+        distancePointToSegment(point, start, end) {
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            if (dx === 0 && dy === 0) {
+                const px = point.x - start.x;
+                const py = point.y - start.y;
+                return Math.sqrt((px * px) + (py * py));
+            }
+            const lengthSquared = (dx * dx) + (dy * dy);
+            let t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+            t = Math.max(0, Math.min(1, t));
+            const projX = start.x + t * dx;
+            const projY = start.y + t * dy;
+            const distX = point.x - projX;
+            const distY = point.y - projY;
+            return Math.sqrt((distX * distX) + (distY * distY));
+        },
+        isPointNearEraserSegment(point, start, end, radius) {
+            return this.distancePointToSegment(point, start, end) <= radius;
+        },
+        orientation(a, b, c) {
+            const value = ((b.y - a.y) * (c.x - b.x)) - ((b.x - a.x) * (c.y - b.y));
+            if (Math.abs(value) < 0.0001) return 0;
+            return value > 0 ? 1 : 2;
+        },
+        onSegment(a, b, c) {
+            return (
+                b.x <= Math.max(a.x, c.x) + 0.0001 &&
+                b.x + 0.0001 >= Math.min(a.x, c.x) &&
+                b.y <= Math.max(a.y, c.y) + 0.0001 &&
+                b.y + 0.0001 >= Math.min(a.y, c.y)
+            );
+        },
+        segmentsIntersect(a1, a2, b1, b2) {
+            const o1 = this.orientation(a1, a2, b1);
+            const o2 = this.orientation(a1, a2, b2);
+            const o3 = this.orientation(b1, b2, a1);
+            const o4 = this.orientation(b1, b2, a2);
+
+            if (o1 !== o2 && o3 !== o4) return true;
+            if (o1 === 0 && this.onSegment(a1, b1, a2)) return true;
+            if (o2 === 0 && this.onSegment(a1, b2, a2)) return true;
+            if (o3 === 0 && this.onSegment(b1, a1, b2)) return true;
+            if (o4 === 0 && this.onSegment(b1, a2, b2)) return true;
+            return false;
+        },
+        distanceSegmentToSegment(a1, a2, b1, b2) {
+            if (this.segmentsIntersect(a1, a2, b1, b2)) return 0;
+            return Math.min(
+                this.distancePointToSegment(a1, b1, b2),
+                this.distancePointToSegment(a2, b1, b2),
+                this.distancePointToSegment(b1, a1, a2),
+                this.distancePointToSegment(b2, a1, a2),
+            );
+        },
+        isStrokeSegmentNearEraserSegment(strokeStart, strokeEnd, eraserStart, eraserEnd, radius) {
+            return this.distanceSegmentToSegment(strokeStart, strokeEnd, eraserStart, eraserEnd) <= radius;
+        },
+        pushUniqueStrokePoint(points, point) {
+            if (!point) return;
+            const last = points[points.length - 1];
+            if (
+                last &&
+                Math.abs((last.xRatio || 0) - (point.xRatio || 0)) < 0.000001 &&
+                Math.abs((last.yRatio || 0) - (point.yRatio || 0)) < 0.000001
+            ) {
+                return;
+            }
+            points.push({ ...point });
+        },
+        splitStrokeByEraser(stroke, start, end, cssWidth, cssHeight, radius) {
+            const originalPoints = stroke.points || [];
+            if (originalPoints.length === 0) return [];
+            const strokeRadius = radius + ((stroke.width || this.penWidth) / 2);
+            if (originalPoints.length === 1) {
+                const onlyPoint = {
+                    x: originalPoints[0].xRatio * cssWidth,
+                    y: originalPoints[0].yRatio * cssHeight,
+                };
+                return this.isPointNearEraserSegment(onlyPoint, start, end, strokeRadius)
+                    ? []
+                    : [{ ...stroke, points: [{ ...originalPoints[0] }] }];
+            }
+            const chunks = [];
+            let current = [];
+            const commitChunk = () => {
+                if (current.length >= 2) {
+                    chunks.push({
+                        ...stroke,
+                        points: current.map(point => ({ ...point })),
+                    });
+                }
+                current = [];
+            };
+            for (let index = 0; index < originalPoints.length - 1; index++) {
+                const startPoint = originalPoints[index];
+                const endPoint = originalPoints[index + 1];
+                const strokeStart = {
+                    x: startPoint.xRatio * cssWidth,
+                    y: startPoint.yRatio * cssHeight,
+                };
+                const strokeEnd = {
+                    x: endPoint.xRatio * cssWidth,
+                    y: endPoint.yRatio * cssHeight,
+                };
+                if (this.isStrokeSegmentNearEraserSegment(strokeStart, strokeEnd, start, end, strokeRadius)) {
+                    commitChunk();
+                    continue;
+                }
+                this.pushUniqueStrokePoint(current, startPoint);
+                this.pushUniqueStrokePoint(current, endPoint);
+            }
+            commitChunk();
+            return chunks;
+        },
+        stampHitByEraser(stroke, canvas, idx, start, end, radius) {
+            const meta = this.getCanvasMeta(idx, canvas);
+            const cssWidth = meta.cssWidth;
+            const cssHeight = meta.cssHeight;
+            const x = (stroke.xRatio || 0) * cssWidth;
+            const y = (stroke.yRatio || 0) * cssHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.font = '16px sans-serif';
+            const textWidth = ctx.measureText(stroke.text || '').width;
+            ctx.restore();
+            const padding = 4;
+            const rect = {
+                left: x - padding,
+                right: x + textWidth + padding,
+                top: y - 16 - padding,
+                bottom: y + padding,
+            };
+            const samples = [
+                { x: rect.left, y: rect.top },
+                { x: rect.right, y: rect.top },
+                { x: rect.left, y: rect.bottom },
+                { x: rect.right, y: rect.bottom },
+                { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 },
+                start,
+                end,
+                { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+            ];
+            return samples.some(point => {
+                const expanded = (
+                    point.x >= rect.left - radius &&
+                    point.x <= rect.right + radius &&
+                    point.y >= rect.top - radius &&
+                    point.y <= rect.bottom + radius
+                );
+                return expanded || this.isPointNearEraserSegment(point, start, end, radius);
+            });
+        },
+        applyEraserSegmentToPage(idx, start, end) {
+            const canvas = this.$refs['drawCanvas' + idx]?.[0];
+            if (!canvas) return;
+            this.ensurePageState(idx);
+            if (!this.drawData[idx] || this.drawData[idx].length === 0) return;
+            const meta = this.getCanvasMeta(idx, canvas);
+            const cssWidth = meta.cssWidth;
+            const cssHeight = meta.cssHeight;
+            const radius = this.eraserWidth / 2;
+            const nextDrawData = [];
+            let changed = false;
+            (this.drawData[idx] || []).forEach(stroke => {
+                if (stroke.tool === 'stamp') {
+                    if (this.stampHitByEraser(stroke, canvas, idx, start, end, radius)) {
+                        changed = true;
+                        return;
+                    }
+                    nextDrawData.push(this.cloneStroke(stroke));
+                    return;
+                }
+                const keptChunks = this.splitStrokeByEraser(stroke, start, end, cssWidth, cssHeight, radius);
+                if (keptChunks.length !== 1 || (stroke.points || []).length !== (keptChunks[0]?.points || []).length) {
+                    changed = true;
+                }
+                keptChunks.forEach(chunk => nextDrawData.push(chunk));
+            });
+            if (changed) {
+                this.$set(this.drawData, idx, nextDrawData);
+                this.redraw(idx);
+            }
         },
         getMainScale() {
             const baseScale = 1.4;
@@ -504,6 +800,8 @@ new Vue({
                 return;
             }
             const pointerType = this.resolvePointerType(e);
+            this.clearHighlightStraightTimer();
+            this.highlightStraightMode = false;
             if (pointerType === 'touch') {
                 if (this.activePointerType === 'pen' && this.drawing) {
                     if (e.cancelable) e.preventDefault();
@@ -531,6 +829,7 @@ new Vue({
             }
             this.activePointerId = e.pointerId != null ? e.pointerId : null;
             this.activePointerType = pointerType;
+            this.ensurePageState(idx);
             if (pointerType === 'pen') {
                 canvas.style.touchAction = 'none';
                 this.lastPenTime = Date.now();
@@ -541,8 +840,8 @@ new Vue({
             }
             if (this.tool === 'stamp') {
                 const point = this.getCanvasPoint(idx, canvas, e);
-                if (!this.drawData[idx]) this.drawData[idx] = [];
-                if (!this.undoStack[idx]) this.undoStack[idx] = [];
+                this.snapshotForHistory(idx);
+                this.clearRedoHistory(idx);
                 this.drawData[idx].push({
                     tool: 'stamp',
                     text: this.selectedStamp,
@@ -571,18 +870,30 @@ new Vue({
             const point = this.getCanvasPoint(idx, canvas, e);
             this.lastX = point.x;
             this.lastY = point.y;
-            if (!this.drawData[idx]) this.drawData[idx] = [];
-            if (!this.undoStack[idx]) this.undoStack[idx] = [];
+            this.currentEraserPoint = { x: point.x, y: point.y };
+            this.snapshotForHistory(idx);
+            this.clearRedoHistory(idx);
+            if (this.tool === 'eraser') {
+                this.applyEraserSegmentToPage(idx, this.currentEraserPoint, this.currentEraserPoint);
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
             let width = this.penWidth;
+            let color = this.penColor;
             if (this.tool === 'highlight') width = this.highlightWidth;
+            if (this.tool === 'highlight') color = this.getCurrentHighlightColor();
             this.drawData[idx].push({
                 tool: this.tool,
                 width: width,
+                color: color,
                 points: [{
                     xRatio: point.x / point.cssWidth,
                     yRatio: point.y / point.cssHeight
                 }]
             });
+            if (this.shouldUseHighlightStraightAssist(pointerType)) {
+                this.startHighlightStraightTimer(idx);
+            }
             if (e.cancelable) e.preventDefault();
         },
         draw(idx, e) {
@@ -619,33 +930,53 @@ new Vue({
             const canvas = this.$refs['drawCanvas' + idx][0];
             const scrollArea = this.$refs.pdfArea;
             const ctx = canvas.getContext('2d');
-            this.prepareDrawContext(ctx, idx);
             const point = this.getCanvasPoint(idx, canvas, e);
             const x = point.x;
             const y = point.y;
             if (this.tool === 'eraser') {
-                ctx.globalCompositeOperation = 'destination-out';
-                ctx.lineWidth = 30;
+                this.applyEraserSegmentToPage(idx, this.currentEraserPoint || { x: this.lastX, y: this.lastY }, { x, y });
+                this.currentEraserPoint = { x, y };
             } else if (this.tool === 'highlight') {
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = 'rgba(255,255,0,0.1)';
-                ctx.lineWidth = this.highlightWidth;
+                this.prepareDrawContext(ctx, idx);
             } else {
+                this.prepareDrawContext(ctx, idx);
                 ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = "red";
+                const currentStroke = (this.drawData[idx] || [])[this.drawData[idx].length - 1];
+                ctx.strokeStyle = this.getStrokeColor(currentStroke);
                 ctx.lineWidth = this.penWidth;
             }
-            ctx.lineCap = "round";
-            ctx.beginPath();
-            ctx.moveTo(this.lastX, this.lastY);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.globalCompositeOperation = 'source-over';
+            if (this.tool !== 'eraser' && this.tool !== 'highlight') {
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                ctx.beginPath();
+                ctx.moveTo(this.lastX, this.lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
+            }
             this.lastX = x; this.lastY = y;
-            this.drawData[idx][this.drawData[idx].length - 1].points.push({
-                xRatio: x / point.cssWidth,
-                yRatio: y / point.cssHeight
-            });
+            if (this.tool !== 'eraser') {
+                if (this.tool === 'highlight') {
+                    const strokes = this.drawData[idx] || [];
+                    const stroke = strokes[strokes.length - 1];
+                    if (stroke && stroke.tool === 'highlight' && this.highlightStraightMode && stroke.points && stroke.points.length > 0) {
+                        const startPoint = stroke.points[0];
+                        stroke.points = [startPoint, {
+                            xRatio: x / point.cssWidth,
+                            yRatio: y / point.cssHeight
+                        }];
+                    } else {
+                        const replaceThreshold = Math.max(1.5, (this.highlightWidth || 1) * 0.15);
+                        this.appendPointToCurrentStroke(idx, point, { replaceThreshold });
+                    }
+                } else {
+                    this.appendPointToCurrentStroke(idx, point);
+                }
+                if (this.tool === 'highlight') {
+                    this.redraw(idx);
+                    this.startHighlightStraightTimer(idx);
+                }
+            }
             if (e.cancelable) e.preventDefault();
         },
         stopDraw(idx, e) {
@@ -687,8 +1018,10 @@ new Vue({
             }
             this.activePointerId = null;
             this.activePointerType = "";
+            this.currentEraserPoint = null;
+            this.clearHighlightStraightTimer();
+            this.highlightStraightMode = false;
             this.drawing = false;
-            this.undoStack[idx] = [];
             if (pointerType === 'pen') {
                 this.lastPenTime = Date.now();
             }
@@ -723,17 +1056,18 @@ new Vue({
                     return;
                 }
                 if (!stroke.points || stroke.points.length === 0) return;
-                if (stroke.tool === 'eraser') {
-                    ctx.globalCompositeOperation = 'destination-out';
-                    ctx.lineWidth = 10;
-                } else if (stroke.tool === 'highlight') {
+                if (stroke.tool === 'highlight') {
                     ctx.globalCompositeOperation = 'source-over';
-                    ctx.strokeStyle = 'rgba(255,255,0,0.1)';
+                    ctx.strokeStyle = this.getStrokeColor(stroke);
                     ctx.lineWidth = stroke.width || this.highlightWidth;
+                    ctx.lineCap = "butt";
+                    ctx.lineJoin = "round";
                 } else {
                     ctx.globalCompositeOperation = 'source-over';
-                    ctx.strokeStyle = "red";
+                    ctx.strokeStyle = this.getStrokeColor(stroke);
                     ctx.lineWidth = stroke.width || this.penWidth;
+                    ctx.lineCap = "round";
+                    ctx.lineJoin = "round";
                 }
                 ctx.beginPath();
                 for (let i = 0; i < stroke.points.length; i++) {
@@ -743,22 +1077,23 @@ new Vue({
                     if (i == 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 }
-                ctx.lineCap = "round";
                 ctx.stroke();
                 ctx.globalCompositeOperation = 'source-over';
             });
         },
         undo(idx) {
-            if (!this.drawData[idx] || this.drawData[idx].length === 0) return;
-            if (!this.undoStack[idx]) this.undoStack[idx] = [];
-            this.undoStack[idx].push(this.drawData[idx].pop());
-            this.redraw(idx);
+            this.ensurePageState(idx);
+            if (!this.historyStack[idx] || this.historyStack[idx].length === 0) return;
+            this.undoStack[idx].push(this.clonePageDrawData(idx));
+            const snapshot = this.historyStack[idx].pop();
+            this.restorePageDrawData(idx, snapshot);
         },
         redo(idx) {
+            this.ensurePageState(idx);
             if (!this.undoStack[idx] || this.undoStack[idx].length === 0) return;
-            if (!this.drawData[idx]) this.drawData[idx] = [];
-            this.drawData[idx].push(this.undoStack[idx].pop());
-            this.redraw(idx);
+            this.historyStack[idx].push(this.clonePageDrawData(idx));
+            const snapshot = this.undoStack[idx].pop();
+            this.restorePageDrawData(idx, snapshot);
         },
         saveGrading() {
             let images = [];
