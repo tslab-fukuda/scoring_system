@@ -21,6 +21,9 @@ if [[ -f "$DB_PATH" ]]; then
   cp "$DB_PATH" "${DB_PATH}.${TS}.bak"
 fi
 
+echo "[prod] Install/update dependencies..."
+"$PY_BIN" -m pip install -r requirements.txt
+
 echo "[prod] Apply migrations..."
 "$PY_BIN" manage.py migrate --settings=scoring_system.settings_prod
 
