@@ -53,10 +53,6 @@
     background-color: #1669c1;
   }
 
-  .signup-link {
-    text-align: center;
-    margin-top: 20px;
-  }
 </style>
 
 <div class="login-container">
@@ -80,9 +76,5 @@
     <a href="/accounts/google/login/" class="btn btn-outline-secondary w-100">Googleでログイン</a>
   </div>
   {% endif %}
-  <div class="signup-link">
-    まだアカウントを持っていませんか？ <br>
-    <a href="{% url 'signup' %}">サインアップはこちら</a>
-  </div>
 </div>
 {% endblock %}
