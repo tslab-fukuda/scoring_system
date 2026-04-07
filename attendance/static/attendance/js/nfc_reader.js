@@ -12,6 +12,7 @@ let lastIdmAt = 0;
 let scanInFlight = false;
 let selectedUsbDevice = null;
 let isConnected = false;
+let isSpeaking = false;
 
 function setStatus(message) {
     const el = document.getElementById('nfc-status');
@@ -35,6 +36,33 @@ function normalizeIdm(idm) {
 
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function speakStudentId(studentId) {
+    return new Promise(resolve => {
+        const normalized = String(studentId || '').trim();
+        if (!normalized || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+            isSpeaking = false;
+            resolve();
+            return;
+        }
+        isSpeaking = true;
+        const utter = new SpeechSynthesisUtterance(`${normalized}番`);
+        utter.lang = 'ja-JP';
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+        utter.onend = () => {
+            isSpeaking = false;
+            resolve();
+        };
+        utter.onerror = () => {
+            isSpeaking = false;
+            resolve();
+        };
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+    });
 }
 
 function isRegisterOpen() {
@@ -254,6 +282,7 @@ async function connectDevice(options) {
 }
 
 async function handleIdm(idm) {
+    if (isSpeaking) return;
     const offeringId = getOfferingId();
     if (!offeringId) {
         setStatus('科目/年度を選択してください');
@@ -285,6 +314,7 @@ async function handleIdm(idm) {
         const actionLabel = data.action === 'check_in' ? '入室' : '退室';
         setStatus(`${data.student_id || ''} ${data.full_name || ''} ${actionLabel}`.trim());
         applyAttendanceUpdate(data);
+        await speakStudentId(data.student_id);
     } catch (err) {
         alert('通信エラーが発生しました');
     } finally {
@@ -301,7 +331,7 @@ async function startPolling() {
             const res = await nfcDevice.pollingLiteS();
             if (nfcDevice.FelicaConfig.Polling === true) {
                 const idm = normalizeIdm(res.IDmString);
-                if (idm) {
+                if (idm && !isSpeaking) {
                     const now = Date.now();
                     if (idm !== lastIdm || now - lastIdmAt > CHATTERING_MS) {
                         lastIdm = idm;
@@ -351,6 +381,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (navigator.usb) {
         navigator.usb.addEventListener('disconnect', () => {
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+            isSpeaking = false;
             setStatus('NFC切断');
             nfcDevice = null;
             polling = false;

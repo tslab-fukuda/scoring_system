@@ -24,7 +24,7 @@ from submission.models import UserProfile, Submission, ScoringItem, CourseOfferi
 
 JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 20)
-CLASS_END = time(16, 40)
+CLASS_END = time(16, 50)
 MAX_EARLY_MINUTES = 30
 FORGET_REQUEST_ALLOWED_ROLES = {'admin', 'course-teacher'}
 HELP_TICKET_ALLOWED_ROLES = {'admin', 'teacher'}
