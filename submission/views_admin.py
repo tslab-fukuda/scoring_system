@@ -41,6 +41,7 @@ import xlrd
 
 JST = ZoneInfo("Asia/Tokyo")
 ABSENCE_CUTOFF_TIME = time(21, 0)
+LATE_CHECKIN_TIME = time(13, 40)
 SYSTEM_SCORING_DEFS = [
     {'code': 'late', 'label': '遅刻', 'category': 'pre'},
     {'code': 'late', 'label': '遅刻', 'category': 'main'},
@@ -3799,7 +3800,7 @@ def final_score_list_csv(request):
     # Add BOM for Excel compatibility
     response.write('\ufeff')
     writer = csv.writer(response)
-    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['欠席回数', '減点', 'ディスカッション', '実施項目数', '最終成績']
+    header = ['名前', '学生番号', '曜日', '班番号'] + experiment_numbers + ['遅刻回数', '欠席回数', '減点', 'ディスカッション', '実施項目数', '最終成績']
     writer.writerow(header)
 
     for row_data in student_data:
@@ -3811,6 +3812,7 @@ def final_score_list_csv(request):
         ]
         for ex in experiment_numbers:
             row.append(row_data.get(ex, ''))
+        row.append(row_data.get('late_count', 0))
         row.append(row_data.get('absence_count', 0))
         row.append(row_data.get('score_details_total', ''))
         row.append(row_data.get('discussion_count_total', 0))
@@ -3857,6 +3859,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
     discussion_bonus_weight = _discussion_bonus_weight(offering_id)
     schedule_by_day = {}
     attendance_map = {}
+    late_attendance_map = {}
     if offering_id and students_qs.exists():
         now_local = timezone.localtime(timezone.now(), JST)
         cutoff_date = now_local.date()
@@ -3877,9 +3880,11 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
                 course_offering_id=offering_id,
                 date__in=schedule_dates_all,
                 user_id__in=list(enrollment_map.keys()) if enrollment_map else list(students_qs.values_list('user_id', flat=True))
-            ).values_list('user_id', 'date')
-            for user_id, att_date in attendance_qs:
+            ).values_list('user_id', 'date', 'check_in')
+            for user_id, att_date, check_in in attendance_qs:
                 attendance_map.setdefault(user_id, set()).add(att_date)
+                if check_in and timezone.localtime(check_in, JST).time() > LATE_CHECKIN_TIME:
+                    late_attendance_map.setdefault(user_id, set()).add(att_date)
     student_data = []
     experiment_count = len(unique_experiment_numbers) if unique_experiment_numbers else 0
 
@@ -3989,12 +3994,15 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             discussion_count_total += discussion_count_map.get((up.user_id, ex), 0)
 
         absence_count = 0
+        late_count = 0
         if offering_id:
             day_label = record['experiment_day']
             target_dates = schedule_by_day.get(day_label, set())
             if target_dates:
                 attended_dates = attendance_map.get(up.user_id, set())
                 absence_count = len(target_dates - attended_dates)
+                late_dates = late_attendance_map.get(up.user_id, set())
+                late_count = len(target_dates & late_dates)
         absence_penalty = round(absence_count * absence_penalty_weight, 2)
         discussion_bonus_total = round(discussion_count_total * discussion_bonus_weight, 2)
         score_details_total = round(abs(score_details_total), 2)
@@ -4010,6 +4018,7 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             final_grade = round(final_grade, 2)
             score_details_avg = round(score_details_avg, 2)
 
+        record['late_count'] = late_count
         record['absence_count'] = absence_count
         record['score_details_total'] = score_details_total
         record['absence_penalty'] = absence_penalty

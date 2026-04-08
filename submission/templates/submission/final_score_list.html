@@ -63,6 +63,7 @@
                         </div>
                     </th>
                     <th v-for="ex in experimentNumbers" :key="ex" @click="toggleSort(ex)" style="cursor:pointer">{{ ex }}</th>
+                    <th @click="toggleSort('late_count')" style="cursor:pointer">遅刻回数</th>
                     <th @click="toggleSort('absence_count')" style="cursor:pointer">欠席回数</th>
                     <th @click="toggleSort('score_details_total')" style="cursor:pointer">減点</th>
                     <th @click="toggleSort('discussion_count_total')" style="cursor:pointer">ディスカッション</th>
@@ -82,6 +83,7 @@
                         <a v-if="stu[ex] !== ''" href="#" @click.prevent="openScoreDetail(stu, ex)">{{ stu[ex] }}</a>
                         <span v-else>-</span>
                     </td>
+                    <td>{{ stu.late_count != null ? stu.late_count : 0 }}</td>
                     <td>{{ stu.absence_count }}</td>
                     <td>{{ stu.score_details_total !== '' ? stu.score_details_total : '-' }}</td>
                     <td>{{ stu.discussion_count_total != null ? stu.discussion_count_total : 0 }}</td>
