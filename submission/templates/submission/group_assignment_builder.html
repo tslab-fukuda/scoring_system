@@ -18,7 +18,21 @@
     <h3 class="group-assignment-section-title">入力</h3>
     <div class="row g-3">
       <div class="col-md-3">
-        <label class="form-label">対象学年</label>
+        <label class="form-label">班数 <span class="text-danger">*</span></label>
+        <input type="number" class="form-control" min="1" v-model="groupCount" placeholder="例: 20">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">基本班人数 <span class="text-danger">*</span></label>
+        <select class="form-select" v-model="idealGroupSize">
+          <option value="">選択してください</option>
+          <option value="2">2名</option>
+          <option value="3">3名</option>
+          <option value="4">4名</option>
+          <option value="5">5名</option>
+        </select>
+      </div>
+      <div class="col-md-3" v-if="requiresTargetGrade">
+        <label class="form-label">対象学年 <span class="text-danger">*</span></label>
         <select class="form-select" v-model="targetGrade">
           <option value="">選択してください</option>
           <option value="1">1年</option>
@@ -27,27 +41,66 @@
           <option value="4">4年</option>
         </select>
       </div>
-      <div class="col-md-9"></div>
+      <div class="col-md-3" v-else></div>
+      <div class="col-md-3"></div>
       <div class="col-md-6">
-        <label class="form-label">履修予定者ファイル（courseid_*.csv）</label>
+        <label class="form-label">履修予定者ファイル（courseid_*.csv） <span class="text-danger">*</span></label>
         <input ref="participantsFile" type="file" class="form-control" accept=".csv">
       </div>
       <div class="col-md-6">
-        <label class="form-label">Google Form回答一覧（.csv）</label>
+        <label class="form-label">Google Form回答一覧（.csv） <span class="text-danger">*</span></label>
         <input ref="surveyFile" type="file" class="form-control" accept=".csv">
       </div>
       <div class="col-md-6">
-        <label class="form-label">名簿ファイル（.xls / .xlsx）</label>
+        <label class="form-label">
+          名簿ファイル（.xls / .xlsx）
+          <span v-if="requiresRoster" class="text-danger">*</span>
+        </label>
         <input ref="rosterFile" type="file" class="form-control" accept=".xls,.xlsx">
+        <div class="form-text">再履修生分離 / 女子2名同班禁止 / 男女2名同班禁止を選ぶ場合に必要です。</div>
       </div>
       <div class="col-md-6">
-        <label class="form-label">成績ファイル（.xlsx）</label>
+        <label class="form-label">
+          成績ファイル（.xlsx）
+          <span v-if="requiresGrades" class="text-danger">*</span>
+        </label>
         <input ref="gradesFile" type="file" class="form-control" accept=".xlsx,.xls">
+        <div class="form-text">教養計取得単位の優先 / GPA平準化を選ぶ場合に必要です。</div>
       </div>
       <div class="col-md-6">
         <label class="form-label">既存班分けCSV（任意）</label>
         <input ref="existingAssignmentFile" type="file" class="form-control" accept=".csv">
         <div class="form-text">指定すると、既存学生の曜日を固定して差分学生のみ追加割当します。</div>
+      </div>
+      <div class="col-12">
+        <div class="group-constraint-card">
+          <div class="group-constraint-head">任意制約</div>
+          <div class="group-constraint-grid">
+            <label class="group-constraint-item">
+              <input type="checkbox" v-model="constraints.separateRepeaters">
+              <span>再履修生分離</span>
+            </label>
+            <label class="group-constraint-item">
+              <input type="checkbox" v-model="constraints.forbidTwoFemales">
+              <span>女子2名同班禁止</span>
+            </label>
+            <label class="group-constraint-item">
+              <input type="checkbox" v-model="constraints.forbidMixedTwoPersonGroup">
+              <span>男女2名同班禁止</span>
+            </label>
+            <label class="group-constraint-item">
+              <input type="checkbox" v-model="constraints.useLiberalArtsCreditsPriority">
+              <span>教養計取得単位の優先</span>
+            </label>
+            <label class="group-constraint-item">
+              <input type="checkbox" v-model="constraints.balanceGpa">
+              <span>GPA平準化</span>
+            </label>
+          </div>
+          <div class="group-constraint-note">
+            必須: 履修予定者ファイル / Google Form回答一覧。名簿・成績ファイルは、選択した制約に応じて必須になります。
+          </div>
+        </div>
       </div>
     </div>
     <div class="group-assignment-actions mt-3">
@@ -82,7 +135,9 @@
     <template v-if="currentStep === 1">
       <h3 class="group-assignment-section-title">1. 突合結果</h3>
       <div class="group-assignment-summary mb-3">
-        <div>対象学年: [[ preview.target_grade ]]年</div>
+        <div>班数: [[ preview.constraint_profile.group_count ]]班</div>
+        <div>基本班人数: [[ preview.constraint_profile.ideal_group_size ]]名</div>
+        <div>対象学年: [[ preview.target_grade ? (preview.target_grade + '年') : '未指定' ]]</div>
         <div>対象人数: [[ preview.merged_rows.length ]]名</div>
         <div>生成日時: [[ preview.generated_at ]]</div>
       </div>

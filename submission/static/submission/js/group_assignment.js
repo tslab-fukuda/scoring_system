@@ -3,6 +3,15 @@ new Vue({
     delimiters: ['[[', ']]'],
     data: {
         targetGrade: '',
+        groupCount: '20',
+        idealGroupSize: '3',
+        constraints: {
+            separateRepeaters: false,
+            forbidTwoFemales: false,
+            forbidMixedTwoPersonGroup: false,
+            useLiberalArtsCreditsPriority: false,
+            balanceGpa: false,
+        },
         loading: false,
         finalizing: false,
         errorMessage: '',
@@ -20,31 +29,86 @@ new Vue({
             { id: 4, label: '承認と出力' },
         ],
     },
+    computed: {
+        requiresRoster() {
+            return this.constraints.separateRepeaters
+                || this.constraints.forbidTwoFemales
+                || this.constraints.forbidMixedTwoPersonGroup;
+        },
+        requiresGrades() {
+            return this.constraints.useLiberalArtsCreditsPriority
+                || this.constraints.balanceGpa;
+        },
+        requiresTargetGrade() {
+            return this.constraints.separateRepeaters;
+        },
+    },
     methods: {
         generatePreview() {
             this.errorMessage = '';
-            if (!this.targetGrade) {
-                this.errorMessage = '対象学年を選択してください。';
+            if (!this.groupCount || Number(this.groupCount) <= 0) {
+                this.errorMessage = '班数を入力してください。';
                 return;
             }
+            if (!this.idealGroupSize) {
+                this.errorMessage = '基本班人数を選択してください。';
+                return;
+            }
+            if (this.requiresTargetGrade && !this.targetGrade) {
+                this.errorMessage = '再履修生分離を使う場合は対象学年を選択してください。';
+                return;
+            }
+
             const participantsFile = this.$refs.participantsFile.files[0];
             const surveyFile = this.$refs.surveyFile.files[0];
             const rosterFile = this.$refs.rosterFile.files[0];
             const gradesFile = this.$refs.gradesFile.files[0];
             const existingAssignmentFile = this.$refs.existingAssignmentFile.files[0];
-            if (!participantsFile || !surveyFile || !rosterFile || !gradesFile) {
-                this.errorMessage = '4つのファイルをすべて選択してください。';
+
+            if (!participantsFile || !surveyFile) {
+                this.errorMessage = '履修予定者ファイルとGoogle Form回答一覧ファイルを選択してください。';
+                return;
+            }
+            if (this.requiresRoster && !rosterFile) {
+                this.errorMessage = '選択した制約のため名簿ファイルが必要です。';
+                return;
+            }
+            if (this.requiresGrades && !gradesFile) {
+                this.errorMessage = '選択した制約のため成績ファイルが必要です。';
                 return;
             }
 
             const formData = new FormData();
-            formData.append('target_grade', this.targetGrade);
+            formData.append('group_count', this.groupCount);
+            formData.append('ideal_group_size', this.idealGroupSize);
+            if (this.requiresTargetGrade) {
+                formData.append('target_grade', this.targetGrade);
+            }
             formData.append('participants_file', participantsFile);
             formData.append('survey_file', surveyFile);
-            formData.append('roster_file', rosterFile);
-            formData.append('grades_file', gradesFile);
+            if (rosterFile) {
+                formData.append('roster_file', rosterFile);
+            }
+            if (gradesFile) {
+                formData.append('grades_file', gradesFile);
+            }
             if (existingAssignmentFile) {
                 formData.append('existing_assignment_file', existingAssignmentFile);
+            }
+            if (this.constraints.separateRepeaters) {
+                formData.append('separate_repeaters', '1');
+            }
+            if (this.constraints.forbidTwoFemales) {
+                formData.append('forbid_two_females', '1');
+            }
+            if (this.constraints.forbidMixedTwoPersonGroup) {
+                formData.append('forbid_mixed_two_person_group', '1');
+            }
+            if (this.constraints.useLiberalArtsCreditsPriority) {
+                formData.append('use_liberal_arts_credits_priority', '1');
+            }
+            if (this.constraints.balanceGpa) {
+                formData.append('balance_gpa', '1');
             }
 
             this.loading = true;
