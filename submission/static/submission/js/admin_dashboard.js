@@ -42,8 +42,7 @@ window.app = new Vue({
         discussionTotalCount: 0,
         discussionCanEdit: false,
         showPhotoModal: false,
-        cameraFacingMode: 'environment',
-        canSwitchCamera: false,
+        cameraFacingMode: 'user',
         cameraLoading: false,
         showScoreModal: false,
         scoreDetailPre: [],
@@ -679,43 +678,32 @@ window.app = new Vue({
                 video.srcObject = null;
             }
         },
-        updateCameraSwitchAvailability() {
-            const isMobileLike = /iPad|iPhone|Android/i.test(navigator.userAgent || '');
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-                this.canSwitchCamera = isMobileLike;
-                return;
-            }
-            navigator.mediaDevices.enumerateDevices()
-                .then(devices => {
-                    const videoInputs = devices.filter(device => device.kind === 'videoinput');
-                    this.canSwitchCamera = isMobileLike || videoInputs.length > 1;
-                })
-                .catch(() => {
-                    this.canSwitchCamera = isMobileLike;
-                });
-        },
-        startCamera() {
+        startCamera(useFacingMode = false) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('このブラウザではカメラを利用できません。');
                 return Promise.resolve();
             }
             this.cameraLoading = true;
             this.stopCameraStream();
-            const preferredConstraints = {
-                video: {
-                    facingMode: { ideal: this.cameraFacingMode }
-                },
-                audio: false,
-            };
-            return navigator.mediaDevices.getUserMedia(preferredConstraints)
+            const constraints = useFacingMode
+                ? {
+                    video: {
+                        facingMode: { ideal: this.cameraFacingMode }
+                    },
+                    audio: false,
+                }
+                : { video: true, audio: false };
+            return navigator.mediaDevices.getUserMedia(constraints)
                 .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }))
                 .then(stream => {
                     this.videoStream = stream;
                     const video = this.$refs.video;
                     if (video) {
                         video.srcObject = stream;
+                        if (typeof video.play === 'function') {
+                            video.play().catch(() => {});
+                        }
                     }
-                    this.updateCameraSwitchAvailability();
                 })
                 .catch(err => {
                     console.error("Camera ERROR:", err.name, err.message);
@@ -727,12 +715,11 @@ window.app = new Vue({
         },
         openPhotoModal() {
             this.showPhotoModal = true;
-            this.cameraFacingMode = 'environment';
-            this.canSwitchCamera = false;
+            this.cameraFacingMode = 'user';
 
             // モーダルDOMが描画されてからカメラ起動
             this.$nextTick(() => {
-                this.startCamera();
+                this.startCamera(false);
             });
         },
         switchCamera() {
@@ -741,13 +728,12 @@ window.app = new Vue({
             }
             this.cameraFacingMode = this.cameraFacingMode === 'environment' ? 'user' : 'environment';
             this.$nextTick(() => {
-                this.startCamera();
+                this.startCamera(true);
             });
         },
         closePhotoModal() {
             this.showPhotoModal = false;
             this.stopCameraStream();
-            this.canSwitchCamera = false;
             this.cameraLoading = false;
         },
         capturePhoto() {
