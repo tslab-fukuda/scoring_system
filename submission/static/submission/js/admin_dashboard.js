@@ -42,6 +42,9 @@ window.app = new Vue({
         discussionTotalCount: 0,
         discussionCanEdit: false,
         showPhotoModal: false,
+        cameraFacingMode: 'environment',
+        canSwitchCamera: false,
+        cameraLoading: false,
         showScoreModal: false,
         scoreDetailPre: [],
         scoreDetailMain: [],
@@ -666,34 +669,86 @@ window.app = new Vue({
             this.discussionTotalCount = 0;
             this.discussionCanEdit = false;
         },
-        openPhotoModal() {
-            this.showPhotoModal = true;
-
-            // モーダルDOMが描画されてからカメラ起動
-            this.$nextTick(() => {
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(stream => {
-                        console.log("Camera OK", stream);
-                        this.videoStream = stream;
-                        const video = this.$refs.video;
-                        if (video) {
-                            video.srcObject = stream;
-                        } else {
-                            console.error("video ref is null");
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Camera ERROR:", err.name, err.message);
-                        alert("カメラ取得に失敗しました: " + err.name);
-                    });
-            });
-        },
-        closePhotoModal() {
-            this.showPhotoModal = false;
+        stopCameraStream() {
             if (this.videoStream) {
                 this.videoStream.getTracks().forEach(t => t.stop());
                 this.videoStream = null;
             }
+            const video = this.$refs.video;
+            if (video) {
+                video.srcObject = null;
+            }
+        },
+        updateCameraSwitchAvailability() {
+            const isMobileLike = /iPad|iPhone|Android/i.test(navigator.userAgent || '');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                this.canSwitchCamera = isMobileLike;
+                return;
+            }
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const videoInputs = devices.filter(device => device.kind === 'videoinput');
+                    this.canSwitchCamera = isMobileLike || videoInputs.length > 1;
+                })
+                .catch(() => {
+                    this.canSwitchCamera = isMobileLike;
+                });
+        },
+        startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('このブラウザではカメラを利用できません。');
+                return Promise.resolve();
+            }
+            this.cameraLoading = true;
+            this.stopCameraStream();
+            const preferredConstraints = {
+                video: {
+                    facingMode: { ideal: this.cameraFacingMode }
+                },
+                audio: false,
+            };
+            return navigator.mediaDevices.getUserMedia(preferredConstraints)
+                .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }))
+                .then(stream => {
+                    this.videoStream = stream;
+                    const video = this.$refs.video;
+                    if (video) {
+                        video.srcObject = stream;
+                    }
+                    this.updateCameraSwitchAvailability();
+                })
+                .catch(err => {
+                    console.error("Camera ERROR:", err.name, err.message);
+                    alert("カメラ取得に失敗しました: " + err.name);
+                })
+                .finally(() => {
+                    this.cameraLoading = false;
+                });
+        },
+        openPhotoModal() {
+            this.showPhotoModal = true;
+            this.cameraFacingMode = 'environment';
+            this.canSwitchCamera = false;
+
+            // モーダルDOMが描画されてからカメラ起動
+            this.$nextTick(() => {
+                this.startCamera();
+            });
+        },
+        switchCamera() {
+            if (this.cameraLoading) {
+                return;
+            }
+            this.cameraFacingMode = this.cameraFacingMode === 'environment' ? 'user' : 'environment';
+            this.$nextTick(() => {
+                this.startCamera();
+            });
+        },
+        closePhotoModal() {
+            this.showPhotoModal = false;
+            this.stopCameraStream();
+            this.canSwitchCamera = false;
+            this.cameraLoading = false;
         },
         capturePhoto() {
             const video = this.$refs.video;

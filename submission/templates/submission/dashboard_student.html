@@ -19,10 +19,13 @@
         <button type="button" class="btn-close" @click="closePhotoModal"></button>
       </div>
       <div class="modal-body text-center">
-        <video ref="video" autoplay style="width:100%"></video>
+        <video ref="video" autoplay playsinline style="width:100%"></video>
         <canvas ref="canvas" style="display:none;"></canvas>
       </div>
       <div class="modal-footer">
+        <button v-if="canSwitchCamera" class="btn btn-outline-secondary" :disabled="cameraLoading" @click="switchCamera">
+          カメラ切替
+        </button>
         <button class="btn btn-primary" @click="capturePhoto">撮影</button>
       </div>
     </div>
