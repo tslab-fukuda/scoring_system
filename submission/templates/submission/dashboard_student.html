@@ -23,7 +23,7 @@
         <canvas ref="canvas" style="display:none;"></canvas>
       </div>
       <div class="modal-footer">
-        <button v-if="canSwitchCamera" class="btn btn-outline-secondary" :disabled="cameraLoading" @click="switchCamera">
+        <button class="btn btn-outline-secondary" :disabled="cameraLoading" @click="switchCamera">
           カメラ切替
         </button>
         <button class="btn btn-primary" @click="capturePhoto">撮影</button>
