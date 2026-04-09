@@ -44,6 +44,7 @@ window.app = new Vue({
         showPhotoModal: false,
         cameraFacingMode: 'user',
         cameraLoading: false,
+        cameraAutoSwitchAttempted: false,
         showScoreModal: false,
         scoreDetailPre: [],
         scoreDetailMain: [],
@@ -678,6 +679,11 @@ window.app = new Vue({
                 video.srcObject = null;
             }
         },
+        shouldAttemptRearCameraAutoSwitch() {
+            const ua = navigator.userAgent || '';
+            const isTouchMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+            return /iPad|iPhone|Android/i.test(ua) || isTouchMac;
+        },
         startCamera(useFacingMode = false) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('このブラウザではカメラを利用できません。');
@@ -704,6 +710,21 @@ window.app = new Vue({
                             video.play().catch(() => {});
                         }
                     }
+                    if (
+                        !useFacingMode
+                        && this.showPhotoModal
+                        && !this.cameraAutoSwitchAttempted
+                        && this.shouldAttemptRearCameraAutoSwitch()
+                    ) {
+                        this.cameraAutoSwitchAttempted = true;
+                        window.setTimeout(() => {
+                            if (!this.showPhotoModal || this.cameraLoading) {
+                                return;
+                            }
+                            this.cameraFacingMode = 'environment';
+                            this.startCamera(true);
+                        }, 250);
+                    }
                 })
                 .catch(err => {
                     console.error("Camera ERROR:", err.name, err.message);
@@ -716,6 +737,7 @@ window.app = new Vue({
         openPhotoModal() {
             this.showPhotoModal = true;
             this.cameraFacingMode = 'user';
+            this.cameraAutoSwitchAttempted = false;
 
             // モーダルDOMが描画されてからカメラ起動
             this.$nextTick(() => {
@@ -735,6 +757,7 @@ window.app = new Vue({
             this.showPhotoModal = false;
             this.stopCameraStream();
             this.cameraLoading = false;
+            this.cameraAutoSwitchAttempted = false;
         },
         capturePhoto() {
             const video = this.$refs.video;
