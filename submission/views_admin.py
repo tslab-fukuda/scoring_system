@@ -3490,8 +3490,8 @@ def user_list_view(request):
                 for enrollment in enrollments:
                     course_offering = enrollment.course_offering
                     group = ""
-                    exp_day = enrollment.experiment_day or profile.experiment_day
-                    exp_group = enrollment.experiment_group or profile.experiment_group
+                    exp_day = enrollment.experiment_day or ""
+                    exp_group = enrollment.experiment_group or ""
                     if exp_day and exp_group:
                         group = f"{exp_day}-{str(exp_group).zfill(2)}"
                     user_data.append({
@@ -3512,9 +3512,6 @@ def user_list_view(request):
                         'profile_missing': False,
                     })
             else:
-                group = ""
-                if profile.experiment_day and profile.experiment_group:
-                    group = f"{profile.experiment_day}-{str(profile.experiment_group).zfill(2)}"
                 user_data.append({
                     'id': user.id,
                     'row_key': f"{user.id}-no-enrollment",
@@ -3523,7 +3520,7 @@ def user_list_view(request):
                     'email': user.email,
                     'student_id': profile.student_id,
                     'role': profile.role,
-                    'group': group,
+                    'group': "",
                     'offering_id': None,
                     'course_id': None,
                     'year': None,
