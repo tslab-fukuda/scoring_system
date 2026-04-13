@@ -14,7 +14,7 @@ from submission.models import (
     CourseOffering,
     Enrollment,
 )
-from attendance.models import AttendanceRecord
+from attendance.models import AttendanceRecord, AttendanceOverride
 from datetime import time, timedelta, date as dt_date, datetime
 from zoneinfo import ZoneInfo
 from django.core.files.storage import default_storage
@@ -68,6 +68,19 @@ GROUP_ASSIGNMENT_DEFAULT_CONSTRAINTS = {
     'use_liberal_arts_credits_priority': False,
     'balance_gpa': False,
 }
+
+
+def _attendance_override_effective(global_override, user_override):
+    fields = ('ignore_late', 'ignore_absence', 'ignore_lab_time')
+    result = {}
+    for field in fields:
+        if user_override is not None:
+            result[field] = bool(getattr(user_override, field))
+        elif global_override is not None:
+            result[field] = bool(getattr(global_override, field))
+        else:
+            result[field] = False
+    return result
 
 
 def _weekday_label(dt):
@@ -3278,6 +3291,20 @@ def api_student_reports(request):
                 if _weekday_label(sched.date) == student_day:
                     schedule_dates.add(sched.date)
 
+        global_override_map = {}
+        user_override_map = {}
+        if schedule_dates:
+            override_qs = AttendanceOverride.objects.filter(
+                course_offering_id=offering_id_int,
+                target_date__in=schedule_dates,
+            )
+            for override in override_qs:
+                key = override.target_date
+                if override.user_id is None:
+                    global_override_map[key] = override
+                elif override.user_id == profile.user_id:
+                    user_override_map[key] = override
+
         attendance_dates = set(
             AttendanceRecord.objects.filter(
                 user=profile.user,
@@ -3285,7 +3312,16 @@ def api_student_reports(request):
                 date__in=schedule_dates
             ).values_list('date', flat=True)
         )
-        absence_count = len(schedule_dates - attendance_dates)
+        absence_count = 0
+        for schedule_date in schedule_dates:
+            effective_override = _attendance_override_effective(
+                global_override_map.get(schedule_date),
+                user_override_map.get(schedule_date),
+            )
+            if effective_override['ignore_absence']:
+                continue
+            if schedule_date not in attendance_dates:
+                absence_count += 1
 
         records = AttendanceRecord.objects.filter(
             user=profile.user,
@@ -4147,6 +4183,8 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
     schedule_by_day = {}
     attendance_map = {}
     late_attendance_map = {}
+    global_override_map = {}
+    user_override_map = {}
     if offering_id and students_qs.exists():
         now_local = timezone.localtime(timezone.now(), JST)
         cutoff_date = now_local.date()
@@ -4172,6 +4210,15 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
                 attendance_map.setdefault(user_id, set()).add(att_date)
                 if check_in and timezone.localtime(check_in, JST).time() > LATE_CHECKIN_TIME:
                     late_attendance_map.setdefault(user_id, set()).add(att_date)
+            override_qs = AttendanceOverride.objects.filter(
+                course_offering_id=offering_id,
+                target_date__in=schedule_dates_all,
+            )
+            for override in override_qs:
+                if override.user_id is None:
+                    global_override_map[override.target_date] = override
+                else:
+                    user_override_map[(override.user_id, override.target_date)] = override
     student_data = []
     experiment_count = len(unique_experiment_numbers) if unique_experiment_numbers else 0
 
@@ -4287,9 +4334,16 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
             target_dates = schedule_by_day.get(day_label, set())
             if target_dates:
                 attended_dates = attendance_map.get(up.user_id, set())
-                absence_count = len(target_dates - attended_dates)
                 late_dates = late_attendance_map.get(up.user_id, set())
-                late_count = len(target_dates & late_dates)
+                for target_date in target_dates:
+                    effective_override = _attendance_override_effective(
+                        global_override_map.get(target_date),
+                        user_override_map.get((up.user_id, target_date)),
+                    )
+                    if target_date not in attended_dates and not effective_override['ignore_absence']:
+                        absence_count += 1
+                    if target_date in late_dates and not effective_override['ignore_late']:
+                        late_count += 1
         absence_penalty = round(absence_count * absence_penalty_weight, 2)
         discussion_bonus_total = round(discussion_count_total * discussion_bonus_weight, 2)
         score_details_total = round(abs(score_details_total), 2)

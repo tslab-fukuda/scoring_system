@@ -12,6 +12,7 @@ urlpatterns = [
     path('help_tickets/<int:ticket_id>/process/', views.process_help_ticket, name='process_help_ticket'),
     path('notifications/', views.notification_list, name='attendance_notification_list'),
     path('notifications/mark_read/', views.mark_notifications_read, name='attendance_notifications_mark_read'),
+    path('overrides/update/', views.update_attendance_override, name='update_attendance_override'),
     path('list/', views.attendance_list, name='attendance_list'),
     path('user_info/<str:student_id>/', views.get_user_info, name='attendance_user_info'),
     path('register_nfc/', views.register_nfc, name='register_nfc'),

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models import Q
 
 class AttendanceRecord(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -68,6 +69,51 @@ class AttendanceForgetRequest(models.Model):
             f"{self.student.username} - {self.course_offering_id} - "
             f"{self.target_date} - {self.request_type} - {self.status}"
         )
+
+
+class AttendanceOverride(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='attendance_overrides'
+    )
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='attendance_overrides'
+    )
+    target_date = models.DateField(default=timezone.localdate)
+    ignore_late = models.BooleanField(default=False)
+    ignore_absence = models.BooleanField(default=False)
+    ignore_lab_time = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_attendance_overrides'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['target_date', 'course_offering_id', 'user_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['course_offering', 'target_date', 'user'],
+                name='uniq_attendance_override_user_scope',
+            ),
+            models.UniqueConstraint(
+                fields=['course_offering', 'target_date'],
+                condition=Q(user__isnull=True),
+                name='uniq_attendance_override_global_scope',
+            ),
+        ]
+
+    def __str__(self):
+        scope = f"user={self.user_id}" if self.user_id else "all"
+        return f"{self.course_offering_id} {self.target_date} {scope}"
 
 
 class ExperimentHelpTicket(models.Model):

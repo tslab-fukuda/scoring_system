@@ -32,4 +32,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
     makeSortable(document.getElementById('in-table'));
     makeSortable(document.getElementById('out-table'));
+
+    if (window.CAN_MANAGE_ATTENDANCE_OVERRIDES && window.SELECTED_OFFERING_ID) {
+        document.querySelectorAll('.attendance-override-checkbox').forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                const userId = checkbox.dataset.userId || '';
+                const field = checkbox.dataset.field || '';
+                const enabled = checkbox.checked;
+                checkbox.disabled = true;
+                fetch('/attendance/overrides/update/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': window.CSRF_TOKEN,
+                    },
+                    body: JSON.stringify({
+                        offering_id: window.SELECTED_OFFERING_ID,
+                        user_id: userId || null,
+                        field,
+                        enabled,
+                    }),
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || '更新に失敗しました');
+                    }
+                    window.location.reload();
+                })
+                .catch(function (err) {
+                    checkbox.checked = !enabled;
+                    checkbox.disabled = false;
+                    alert(err.message || '更新に失敗しました');
+                });
+            });
+        });
+    }
 });

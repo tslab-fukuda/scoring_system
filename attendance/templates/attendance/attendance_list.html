@@ -65,6 +65,109 @@
             <button class="btn btn-outline-primary">切替</button>
         </div>
     </form>
+    {% if can_manage_attendance_overrides and selected_offering_id %}
+    <div class="attendance-override-panel mb-4">
+        <div class="attendance-override-header">
+            <div>
+                <h3 class="mb-1">出席評価の手動無効化</h3>
+                <div class="text-muted small">対象日: {{ attendance_override.target_date }}</div>
+            </div>
+            <div class="text-muted small">個別設定が全体設定を上書きします</div>
+        </div>
+        <div class="attendance-override-global">
+            <label class="attendance-override-toggle">
+                <input
+                    type="checkbox"
+                    class="attendance-override-checkbox"
+                    data-user-id=""
+                    data-field="ignore_late"
+                    {% if attendance_override.global_override.ignore_late %}checked{% endif %}
+                >
+                <span>全員の遅刻を無効化</span>
+            </label>
+            <label class="attendance-override-toggle">
+                <input
+                    type="checkbox"
+                    class="attendance-override-checkbox"
+                    data-user-id=""
+                    data-field="ignore_absence"
+                    {% if attendance_override.global_override.ignore_absence %}checked{% endif %}
+                >
+                <span>全員の欠席を無効化</span>
+            </label>
+            <label class="attendance-override-toggle">
+                <input
+                    type="checkbox"
+                    class="attendance-override-checkbox"
+                    data-user-id=""
+                    data-field="ignore_lab_time"
+                    {% if attendance_override.global_override.ignore_lab_time %}checked{% endif %}
+                >
+                <span>全員の実験時間を無効化</span>
+            </label>
+        </div>
+        <div class="table-responsive mt-3">
+            <table class="ts-table attendance-override-table">
+                <thead>
+                    <tr>
+                        <th>学籍番号</th>
+                        <th>氏名</th>
+                        <th>曜日</th>
+                        <th>班</th>
+                        <th>入室</th>
+                        <th>退室</th>
+                        <th>遅刻無効</th>
+                        <th>欠席無効</th>
+                        <th>実験時間無効</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in attendance_override.rows %}
+                    <tr>
+                        <td>{{ row.student_id }}</td>
+                        <td>{{ row.full_name }}</td>
+                        <td>{{ row.experiment_day }}</td>
+                        <td>{{ row.experiment_group }}</td>
+                        <td>{{ row.check_in_time|default:'-' }}</td>
+                        <td>{{ row.check_out_time|default:'-' }}</td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                class="attendance-override-checkbox"
+                                data-user-id="{{ row.user_id }}"
+                                data-field="ignore_late"
+                                {% if row.effective_override.ignore_late %}checked{% endif %}
+                            >
+                        </td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                class="attendance-override-checkbox"
+                                data-user-id="{{ row.user_id }}"
+                                data-field="ignore_absence"
+                                {% if row.effective_override.ignore_absence %}checked{% endif %}
+                            >
+                        </td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                class="attendance-override-checkbox"
+                                data-user-id="{{ row.user_id }}"
+                                data-field="ignore_lab_time"
+                                {% if row.effective_override.ignore_lab_time %}checked{% endif %}
+                            >
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted">対象ユーザがいません</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
     {% verbatim %}
     <div id="nfc-app" v-cloak>
         <div class="nfc-toggle-wrapper">
@@ -216,6 +319,8 @@
     var STUDENTS = {{ students_json|safe }};
     var CSRF_TOKEN = '{{ csrf_token }}';
     var SELECTED_OFFERING_ID = '{{ selected_offering_id|default_if_none:"" }}';
+    var CAN_MANAGE_ATTENDANCE_OVERRIDES = {% if can_manage_attendance_overrides %}true{% else %}false{% endif %};
+    var ATTENDANCE_OVERRIDE_STATE = {{ attendance_override_json|safe }};
 </script>
 <script src="{% static 'attendance/js/nfc_register.js' %}"></script>
 <script type="module" src="{% static 'attendance/js/nfc_reader.js' %}"></script>

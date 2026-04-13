@@ -79,6 +79,38 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
+.attendance-override-panel {
+    border: 1px solid #d9ddeb;
+    border-radius: 12px;
+    background: #f9fbff;
+    padding: 18px 20px;
+}
+
+.attendance-override-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.attendance-override-global {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 14px;
+}
+
+.attendance-override-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.attendance-override-table input[type="checkbox"] {
+    transform: scale(1.1);
+}
+
 .ts-modal-actions {
     display: flex;
     justify-content: flex-end;

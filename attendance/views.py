@@ -11,7 +11,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import AttendanceRecord, AttendanceForgetRequest, ExperimentHelpTicket
+from .models import AttendanceRecord, AttendanceForgetRequest, ExperimentHelpTicket, AttendanceOverride
 from .permissions import (
     allowed_offering_ids,
     can_access_offering,
@@ -345,6 +345,165 @@ def _build_attendance_update_payload(user, record, action):
         'user_id': user.id,
         'check_in_time': timezone.localtime(record.check_in, JST).strftime('%H:%M') if record.check_in else '',
         'check_out_time': timezone.localtime(record.check_out, JST).strftime('%H:%M') if record.check_out else '',
+    }
+
+
+def _can_manage_attendance_overrides(user):
+    return _user_actual_role(user) == 'admin'
+
+
+def _empty_override_flags():
+    return {
+        'ignore_late': False,
+        'ignore_absence': False,
+        'ignore_lab_time': False,
+    }
+
+
+def _override_flags_from_record(override):
+    if not override:
+        return _empty_override_flags()
+    return {
+        'ignore_late': bool(override.ignore_late),
+        'ignore_absence': bool(override.ignore_absence),
+        'ignore_lab_time': bool(override.ignore_lab_time),
+    }
+
+
+def _effective_override_flags(global_override=None, user_override=None):
+    fields = ('ignore_late', 'ignore_absence', 'ignore_lab_time')
+    result = {}
+    for field in fields:
+        if user_override is not None:
+            result[field] = bool(getattr(user_override, field))
+        elif global_override is not None:
+            result[field] = bool(getattr(global_override, field))
+        else:
+            result[field] = False
+    return result
+
+
+def _apply_attendance_override_delta(user, course_offering, target_date, old_flags, new_flags):
+    def _has_score_code(submission, code):
+        for item in (submission.score_details or []):
+            if not isinstance(item, dict):
+                continue
+            if item.get('code') == code:
+                return True
+        return False
+
+    def _late_target_submissions():
+        base_qs = Submission.objects.filter(
+            student=user,
+            course_offering=course_offering,
+        ).order_by('submitted_at', 'id')
+        day_specific = list(base_qs.filter(date=target_date))
+        if day_specific:
+            return day_specific
+        late_scored = [sub for sub in base_qs if _has_score_code(sub, 'late')]
+        if late_scored:
+            return late_scored
+        return list(base_qs.filter(graded=False))
+
+    record = AttendanceRecord.objects.filter(
+        user=user,
+        course_offering=course_offering,
+        date=target_date,
+    ).first()
+    if not record:
+        return
+
+    old_late = False
+    new_late = False
+    if record.check_in:
+        local_in = timezone.localtime(record.check_in, JST)
+        old_late = local_in.time() > CLASS_START and not old_flags.get('ignore_late', False)
+        new_late = local_in.time() > CLASS_START and not new_flags.get('ignore_late', False)
+    late_delta = (1 if new_late else 0) - (1 if old_late else 0)
+    if late_delta:
+        submissions = _late_target_submissions()
+        _increment_score(submissions, "late", late_delta, course_offering)
+
+    old_lab_points = 0
+    new_lab_points = 0
+    if record.check_out:
+        local_out = timezone.localtime(record.check_out, JST)
+        base_points = _calc_lab_time_points(_class_end_diff_minutes(local_out))
+        old_lab_points = 0 if old_flags.get('ignore_lab_time', False) else base_points
+        new_lab_points = 0 if new_flags.get('ignore_lab_time', False) else base_points
+    lab_delta = new_lab_points - old_lab_points
+    if lab_delta:
+        submissions = Submission.objects.filter(
+            student=user,
+            graded=True,
+            report_type='prep',
+            date=target_date,
+            course_offering=course_offering,
+        )
+        _increment_score(submissions, "lab_time", lab_delta, course_offering)
+
+
+def _serialize_attendance_override(override):
+    return {
+        'id': override.id if override else None,
+        'ignore_late': bool(getattr(override, 'ignore_late', False)),
+        'ignore_absence': bool(getattr(override, 'ignore_absence', False)),
+        'ignore_lab_time': bool(getattr(override, 'ignore_lab_time', False)),
+    }
+
+
+def _build_override_student_rows(offering_id, target_date):
+    enrollment_qs = (
+        Enrollment.objects.filter(course_offering_id=offering_id, role='student')
+        .select_related('user__userprofile')
+        .order_by('experiment_day', 'experiment_group', 'user__userprofile__student_id', 'user_id')
+    )
+    user_ids = [enr.user_id for enr in enrollment_qs]
+    records_map = {
+        record.user_id: record
+        for record in AttendanceRecord.objects.filter(
+            course_offering_id=offering_id,
+            date=target_date,
+            user_id__in=user_ids,
+        )
+    }
+    user_override_map = {
+        override.user_id: override
+        for override in AttendanceOverride.objects.filter(
+            course_offering_id=offering_id,
+            target_date=target_date,
+            user_id__in=user_ids,
+        )
+    }
+    global_override = AttendanceOverride.objects.filter(
+        course_offering_id=offering_id,
+        target_date=target_date,
+        user__isnull=True,
+    ).first()
+
+    rows = []
+    for enr in enrollment_qs:
+        profile = getattr(enr.user, 'userprofile', None)
+        if not profile:
+            continue
+        user_override = user_override_map.get(enr.user_id)
+        effective = _effective_override_flags(global_override, user_override)
+        record = records_map.get(enr.user_id)
+        rows.append({
+            'user_id': enr.user_id,
+            'student_id': profile.student_id,
+            'full_name': profile.full_name,
+            'experiment_day': enr.experiment_day or profile.experiment_day,
+            'experiment_group': enr.experiment_group or profile.experiment_group,
+            'check_in_time': timezone.localtime(record.check_in, JST).strftime('%H:%M') if record and record.check_in else '',
+            'check_out_time': timezone.localtime(record.check_out, JST).strftime('%H:%M') if record and record.check_out else '',
+            'effective_override': effective,
+            'user_override': _serialize_attendance_override(user_override),
+        })
+    return {
+        'global_override': _serialize_attendance_override(global_override),
+        'rows': rows,
+        'target_date': target_date.strftime('%Y-%m-%d'),
     }
 
 @login_required
@@ -970,6 +1129,10 @@ def attendance_list(request):
         # emailフィールドをフラットに
         for s in students_list:
             s['email'] = s.pop('user__email', '')
+    can_manage_overrides_flag = _can_manage_attendance_overrides(request.user)
+    override_ui = {'global_override': {'ignore_late': False, 'ignore_absence': False, 'ignore_lab_time': False}, 'rows': [], 'target_date': timezone.localdate().strftime('%Y-%m-%d')}
+    if can_manage_overrides_flag and selected_offering_id:
+        override_ui = _build_override_student_rows(selected_offering_id, timezone.localdate())
     students_json = json.dumps(students_list, ensure_ascii=False)
     context = {
         'in_records': in_room,
@@ -978,8 +1141,120 @@ def attendance_list(request):
         'offerings': offerings_data,
         'selected_offering_id': selected_offering_id,
         'can_register_nfc': can_register_nfc_flag,
+        'can_manage_attendance_overrides': can_manage_overrides_flag,
+        'attendance_override': override_ui,
+        'attendance_override_json': json.dumps(override_ui, ensure_ascii=False),
     }
     return render(request, 'attendance/attendance_list.html', context)
+
+
+@login_required
+@require_POST
+def update_attendance_override(request):
+    if not _can_manage_attendance_overrides(request.user):
+        return HttpResponseForbidden()
+    try:
+        data = json.loads(request.body or '{}')
+    except Exception:
+        data = {}
+
+    try:
+        offering_id = int(data.get('offering_id'))
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'offering_id is required'}, status=400)
+
+    field = (data.get('field') or '').strip()
+    if field not in {'ignore_late', 'ignore_absence', 'ignore_lab_time'}:
+        return JsonResponse({'status': 'error', 'message': 'invalid field'}, status=400)
+    enabled = bool(data.get('enabled'))
+    target_date = timezone.localdate()
+    course_offering = get_object_or_404(CourseOffering, id=offering_id)
+
+    user_id = data.get('user_id')
+    if user_id in ('', None):
+        user_id = None
+    else:
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'invalid user_id'}, status=400)
+
+    global_override = AttendanceOverride.objects.filter(
+        course_offering=course_offering,
+        target_date=target_date,
+        user__isnull=True,
+    ).first()
+
+    if user_id is None:
+        user_ids = list(
+            Enrollment.objects.filter(course_offering=course_offering, role='student')
+            .values_list('user_id', flat=True)
+            .distinct()
+        )
+        user_override_map = {
+            override.user_id: override
+            for override in AttendanceOverride.objects.filter(
+                course_offering=course_offering,
+                target_date=target_date,
+                user_id__in=user_ids,
+            )
+        }
+        old_flags_map = {
+            uid: _effective_override_flags(global_override, user_override_map.get(uid))
+            for uid in user_ids
+        }
+        override, _ = AttendanceOverride.objects.get_or_create(
+            course_offering=course_offering,
+            target_date=target_date,
+            user=None,
+            defaults={
+                'ignore_late': False,
+                'ignore_absence': False,
+                'ignore_lab_time': False,
+                'updated_by': request.user,
+            }
+        )
+        setattr(override, field, enabled)
+        override.updated_by = request.user
+        override.save()
+        new_global_override = override
+        for uid in user_ids:
+            old_flags = old_flags_map[uid]
+            new_flags = _effective_override_flags(new_global_override, user_override_map.get(uid))
+            if old_flags != new_flags:
+                _apply_attendance_override_delta(User.objects.get(id=uid), course_offering, target_date, old_flags, new_flags)
+    else:
+        user = get_object_or_404(User, id=user_id)
+        user_override = AttendanceOverride.objects.filter(
+            course_offering=course_offering,
+            target_date=target_date,
+            user=user,
+        ).first()
+        old_flags = _effective_override_flags(global_override, user_override)
+        override, _ = AttendanceOverride.objects.get_or_create(
+            course_offering=course_offering,
+            target_date=target_date,
+            user=user,
+            defaults={
+                'ignore_late': False,
+                'ignore_absence': False,
+                'ignore_lab_time': False,
+                'updated_by': request.user,
+            }
+        )
+        setattr(override, field, enabled)
+        override.updated_by = request.user
+        override.save()
+        new_flags = _effective_override_flags(global_override, override)
+        if old_flags != new_flags:
+            _apply_attendance_override_delta(user, course_offering, target_date, old_flags, new_flags)
+
+    override_ui = _build_override_student_rows(course_offering.id, target_date)
+    return JsonResponse({
+        'status': 'ok',
+        'message': '更新しました',
+        'override_ui': override_ui,
+    })
 
 
 @login_required
