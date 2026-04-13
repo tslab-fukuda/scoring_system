@@ -67,7 +67,7 @@
 }
 
 .attendance-column-hidden {
-    display: none;
+    display: none !important;
 }
 
 .ts-table th.sortable {

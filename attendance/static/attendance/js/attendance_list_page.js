@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function applyColumnVisibility(columnName, visible) {
         document.querySelectorAll('[data-column="' + columnName + '"]').forEach(function (cell) {
             cell.classList.toggle('attendance-column-hidden', !visible);
+            cell.hidden = !visible;
         });
     }
 
