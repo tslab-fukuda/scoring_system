@@ -272,6 +272,21 @@
         </div>
     </div>
     {% endif %}
+    <div class="attendance-column-visibility">
+        <span class="attendance-column-visibility-label">表示項目</span>
+        <label class="attendance-column-visibility-toggle">
+            <input type="checkbox" class="attendance-column-toggle" data-column="full_name" checked>
+            <span>氏名</span>
+        </label>
+        <label class="attendance-column-visibility-toggle">
+            <input type="checkbox" class="attendance-column-toggle" data-column="experiment_day" checked>
+            <span>曜日</span>
+        </label>
+        <label class="attendance-column-visibility-toggle">
+            <input type="checkbox" class="attendance-column-toggle" data-column="experiment_group" checked>
+            <span>班</span>
+        </label>
+    </div>
     <div class="ts-attendance-columns">
         <div class="ts-column">
             <h3>入室中</h3>
@@ -280,9 +295,9 @@
                     <thead>
                         <tr>
                             <th class="sortable">学籍番号</th>
-                            <th>氏名</th>
-                            <th>曜日</th>
-                            <th class="sortable">班</th>
+                            <th data-column="full_name">氏名</th>
+                            <th data-column="experiment_day">曜日</th>
+                            <th class="sortable" data-column="experiment_group">班</th>
                             <th>入室</th>
                         </tr>
                     </thead>
@@ -290,9 +305,9 @@
                     {% for record in in_records %}
                         <tr>
                             <td>{{ record.user.userprofile.student_id }}</td>
-                            <td>{{ record.user.userprofile.full_name }}</td>
-                            <td>{{ record.user.userprofile.experiment_day }}</td>
-                            <td>{{ record.user.userprofile.experiment_group }}</td>
+                            <td data-column="full_name">{{ record.user.userprofile.full_name }}</td>
+                            <td data-column="experiment_day">{{ record.user.userprofile.experiment_day }}</td>
+                            <td data-column="experiment_group">{{ record.user.userprofile.experiment_group }}</td>
                             <td>{{ record.check_in|date:'H:i' }}</td>
                         </tr>
                     {% endfor %}
@@ -307,9 +322,9 @@
                     <thead>
                         <tr>
                             <th class="sortable">学籍番号</th>
-                            <th>氏名</th>
-                            <th>曜日</th>
-                            <th class="sortable">班</th>
+                            <th data-column="full_name">氏名</th>
+                            <th data-column="experiment_day">曜日</th>
+                            <th class="sortable" data-column="experiment_group">班</th>
                             <th>入室</th>
                             <th>退室</th>
                         </tr>
@@ -318,9 +333,9 @@
                     {% for record in out_records %}
                         <tr>
                             <td>{{ record.user.userprofile.student_id }}</td>
-                            <td>{{ record.user.userprofile.full_name }}</td>
-                            <td>{{ record.user.userprofile.experiment_day }}</td>
-                            <td>{{ record.user.userprofile.experiment_group }}</td>
+                            <td data-column="full_name">{{ record.user.userprofile.full_name }}</td>
+                            <td data-column="experiment_day">{{ record.user.userprofile.experiment_day }}</td>
+                            <td data-column="experiment_group">{{ record.user.userprofile.experiment_group }}</td>
                             <td>{{ record.check_in|date:'H:i' }}</td>
                             <td>{{ record.check_out|date:'H:i' }}</td>
                         </tr>

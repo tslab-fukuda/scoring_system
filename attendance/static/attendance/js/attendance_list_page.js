@@ -8,6 +8,30 @@ function updateTime() {
 document.addEventListener('DOMContentLoaded', function () {
     updateTime();
     setInterval(updateTime, 1000);
+    const columnToggleStorageKey = 'attendance-column-visibility';
+
+    function applyColumnVisibility(columnName, visible) {
+        document.querySelectorAll('[data-column="' + columnName + '"]').forEach(function (cell) {
+            cell.classList.toggle('attendance-column-hidden', !visible);
+        });
+    }
+
+    function loadColumnVisibility() {
+        try {
+            const raw = window.localStorage.getItem(columnToggleStorageKey);
+            return raw ? JSON.parse(raw) : {};
+        } catch (err) {
+            return {};
+        }
+    }
+
+    function saveColumnVisibility(state) {
+        try {
+            window.localStorage.setItem(columnToggleStorageKey, JSON.stringify(state));
+        } catch (err) {
+            // ignore storage errors
+        }
+    }
 
     function makeSortable(table) {
         if (!table) return;
@@ -32,6 +56,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     makeSortable(document.getElementById('in-table'));
     makeSortable(document.getElementById('out-table'));
+
+    const savedColumnVisibility = loadColumnVisibility();
+    document.querySelectorAll('.attendance-column-toggle').forEach(function (checkbox) {
+        const columnName = checkbox.dataset.column || '';
+        if (!columnName) return;
+        if (Object.prototype.hasOwnProperty.call(savedColumnVisibility, columnName)) {
+            checkbox.checked = !!savedColumnVisibility[columnName];
+        }
+        applyColumnVisibility(columnName, checkbox.checked);
+        checkbox.addEventListener('change', function () {
+            const visible = checkbox.checked;
+            savedColumnVisibility[columnName] = visible;
+            applyColumnVisibility(columnName, visible);
+            saveColumnVisibility(savedColumnVisibility);
+        });
+    });
 
     const overridePanel = document.getElementById('attendance-override-panel');
     const openOverrideBtn = document.getElementById('attendance-override-open-btn');
