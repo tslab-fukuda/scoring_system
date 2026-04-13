@@ -21,6 +21,12 @@ from .permissions import (
     is_attendance_only,
 )
 from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment
+from submission.enrollment_utils import (
+    build_student_context,
+    get_student_context,
+    get_student_day_group,
+    get_student_enrollment_map,
+)
 
 JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 40)
@@ -335,13 +341,13 @@ def _build_help_ticket_payload(ticket):
 
 
 def _build_attendance_update_payload(user, record, action):
-    user_profile = getattr(user, 'userprofile', None)
+    student_context = get_student_context(user, record.course_offering_id)
     return {
         'action': action,
-        'student_id': user_profile.student_id if user_profile else '',
-        'full_name': user_profile.full_name if user_profile else (user.get_full_name() or user.username),
-        'experiment_day': user_profile.experiment_day if user_profile else '',
-        'experiment_group': user_profile.experiment_group if user_profile else '',
+        'student_id': student_context['student_id'],
+        'full_name': student_context['full_name'],
+        'experiment_day': student_context['experiment_day'],
+        'experiment_group': student_context['experiment_group'],
         'user_id': user.id,
         'check_in_time': timezone.localtime(record.check_in, JST).strftime('%H:%M') if record.check_in else '',
         'check_out_time': timezone.localtime(record.check_out, JST).strftime('%H:%M') if record.check_out else '',
@@ -489,12 +495,13 @@ def _build_override_student_rows(offering_id, target_date):
         user_override = user_override_map.get(enr.user_id)
         effective = _effective_override_flags(global_override, user_override)
         record = records_map.get(enr.user_id)
+        student_context = build_student_context(profile=profile, enrollment=enr)
         rows.append({
             'user_id': enr.user_id,
-            'student_id': profile.student_id,
-            'full_name': profile.full_name,
-            'experiment_day': enr.experiment_day or profile.experiment_day,
-            'experiment_group': enr.experiment_group or profile.experiment_group,
+            'student_id': student_context['student_id'],
+            'full_name': student_context['full_name'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'check_in_time': timezone.localtime(record.check_in, JST).strftime('%H:%M') if record and record.check_in else '',
             'check_out_time': timezone.localtime(record.check_out, JST).strftime('%H:%M') if record and record.check_out else '',
             'effective_override': effective,
@@ -590,13 +597,14 @@ def scan_nfc(request):
             check_in_time = timezone.localtime(record.check_in, JST).strftime('%H:%M')
         if record.check_out:
             check_out_time = timezone.localtime(record.check_out, JST).strftime('%H:%M')
+        student_context = get_student_context(user_profile.user, offering_id)
         return JsonResponse({
             'status': 'ok',
             'action': action,
-            'student_id': user_profile.student_id,
-            'full_name': user_profile.full_name,
-            'experiment_day': user_profile.experiment_day,
-            'experiment_group': user_profile.experiment_group,
+            'student_id': student_context['student_id'],
+            'full_name': student_context['full_name'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'user_id': user_profile.user_id,
             'check_in_time': check_in_time,
             'check_out_time': check_out_time,
@@ -738,7 +746,7 @@ def help_ticket_context(request):
         return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
 
     course_offering = enrollment.course_offering
-    experiment_group = (enrollment.experiment_group or '').strip() or getattr(request.user.userprofile, 'experiment_group', '')
+    experiment_group = (enrollment.experiment_group or '').strip()
     unresolved_ticket = (
         ExperimentHelpTicket.objects.filter(
             course_offering=course_offering,
@@ -798,7 +806,7 @@ def create_help_ticket(request):
     if valid_numbers and experiment_number not in valid_numbers:
         return JsonResponse({'status': 'error', 'message': '実験番号が不正です'}, status=400)
 
-    experiment_group = (enrollment.experiment_group or '').strip() or getattr(request.user.userprofile, 'experiment_group', '')
+    experiment_group = (enrollment.experiment_group or '').strip()
     if not experiment_group:
         return JsonResponse({'status': 'error', 'message': '実験班情報が見つかりません'}, status=400)
 
@@ -1103,7 +1111,7 @@ def attendance_list(request):
         except (TypeError, ValueError):
             pass
 
-    today_records = AttendanceRecord.objects.filter(date=date.today())
+    today_records = AttendanceRecord.objects.filter(date=date.today()).select_related('user__userprofile')
     student_ids = None
     if selected_offering_id:
         student_ids = list(
@@ -1115,20 +1123,39 @@ def attendance_list(request):
             course_offering_id=selected_offering_id
         )
 
-    in_room = today_records.filter(check_out__isnull=True)
-    out_room = today_records.filter(check_out__isnull=False)
+    in_room = list(today_records.filter(check_out__isnull=True))
+    out_room = list(today_records.filter(check_out__isnull=False))
+    displayed_user_ids = {record.user_id for record in in_room + out_room}
+    displayed_enrollment_map = get_student_enrollment_map(displayed_user_ids, selected_offering_id)
+    for record in in_room + out_room:
+        student_context = build_student_context(
+            profile=getattr(record.user, 'userprofile', None),
+            enrollment=displayed_enrollment_map.get(record.user_id),
+        )
+        record.display_full_name = student_context['full_name']
+        record.display_experiment_day = student_context['experiment_day']
+        record.display_experiment_group = student_context['experiment_group']
     can_register_nfc_flag = can_register_nfc(request.user)
     students_list = []
     if can_register_nfc_flag and student_ids is not None:
-        students_qs = UserProfile.objects.select_related('user')
-        students_qs = students_qs.filter(user_id__in=student_ids)
-        students = students_qs.values(
-            'student_id', 'full_name', 'experiment_day', 'experiment_group', 'nfc_id', 'user__email', 'role', 'user_id'
-        )
-        students_list = list(students)
-        # emailフィールドをフラットに
-        for s in students_list:
-            s['email'] = s.pop('user__email', '')
+        enrollment_map = get_student_enrollment_map(student_ids, selected_offering_id)
+        students_qs = UserProfile.objects.select_related('user').filter(user_id__in=student_ids)
+        students_list = []
+        for profile in students_qs:
+            student_context = build_student_context(
+                profile=profile,
+                enrollment=enrollment_map.get(profile.user_id),
+            )
+            students_list.append({
+                'student_id': student_context['student_id'],
+                'full_name': student_context['full_name'],
+                'experiment_day': student_context['experiment_day'],
+                'experiment_group': student_context['experiment_group'],
+                'nfc_id': profile.nfc_id or '',
+                'email': profile.user.email,
+                'role': profile.role,
+                'user_id': profile.user_id,
+            })
     can_manage_overrides_flag = _can_manage_attendance_overrides(request.user)
     override_ui = {'global_override': {'ignore_late': False, 'ignore_absence': False, 'ignore_lab_time': False}, 'rows': [], 'target_date': timezone.localdate().strftime('%Y-%m-%d')}
     if can_manage_overrides_flag and selected_offering_id:
@@ -1268,11 +1295,13 @@ def get_user_info(request, student_id):
         allowed_ids = allowed_offering_ids(request.user)
         if not allowed_ids or not Enrollment.objects.filter(user=profile.user, course_offering_id__in=allowed_ids).exists():
             return JsonResponse({'status': 'error', 'message': '担当の科目/年度に登録されていません'}, status=403)
+        offering_id = request.GET.get('offering_id')
+        student_context = get_student_context(profile.user, offering_id) if offering_id else build_student_context(profile=profile)
         data = {
-            'student_id': profile.student_id,
-            'full_name': profile.full_name,
-            'experiment_day': profile.experiment_day,
-            'experiment_group': profile.experiment_group,
+            'student_id': student_context['student_id'],
+            'full_name': student_context['full_name'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'nfc_id': profile.nfc_id or ''
         }
         return JsonResponse({'status': 'success', 'user': data})

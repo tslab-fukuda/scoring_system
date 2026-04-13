@@ -7,6 +7,8 @@ from django.http import JsonResponse
 from django.utils import timezone
 import json
 
+from submission.enrollment_utils import get_student_context
+
 @login_required
 def submit_assignment(request):
     student_id = request.user.userprofile.student_id
@@ -46,9 +48,9 @@ def submit_assignment(request):
             enrollment = resolve_offering(request.user, offering_id)
             if enrollment:
                 submission.course_offering = enrollment.course_offering
-                submission.experiment_group = enrollment.experiment_group or request.user.userprofile.experiment_group
+                submission.experiment_group = enrollment.experiment_group or ''
             else:
-                submission.experiment_group = request.user.userprofile.experiment_group
+                submission.experiment_group = ''
             # report_type, experiment_numberはformで自動セット
             submission.save()
             # 成功時はJsonResponseで"redirect"フラグ
@@ -59,7 +61,7 @@ def submit_assignment(request):
     else:
         # GET時はフォーム描画
         date = request.GET.get('date') or ""
-        experiment_group = request.user.userprofile.experiment_group
+        experiment_group = (enrollment.experiment_group or '').strip() if enrollment else ''
         form = SubmissionForm()
         return render(request, 'submission/submit.html', {
             'form': form,
@@ -75,9 +77,15 @@ def complete_submission(request):
     date = request.GET.get('date') or request.POST.get('date')
     # 必要なら提出日時や学生番号も取得
     submission = Submission.objects.filter(student=request.user).order_by('-submitted_at').first()
+    student_context = get_student_context(
+        request.user,
+        submission.course_offering_id if submission and submission.course_offering_id else None,
+    )
     context = {
         'filename': (file.split('/')[-1] if file else (submission.file.name.split('/')[-1] if submission else '')),
-        'student_id': request.user.userprofile.student_id,
+        'student_id': student_context['student_id'],
+        'experiment_day': student_context['experiment_day'],
+        'experiment_group': student_context['experiment_group'],
         'submitted_at': submission.submitted_at if submission else timezone.now(),
         'date': date,
         'submission': submission,

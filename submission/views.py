@@ -13,9 +13,10 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import UserProfile, Submission, Schedule
+from .models import UserProfile, Submission, Schedule, Enrollment
 from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
+from submission.enrollment_utils import get_student_context
 from django.http import HttpResponse
 from .roles import ROLE_OPTIONS, get_actual_role, get_effective_role
 
@@ -101,12 +102,24 @@ def set_view_role(request):
 @login_required
 def api_user_profile(request):
     profile = request.user.userprofile
+    offering_id = request.GET.get('offering_id')
+    if profile.role == "student" and not offering_id:
+        offering_id = (
+            Enrollment.objects.filter(user=request.user, role='student')
+            .order_by('-course_offering__year', '-course_offering__id')
+            .values_list('course_offering_id', flat=True)
+            .first()
+        )
+    student_context = get_student_context(request.user, offering_id) if profile.role == "student" else {
+        "experiment_day": profile.experiment_day,
+        "experiment_group": profile.experiment_group,
+    }
     user_data = {
         "full_name": profile.full_name,
         "student_id": profile.student_id,
         "email": profile.email,
-        "experiment_day": profile.experiment_day,
-        "experiment_group": profile.experiment_group,
+        "experiment_day": student_context["experiment_day"],
+        "experiment_group": student_context["experiment_group"],
         "role": profile.role,
     }
     result = {"profile": user_data}

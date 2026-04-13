@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from submission.models import UserProfile, Submission, Schedule, Enrollment
+from submission.enrollment_utils import get_student_context
 import json
 from submission.decorators import role_required
 from django.contrib.auth.decorators import login_required
@@ -18,14 +19,15 @@ def student_dashboard(request):
     )
     offerings_data = []
     for enr in enrollments:
+        student_context = get_student_context(request.user, enr.course_offering_id)
         offerings_data.append({
             'id': enr.course_offering_id,
             'course_id': enr.course_offering.course_id,
             'course_code': enr.course_offering.course.code,
             'course_name': enr.course_offering.course.name,
             'year': enr.course_offering.year,
-            'experiment_day': enr.experiment_day or user_profile.experiment_day,
-            'experiment_group': enr.experiment_group or user_profile.experiment_group,
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
         })
     default_offering_id = None
     if offerings_data:
@@ -42,8 +44,8 @@ def student_dashboard(request):
             pass
 
     selected_offering = next((o for o in offerings_data if o['id'] == selected_offering_id), None)
-    student_day = selected_offering['experiment_day'] if selected_offering else user_profile.experiment_day
-    student_group = selected_offering['experiment_group'] if selected_offering else user_profile.experiment_group
+    student_day = selected_offering['experiment_day'] if selected_offering else ''
+    student_group = selected_offering['experiment_group'] if selected_offering else ''
 
     # ユーザ自身の提出物一覧を抽出（科目/年度でフィルタ）
     submissions = Submission.objects.filter(student=request.user).order_by('-submitted_at')

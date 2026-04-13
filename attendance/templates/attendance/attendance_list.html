@@ -305,9 +305,9 @@
                     {% for record in in_records %}
                         <tr>
                             <td>{{ record.user.userprofile.student_id }}</td>
-                            <td data-column="full_name">{{ record.user.userprofile.full_name }}</td>
-                            <td data-column="experiment_day">{{ record.user.userprofile.experiment_day }}</td>
-                            <td data-column="experiment_group">{{ record.user.userprofile.experiment_group }}</td>
+                            <td data-column="full_name">{{ record.display_full_name }}</td>
+                            <td data-column="experiment_day">{{ record.display_experiment_day }}</td>
+                            <td data-column="experiment_group">{{ record.display_experiment_group }}</td>
                             <td>{{ record.check_in|date:'H:i' }}</td>
                         </tr>
                     {% endfor %}
@@ -333,9 +333,9 @@
                     {% for record in out_records %}
                         <tr>
                             <td>{{ record.user.userprofile.student_id }}</td>
-                            <td data-column="full_name">{{ record.user.userprofile.full_name }}</td>
-                            <td data-column="experiment_day">{{ record.user.userprofile.experiment_day }}</td>
-                            <td data-column="experiment_group">{{ record.user.userprofile.experiment_group }}</td>
+                            <td data-column="full_name">{{ record.display_full_name }}</td>
+                            <td data-column="experiment_day">{{ record.display_experiment_day }}</td>
+                            <td data-column="experiment_group">{{ record.display_experiment_group }}</td>
                             <td>{{ record.check_in|date:'H:i' }}</td>
                             <td>{{ record.check_out|date:'H:i' }}</td>
                         </tr>

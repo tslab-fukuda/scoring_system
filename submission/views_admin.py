@@ -28,6 +28,13 @@ import unicodedata
 import math
 import fitz
 from submission.decorators import role_required
+from submission.enrollment_utils import (
+    build_student_context,
+    filter_queryset_by_student_enrollment,
+    get_student_context,
+    get_student_day_group,
+    get_student_enrollment_map,
+)
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from collections import Counter, defaultdict
@@ -1908,10 +1915,7 @@ def admin_get_submissions_api(request):
             ).update(graded=True,accepted=True)
     
     qs = base_qs.filter(graded=False, accepted=False)
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     
@@ -1924,8 +1928,8 @@ def admin_get_submissions_api(request):
     detail_cache = {}
     submissions = []
     for sub in qs:
-        up = getattr(sub.student, 'userprofile', None)
         detail_offering_id = offering_id or sub.course_offering_id
+        student_context = get_student_context(sub.student, detail_offering_id)
         cache_key = (sub.student_id, sub.experiment_number, detail_offering_id)
         if cache_key not in detail_cache:
             detail_cache[cache_key] = _aggregate_score_details(
@@ -1935,10 +1939,10 @@ def admin_get_submissions_api(request):
         submit_count = submit_count_map[(sub.student_id, sub.experiment_number)]  # 本レポート提出回数
         submissions.append({
             'id': sub.id,
-            'experiment_day': up.experiment_day if up else "",
-            'experiment_group': up.experiment_group if up else "",
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'experiment_number': sub.experiment_number,
-            'full_name': up.full_name if up else "",
+            'full_name': student_context['full_name'],
             'file': sub.file.url if sub.file else "",  # 既存互換
             'file_url': sub.file.url if sub.file else "",
             'file_name': sub.file.name.split('/')[-1] if sub.file else "",
@@ -1964,10 +1968,7 @@ def admin_get_accepted_submissions_api(request):
     qs = Submission.objects.filter(report_type='main', accepted=True).select_related('student', 'student__userprofile')
     if offering_id:
         qs = qs.filter(course_offering_id=offering_id)
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     if student_id:
@@ -1976,8 +1977,8 @@ def admin_get_accepted_submissions_api(request):
     detail_cache = {}
     submissions = []
     for sub in qs:
-        up = getattr(sub.student, 'userprofile', None)
         detail_offering_id = offering_id or sub.course_offering_id
+        student_context = get_student_context(sub.student, detail_offering_id)
         cache_key = (sub.student_id, sub.experiment_number, detail_offering_id)
         if cache_key not in detail_cache:
             detail_cache[cache_key] = _aggregate_score_details(
@@ -1986,11 +1987,11 @@ def admin_get_accepted_submissions_api(request):
         details = detail_cache[cache_key]
         submissions.append({
             'id': sub.id,
-            'experiment_day': up.experiment_day if up else "",
-            'experiment_group': up.experiment_group if up else "",
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'experiment_number': sub.experiment_number,
-            'full_name': up.full_name if up else "",
-            'student_id': up.student_id if up else "",
+            'full_name': student_context['full_name'],
+            'student_id': student_context['student_id'],
             'file': sub.file.url if sub.file else "",
             'file_url': sub.file.url if sub.file else "",
             'file_name': sub.file.name.split('/')[-1] if sub.file else "",
@@ -2598,8 +2599,7 @@ def get_students_api(request):
             enr_qs = enr_qs.filter(experiment_day=day)
         if groups:
             enr_qs = enr_qs.filter(experiment_group__in=groups)
-        user_ids = enr_qs.values_list('user_id', 'experiment_day', 'experiment_group')
-        enr_map = {u: {'experiment_day': d, 'experiment_group': g} for u, d, g in user_ids}
+        enr_map = {enr.user_id: enr for enr in enr_qs}
         qs = qs.filter(user_id__in=enr_map.keys())
     else:
         if day:
@@ -2610,14 +2610,14 @@ def get_students_api(request):
         qs = qs.filter(student_id__icontains=student_id)
     students = []
     for up in qs:
-        override = enr_map.get(up.user_id, {})
+        student_context = build_student_context(profile=up, enrollment=enr_map.get(up.user_id))
         students.append({
             'id': up.id,
-            'full_name': up.full_name,
-            'student_id': up.student_id,
+            'full_name': student_context['full_name'],
+            'student_id': student_context['student_id'],
             'user__email': up.user.email,
-            'experiment_day': override.get('experiment_day', up.experiment_day),
-            'experiment_group': override.get('experiment_group', up.experiment_group),
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'photo': up.photo.url if up.photo else ''
         })
     return JsonResponse({'students_json': students})
@@ -3280,12 +3280,7 @@ def api_student_reports(request):
             offering_id_int = int(offering_id)
         except (TypeError, ValueError):
             offering_id_int = None
-        enrollment = Enrollment.objects.filter(
-            user=profile.user,
-            course_offering_id=offering_id_int,
-            role='student'
-        ).first()
-        student_day = enrollment.experiment_day if enrollment else profile.experiment_day
+        student_day, _ = get_student_day_group(profile.user, offering_id_int)
 
         now_local = timezone.localtime(timezone.now(), JST)
         cutoff_date = now_local.date()
@@ -3612,10 +3607,19 @@ def update_group_view(request, user_id):
         data = json.loads(request.body)
         try:
             user = User.objects.get(id=user_id)
-            profile = user.userprofile
-            profile.experiment_day = data['experiment_day']
-            profile.experiment_group = data['experiment_group']
-            profile.save()
+            offering_id = data.get('offering_id')
+            if not offering_id:
+                return JsonResponse({'status': 'error', 'message': 'offering_id is required'}, status=400)
+            enrollment = Enrollment.objects.filter(
+                user=user,
+                course_offering_id=offering_id,
+                role='student',
+            ).first()
+            if not enrollment:
+                return JsonResponse({'status': 'error', 'message': 'Enrollment not found'}, status=404)
+            enrollment.experiment_day = data['experiment_day']
+            enrollment.experiment_group = _normalize_experiment_group_value(data['experiment_group'])
+            enrollment.save(update_fields=['experiment_day', 'experiment_group'])
             return JsonResponse({'status': 'success'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
@@ -3716,8 +3720,8 @@ def create_user_view(request):
                 course_offering=offering,
                 role='student',
                 defaults={
-                    'experiment_day': data.get('experiment_day', '') or profile.experiment_day,
-                    'experiment_group': normalized_group or profile.experiment_group,
+                    'experiment_day': data.get('experiment_day', '') or '',
+                    'experiment_group': normalized_group or '',
                 }
             )
             if not created:
@@ -3906,8 +3910,8 @@ def bulk_create_users(request):
                     course_offering=offering,
                     role='student',
                     defaults={
-                        'experiment_day': profile.experiment_day,
-                        'experiment_group': profile.experiment_group,
+                        'experiment_day': day_val,
+                        'experiment_group': group_val,
                     }
                 )
             created += 1
@@ -4266,13 +4270,14 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
 
     for up in students_qs:
         enr = enrollment_map.get(up.user_id)
+        student_context = build_student_context(profile=up, enrollment=enr)
         record = {
             'user_profile_id': up.id,
             'user_id': up.user_id,
-            'name': up.full_name,
-            'student_id': up.student_id,
-            'experiment_day': enr.experiment_day if enr else up.experiment_day,
-            'experiment_group': enr.experiment_group if enr else up.experiment_group,
+            'name': student_context['full_name'],
+            'student_id': student_context['student_id'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
         }
         total_final_score = 0.0
         score_details_total = 0.0
@@ -4458,8 +4463,8 @@ def final_score_detail_api(request):
         'student': {
             'name': up.full_name,
             'student_id': up.student_id,
-            'experiment_day': enr.experiment_day if enr else getattr(up, 'experiment_day', ''),
-            'experiment_group': enr.experiment_group if enr else getattr(up, 'experiment_group', ''),
+            'experiment_day': (enr.experiment_day or '').strip() if enr else '',
+            'experiment_group': (enr.experiment_group or '').strip() if enr else '',
         },
         'course': {
             'course_code': offering.course.code,
@@ -4485,10 +4490,12 @@ def download_accepted_reports(request):
             submissions = Submission.objects.filter(experiment_number=ex, accepted=True)
             if offering_id:
                 submissions = submissions.filter(course_offering_id=offering_id)
-            if day:
-                submissions = submissions.filter(student__userprofile__experiment_day=day)
-            if group:
-                submissions = submissions.filter(student__userprofile__experiment_group=group)
+            submissions = filter_queryset_by_student_enrollment(
+                submissions,
+                offering_id,
+                day=day,
+                group=group,
+            )
             for sub in submissions:
                 if sub.file and default_storage.exists(sub.file.name):
                     filename_raw = os.path.basename(sub.file.name)

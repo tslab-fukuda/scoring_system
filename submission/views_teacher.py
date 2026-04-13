@@ -26,6 +26,11 @@ from .models import (
     UserProfile,
 )
 from attendance.models import AttendanceRecord
+from submission.enrollment_utils import (
+    build_student_context,
+    filter_queryset_by_student_enrollment,
+    get_student_context,
+)
 
 TEACHER_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 JST = ZoneInfo("Asia/Tokyo")
@@ -98,17 +103,13 @@ def _dashboard_context(user):
     }
 
 def _student_enrollment_info(user, offering_id):
-    """
-    指定の科目/年度に紐づくEnrollmentがあれば、そこから曜日・班を取得。
-    なければプロフィールの曜日・班を返す。
-    """
-    up = getattr(user, 'userprofile', None)
-    enr = Enrollment.objects.filter(user=user, course_offering_id=offering_id, role='student').first()
-    experiment_day = enr.experiment_day if enr else (up.experiment_day if up else "")
-    experiment_group = enr.experiment_group if enr else (up.experiment_group if up else "")
-    full_name = up.full_name if up else user.username
-    student_id = up.student_id if up else ""
-    return experiment_day, experiment_group, full_name, student_id
+    student_context = get_student_context(user, offering_id)
+    return (
+        student_context['experiment_day'],
+        student_context['experiment_group'],
+        student_context['full_name'],
+        student_context['student_id'],
+    )
 
 
 def _collect_requested_groups(request):
@@ -229,10 +230,7 @@ def get_ungraded_submissions(request):
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
     ).distinct()
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
@@ -273,10 +271,7 @@ def get_graded_submissions(request):
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
     ).distinct()
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
@@ -319,10 +314,7 @@ def get_ungraded_main_reports(request):
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
     ).distinct()
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
@@ -364,10 +356,7 @@ def get_graded_main_reports(request):
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
     ).distinct()
-    if day:
-        qs = qs.filter(student__userprofile__experiment_day=day)
-    if group:
-        qs = qs.filter(student__userprofile__experiment_group=group)
+    qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     result = []
@@ -653,12 +642,13 @@ def teacher_students_api(request):
         ).values_list('experiment_number', 'completed')
         completed = {ex: done for ex, done in completions}
         enr = enrollment_map.get(up.user_id)
+        student_context = build_student_context(profile=up, enrollment=enr)
         students.append({
             'id': up.id,
-            'full_name': up.full_name,
-            'student_id': up.student_id,
-            'experiment_day': enr.experiment_day if enr else up.experiment_day,
-            'experiment_group': enr.experiment_group if enr else up.experiment_group,
+            'full_name': student_context['full_name'],
+            'student_id': student_context['student_id'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'photo': up.photo.url if up.photo else '',
             'experiment_completion': completed,
         })
@@ -700,12 +690,7 @@ def teacher_student_reports(request):
             'discussion_total_count': 0,
             'discussion_can_edit': False,
         }, status=403)
-    enrollment = Enrollment.objects.filter(
-        user=profile.user,
-        course_offering_id=offering_id,
-        role='student'
-    ).first()
-    student_day = enrollment.experiment_day if enrollment else profile.experiment_day
+    student_day, _, _, _ = _student_enrollment_info(profile.user, offering_id)
 
     now_local = timezone.localtime(timezone.now(), JST)
     cutoff_date = now_local.date()
