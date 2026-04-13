@@ -35,6 +35,25 @@
         <button class="btn btn-secondary" @click="triggerFileInput">ユーザ一括登録</button>
         <button class="btn btn-outline-secondary" @click="openTemplateGuideModal">テンプレートDL / 記入方法</button>
     </div>
+    {% verbatim %}
+    <div class="d-flex gap-2 mb-3">
+        <button
+            type="button"
+            class="btn"
+            :class="activeTab === 'normal' ? 'btn-primary' : 'btn-outline-primary'"
+            @click="activeTab = 'normal'">
+            ユーザ一覧
+        </button>
+        <button
+            type="button"
+            class="btn"
+            :class="activeTab === 'profile-missing' ? 'btn-warning' : 'btn-outline-warning'"
+            @click="activeTab = 'profile-missing'">
+            要確認ユーザ
+            <span v-if="profileMissingUsers.length" class="ms-1">({{ profileMissingUsers.length }})</span>
+        </button>
+    </div>
+    {% endverbatim %}
     <input type="file" ref="csvInput" accept=".csv" @change="uploadCsv" style="display:none">
 
     <div v-if="showTemplateGuideModal" class="ts-modal-overlay" @click.self="closeTemplateGuideModal">
@@ -201,7 +220,8 @@
     {% endverbatim %}
 
     <!-- ユーザ一覧テーブル -->
-    <div class="table-responsive">
+    {% verbatim %}
+    <div v-if="activeTab === 'normal'" class="table-responsive">
         <table class="ts-table">
             <thead>
                 <tr>
@@ -235,7 +255,6 @@
                 </tr>
             </thead>
             <tbody>
-            {% verbatim %}
                 <tr v-for="user in processedUsers" :key="user.row_key || user.id">
                     <td>{{ user.name }}</td>
                     <td>{{ user.email }}</td>
@@ -254,13 +273,48 @@
                         <button class="ts-delete-btn" @click="deleteUser(user)">🗑️</button>
                     </td>
                 </tr>
-            {% endverbatim %}
             </tbody>
         </table>
     </div>
+    <div v-else class="table-responsive">
+        <div class="alert alert-warning mb-3">
+            UserProfile が存在しないユーザです。通常のダッシュボード遷移やロール判定で不整合が起きる可能性があります。
+        </div>
+        <table class="ts-table">
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>名前</th>
+                    <th>メールアドレス</th>
+                    <th>ロール</th>
+                    <th>グループ</th>
+                    <th>最終アクセス</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="user in processedProfileMissingUsers" :key="user.row_key || user.id">
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role }}</td>
+                    <td>{{ user.group }}</td>
+                    <td>{{ user.last_login }}</td>
+                    <td>
+                        <button class="ts-delete-btn" @click="deleteUser(user)">🗑️</button>
+                    </td>
+                </tr>
+                <tr v-if="processedProfileMissingUsers.length === 0">
+                    <td colspan="7" class="text-center text-muted">UserProfile が存在しないユーザはいません</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endverbatim %}
 </div>
 <script>
     var USERS_DATA = {{ users_json|safe }};
+    var PROFILE_MISSING_USERS_DATA = {{ profile_missing_users_json|safe }};
     var CSRF_TOKEN = '{{ csrf_token }}';
     var OFFERINGS = {{ offerings_json|safe }};
 </script>

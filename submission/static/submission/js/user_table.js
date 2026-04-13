@@ -6,6 +6,12 @@ new Vue({
             can_view_attendance: user.can_view_attendance,
             is_attendance_only: user.is_attendance_only
         })),
+        profileMissingUsers: (PROFILE_MISSING_USERS_DATA || []).map(user => ({
+            ...user,
+            can_view_attendance: user.can_view_attendance,
+            is_attendance_only: user.is_attendance_only
+        })),
+        activeTab: 'normal',
         defaultDays: ['火', '木'],
         groupOptions: [].concat(...['火', '木'].map(day =>
             Array.from({ length: 20 }, (_, i) => day + '-' + ('0' + (i + 1)).slice(-2))
@@ -56,6 +62,12 @@ new Vue({
                     return this.sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
                 });
             }
+            return list;
+        },
+        processedProfileMissingUsers() {
+            let list = this.profileMissingUsers.slice();
+            if (this.bulkCourseId) list = list.filter(u => String(u.course_id) === String(this.bulkCourseId));
+            if (this.bulkYear) list = list.filter(u => String(u.year) === String(this.bulkYear));
             return list;
         },
         courseOptions() {
@@ -205,6 +217,7 @@ new Vue({
             if (!confirm(`${user.name} を本当に削除しますか？`)) return;
             const doRemoveRow = () => {
                 this.users = this.users.filter(u => u.row_key !== user.row_key);
+                this.profileMissingUsers = this.profileMissingUsers.filter(u => u.row_key !== user.row_key);
             };
             // Enrollmentがある場合はEnrollmentのみ削除
             if (user.enrollment_id) {
@@ -238,6 +251,7 @@ new Vue({
                 .then(data => {
                     if (data.status === 'success') {
                         this.users = this.users.filter(u => u.id !== user.id);
+                        this.profileMissingUsers = this.profileMissingUsers.filter(u => u.id !== user.id);
                     } else {
                         alert('削除に失敗しました: ' + (data.message || ''));
                     }

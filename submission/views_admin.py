@@ -3422,24 +3422,24 @@ def user_list_view(request):
     ]
 
     user_data = []
+    profile_missing_user_data = []
     for user in User.objects.all():
+        enrollments = list(
+            Enrollment.objects
+            .filter(user=user)
+            .select_related('course_offering__course')
+        )
+        last_login = (
+            timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
+            if user.last_login else "未ログイン"
+        )
+        can_view_attendance = user.user_permissions.filter(
+            codename='view_attendancerecord',
+            content_type__app_label='attendance'
+        ).exists()
+        is_attendance_only = user.groups.filter(name='attendance_only').exists()
         try:
             profile = user.userprofile
-            enrollments = list(
-                Enrollment.objects
-                .filter(user=user)
-                .select_related('course_offering__course')
-            )
-            last_login = (
-                timezone.localtime(user.last_login).strftime("%Y-%m-%d %H:%M")
-                if user.last_login else "未ログイン"
-            )
-            can_view_attendance = user.user_permissions.filter(
-                codename='view_attendancerecord',
-                content_type__app_label='attendance'
-            ).exists()
-            is_attendance_only = user.groups.filter(name='attendance_only').exists()
-
             # Enrollmentごとに行を作成。紐付けが無い場合は空で1行表示。
             if enrollments:
                 for enrollment in enrollments:
@@ -3464,6 +3464,7 @@ def user_list_view(request):
                         'last_login': last_login,
                         'can_view_attendance': can_view_attendance,
                         'is_attendance_only': is_attendance_only,
+                        'profile_missing': False,
                     })
             else:
                 group = ""
@@ -3484,15 +3485,60 @@ def user_list_view(request):
                     'last_login': last_login,
                     'can_view_attendance': can_view_attendance,
                     'is_attendance_only': is_attendance_only,
+                    'profile_missing': False,
                 })
         except UserProfile.DoesNotExist:
-            continue
+            display_name = user.get_full_name() or user.username or user.email or f'User {user.id}'
+            if enrollments:
+                for enrollment in enrollments:
+                    course_offering = enrollment.course_offering
+                    group = ""
+                    exp_day = enrollment.experiment_day or ""
+                    exp_group = enrollment.experiment_group or ""
+                    if exp_day and exp_group:
+                        group = f"{exp_day}-{str(exp_group).zfill(2)}"
+                    profile_missing_user_data.append({
+                        'id': user.id,
+                        'row_key': f"{user.id}-enr-{enrollment.id}-no-profile",
+                        'enrollment_id': enrollment.id,
+                        'name': display_name,
+                        'email': user.email,
+                        'student_id': '',
+                        'role': f'{enrollment.role} (profileなし)',
+                        'group': group,
+                        'offering_id': course_offering.id if course_offering else None,
+                        'course_id': course_offering.course_id if course_offering else None,
+                        'year': course_offering.year if course_offering else None,
+                        'last_login': last_login,
+                        'can_view_attendance': can_view_attendance,
+                        'is_attendance_only': is_attendance_only,
+                        'profile_missing': True,
+                    })
+            else:
+                profile_missing_user_data.append({
+                    'id': user.id,
+                    'row_key': f"{user.id}-no-profile",
+                    'enrollment_id': None,
+                    'name': display_name,
+                    'email': user.email,
+                    'student_id': '',
+                    'role': 'プロフィールなし',
+                    'group': '',
+                    'offering_id': None,
+                    'course_id': None,
+                    'year': None,
+                    'last_login': last_login,
+                    'can_view_attendance': can_view_attendance,
+                    'is_attendance_only': is_attendance_only,
+                    'profile_missing': True,
+                })
 
     context = {
-            'users': user_data,
-            'users_json': json.dumps(user_data, ensure_ascii=False),
-            'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
-        }
+        'users': user_data,
+        'users_json': json.dumps(user_data, ensure_ascii=False),
+        'profile_missing_users_json': json.dumps(profile_missing_user_data, ensure_ascii=False),
+        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+    }
 
     return render(request, 'submission/user_list.html', context)
 
