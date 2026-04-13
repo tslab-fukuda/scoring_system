@@ -83,9 +83,17 @@ function isIgnorableError(err) {
     return err && err.code === 512;
 }
 
-function createCell(value) {
+function createCell(value, columnName = '') {
     const td = document.createElement('td');
     td.textContent = value || '';
+    if (columnName) {
+        td.dataset.column = columnName;
+        const visibilityState = window.attendanceColumnVisibilityState || {};
+        if (Object.prototype.hasOwnProperty.call(visibilityState, columnName) && !visibilityState[columnName]) {
+            td.classList.add('attendance-column-hidden');
+            td.hidden = true;
+        }
+    }
     return td;
 }
 
@@ -137,9 +145,9 @@ function buildInRow(data) {
     if (data.student_id) tr.dataset.studentId = data.student_id;
     if (data.user_id) tr.dataset.userId = String(data.user_id);
     tr.appendChild(createCell(data.student_id));
-    tr.appendChild(createCell(data.full_name));
-    tr.appendChild(createCell(data.experiment_day));
-    tr.appendChild(createCell(data.experiment_group));
+    tr.appendChild(createCell(data.full_name, 'full_name'));
+    tr.appendChild(createCell(data.experiment_day, 'experiment_day'));
+    tr.appendChild(createCell(data.experiment_group, 'experiment_group'));
     tr.appendChild(createCell(data.check_in_time));
     return tr;
 }
@@ -149,9 +157,9 @@ function buildOutRow(data) {
     if (data.student_id) tr.dataset.studentId = data.student_id;
     if (data.user_id) tr.dataset.userId = String(data.user_id);
     tr.appendChild(createCell(data.student_id));
-    tr.appendChild(createCell(data.full_name));
-    tr.appendChild(createCell(data.experiment_day));
-    tr.appendChild(createCell(data.experiment_group));
+    tr.appendChild(createCell(data.full_name, 'full_name'));
+    tr.appendChild(createCell(data.experiment_day, 'experiment_day'));
+    tr.appendChild(createCell(data.experiment_group, 'experiment_group'));
     tr.appendChild(createCell(data.check_in_time));
     tr.appendChild(createCell(data.check_out_time));
     return tr;
@@ -170,6 +178,9 @@ function applyAttendanceUpdate(data) {
         let inRow = findRowByData(inTable, data);
         if (!inRow) {
             inRow = buildInRow(data);
+            if (typeof window.applyAttendanceColumnVisibility === 'function') {
+                window.applyAttendanceColumnVisibility(inRow);
+            }
             inBody.appendChild(inRow);
         } else {
             updateInRow(inRow, data);
@@ -180,6 +191,9 @@ function applyAttendanceUpdate(data) {
         let outRow = findRowByData(outTable, data);
         if (!outRow) {
             outRow = buildOutRow(data);
+            if (typeof window.applyAttendanceColumnVisibility === 'function') {
+                window.applyAttendanceColumnVisibility(outRow);
+            }
             outBody.appendChild(outRow);
         } else {
             updateOutRow(outRow, data);

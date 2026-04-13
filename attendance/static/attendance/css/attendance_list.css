@@ -8,18 +8,21 @@
 }
 .ts-table-container { width: 100%; overflow-x: auto; }
 .ts-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     background: #fff;
     border-collapse: separate;
     border-spacing: 0;
     box-shadow: 0 2px 12px rgba(90,80,120,0.05);
     font-size: 1rem;
+    table-layout: auto;
 }
 .ts-table th, .ts-table td {
     padding: 0.7em 1.2em;
     text-align: left;
     vertical-align: middle;
     border-bottom: 1px solid #eaeaea;
+    white-space: nowrap;
 }
 .ts-table th {
     background: #f7f6fb;

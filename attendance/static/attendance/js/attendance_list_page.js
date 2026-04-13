@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', function () {
     updateTime();
     setInterval(updateTime, 1000);
     const columnToggleStorageKey = 'attendance-column-visibility';
+    const defaultColumnVisibility = {
+        full_name: true,
+        experiment_day: true,
+        experiment_group: true,
+    };
 
     function applyColumnVisibility(columnName, visible) {
         document.querySelectorAll('[data-column="' + columnName + '"]').forEach(function (cell) {
@@ -17,12 +22,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function applyStoredColumnVisibility(root) {
+        const scope = root || document;
+        Object.keys(savedColumnVisibility).forEach(function (columnName) {
+            const visible = savedColumnVisibility[columnName];
+            scope.querySelectorAll('[data-column="' + columnName + '"]').forEach(function (cell) {
+                cell.classList.toggle('attendance-column-hidden', !visible);
+                cell.hidden = !visible;
+            });
+        });
+    }
+
     function loadColumnVisibility() {
         try {
             const raw = window.localStorage.getItem(columnToggleStorageKey);
-            return raw ? JSON.parse(raw) : {};
+            return Object.assign({}, defaultColumnVisibility, raw ? JSON.parse(raw) : {});
         } catch (err) {
-            return {};
+            return Object.assign({}, defaultColumnVisibility);
         }
     }
 
@@ -59,12 +75,12 @@ document.addEventListener('DOMContentLoaded', function () {
     makeSortable(document.getElementById('out-table'));
 
     const savedColumnVisibility = loadColumnVisibility();
+    window.attendanceColumnVisibilityState = savedColumnVisibility;
+    window.applyAttendanceColumnVisibility = applyStoredColumnVisibility;
     document.querySelectorAll('.attendance-column-toggle').forEach(function (checkbox) {
         const columnName = checkbox.dataset.column || '';
         if (!columnName) return;
-        if (Object.prototype.hasOwnProperty.call(savedColumnVisibility, columnName)) {
-            checkbox.checked = !!savedColumnVisibility[columnName];
-        }
+        checkbox.checked = !!savedColumnVisibility[columnName];
         applyColumnVisibility(columnName, checkbox.checked);
         checkbox.addEventListener('change', function () {
             const visible = checkbox.checked;
