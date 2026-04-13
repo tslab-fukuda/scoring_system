@@ -38,16 +38,16 @@ async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function speakStudentId(studentId) {
+function speakAttendanceAction(action) {
     return new Promise(resolve => {
-        const normalized = String(studentId || '').trim();
-        if (!normalized || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+        const actionLabel = action === 'check_in' ? '入室' : action === 'check_out' ? '退室' : '';
+        if (!actionLabel || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
             isSpeaking = false;
             resolve();
             return;
         }
         isSpeaking = true;
-        const utter = new SpeechSynthesisUtterance(`${normalized}番`);
+        const utter = new SpeechSynthesisUtterance(actionLabel);
         utter.lang = 'ja-JP';
         utter.rate = 1.0;
         utter.pitch = 1.0;
@@ -314,7 +314,7 @@ async function handleIdm(idm) {
         const actionLabel = data.action === 'check_in' ? '入室' : '退室';
         setStatus(`${data.student_id || ''} ${data.full_name || ''} ${actionLabel}`.trim());
         applyAttendanceUpdate(data);
-        await speakStudentId(data.student_id);
+        await speakAttendanceAction(data.action);
     } catch (err) {
         alert('通信エラーが発生しました');
     } finally {
