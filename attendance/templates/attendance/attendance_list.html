@@ -13,6 +13,21 @@
   top: calc(var(--ts-header-height, 60px) + 12px);
   z-index: 1200;
 }
+.nfc-toggle-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.nfc-side-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.nfc-side-stack #nfc-status {
+  min-width: 92px;
+  text-align: center;
+}
 .nfc-toggle-btn {
   border-radius: 20px 0 0 20px;
 }
@@ -65,15 +80,104 @@
             <button class="btn btn-outline-primary">切替</button>
         </div>
     </form>
+    {% verbatim %}
+    <div id="nfc-app" v-cloak>
+        <div class="nfc-toggle-wrapper">
+            <div class="nfc-toggle-actions">
+                <button id="nfc-connect-btn" type="button" class="btn btn-outline-primary btn-sm">NFC接続</button>
+                <div class="nfc-side-stack">
+{% endverbatim %}
+{% if can_register_nfc %}
+{% verbatim %}
+                    <button class="btn btn-primary nfc-toggle-btn" @click="open" :disabled="showPanel">NFC登録</button>
+{% endverbatim %}
+{% endif %}
+                    <div id="nfc-status" class="text-muted small">NFC未接続</div>
+{% if can_manage_attendance_overrides %}
+                    <button id="attendance-override-open-btn" type="button" class="btn btn-warning btn-sm">無効化</button>
+{% endif %}
+                </div>
+            </div>
+{% verbatim %}
+        </div>
+{% endverbatim %}
+{% if can_register_nfc %}
+{% verbatim %}
+        <transition name="slide-right">
+            <div v-if="showPanel" class="nfc-panel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0">NFC登録</h4>
+                    <button class="btn-close" @click="close"></button>
+                </div>
+                <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>名前</th>
+                                <th>学生番号</th>
+                                <th>メールアドレス</th>
+                                <th>曜日</th>
+                                <th>班</th>
+                                <th>ロール</th>
+                                <th>NFC_ID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="s in students" :key="s.student_id"
+                                :class="{'table-active': selectedKey === studentKey(s)}"
+                                @click="selectStudent(s)" style="cursor:pointer;">
+                                <td>{{ s.full_name }}</td>
+                                <td>{{ s.student_id }}</td>
+                                <td>{{ s.email }}</td>
+                                <td>{{ s.experiment_day }}</td>
+                                <td>{{ s.experiment_group }}</td>
+                                <td>{{ s.role }}</td>
+                                <td>{{ s.nfc_id || '-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2">
+                    <div class="small text-muted">最大10件表示（スクロールで残りを表示）</div>
+                    <div class="border rounded p-2 mt-1 bg-light">
+                        <div class="fw-semibold">選択中のユーザ</div>
+                        <div v-if="selectedUser && selectedUser.student_id">
+                            <div>名前: {{ selectedUser.full_name }}</div>
+                            <div>学生番号: {{ selectedUser.student_id }}</div>
+                            <div>メールアドレス: {{ selectedUser.email || '-' }}</div>
+                            <div>曜日: {{ selectedUser.experiment_day }}</div>
+                            <div>班: {{ selectedUser.experiment_group }}</div>
+                            <div>ロール: {{ selectedUser.role }}</div>
+                            <div>NFC_ID: {{ selectedUser.nfc_id || '-' }}</div>
+                        </div>
+                        <div v-else class="text-muted">未選択</div>
+                    </div>
+                </div>
+                <div class="ts-form-group mt-3">
+                    <label>NFC ID</label>
+                    <input type="text" class="form-control" v-model="nfcId" ref="nfcInput" placeholder="NFCを入力">
+                </div>
+                <div class="ts-modal-actions mt-3">
+                    <button class="btn btn-success" @click="registerNfc">登録</button>
+                    <button class="btn btn-outline-secondary" @click="close">キャンセル</button>
+                </div>
+            </div>
+        </transition>
+{% endverbatim %}
+{% endif %}
+{% verbatim %}
+    </div>
+    {% endverbatim %}
     {% if can_manage_attendance_overrides and selected_offering_id %}
-    <div class="attendance-override-panel mb-4">
-        <div class="attendance-override-header">
+    <div id="attendance-override-panel" class="attendance-override-side-panel">
+        <div class="attendance-override-side-header">
             <div>
-                <h3 class="mb-1">出席評価の手動無効化</h3>
+                <h4 class="mb-1">出席評価の手動無効化</h4>
                 <div class="text-muted small">対象日: {{ attendance_override.target_date }}</div>
             </div>
-            <div class="text-muted small">個別設定が全体設定を上書きします</div>
+            <button id="attendance-override-close-btn" type="button" class="btn-close"></button>
         </div>
+        <div class="text-muted small mb-3">個別設定が全体設定を上書きします</div>
         <div class="attendance-override-global">
             <label class="attendance-override-toggle">
                 <input
@@ -168,91 +272,6 @@
         </div>
     </div>
     {% endif %}
-    {% verbatim %}
-    <div id="nfc-app" v-cloak>
-        <div class="nfc-toggle-wrapper">
-            <div class="d-flex flex-column align-items-end gap-2">
-                <div class="d-flex align-items-center gap-2">
-                    <button id="nfc-connect-btn" type="button" class="btn btn-outline-primary btn-sm">NFC接続</button>
-{% endverbatim %}
-{% if can_register_nfc %}
-{% verbatim %}
-                    <button class="btn btn-primary nfc-toggle-btn" @click="open" :disabled="showPanel">NFC登録</button>
-{% endverbatim %}
-{% endif %}
-{% verbatim %}
-                </div>
-                <div id="nfc-status" class="text-muted small">NFC未接続</div>
-            </div>
-        </div>
-{% endverbatim %}
-{% if can_register_nfc %}
-{% verbatim %}
-        <transition name="slide-right">
-            <div v-if="showPanel" class="nfc-panel">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="mb-0">NFC登録</h4>
-                    <button class="btn-close" @click="close"></button>
-                </div>
-                <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>名前</th>
-                                <th>学生番号</th>
-                                <th>メールアドレス</th>
-                                <th>曜日</th>
-                                <th>班</th>
-                                <th>ロール</th>
-                                <th>NFC_ID</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="s in students" :key="s.student_id"
-                                :class="{'table-active': selectedKey === studentKey(s)}"
-                                @click="selectStudent(s)" style="cursor:pointer;">
-                                <td>{{ s.full_name }}</td>
-                                <td>{{ s.student_id }}</td>
-                                <td>{{ s.email }}</td>
-                                <td>{{ s.experiment_day }}</td>
-                                <td>{{ s.experiment_group }}</td>
-                                <td>{{ s.role }}</td>
-                                <td>{{ s.nfc_id || '-' }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="mt-2">
-                    <div class="small text-muted">最大10件表示（スクロールで残りを表示）</div>
-                    <div class="border rounded p-2 mt-1 bg-light">
-                        <div class="fw-semibold">選択中のユーザ</div>
-                        <div v-if="selectedUser && selectedUser.student_id">
-                            <div>名前: {{ selectedUser.full_name }}</div>
-                            <div>学生番号: {{ selectedUser.student_id }}</div>
-                            <div>メールアドレス: {{ selectedUser.email || '-' }}</div>
-                            <div>曜日: {{ selectedUser.experiment_day }}</div>
-                            <div>班: {{ selectedUser.experiment_group }}</div>
-                            <div>ロール: {{ selectedUser.role }}</div>
-                            <div>NFC_ID: {{ selectedUser.nfc_id || '-' }}</div>
-                        </div>
-                        <div v-else class="text-muted">未選択</div>
-                    </div>
-                </div>
-                <div class="ts-form-group mt-3">
-                    <label>NFC ID</label>
-                    <input type="text" class="form-control" v-model="nfcId" ref="nfcInput" placeholder="NFCを入力">
-                </div>
-                <div class="ts-modal-actions mt-3">
-                    <button class="btn btn-success" @click="registerNfc">登録</button>
-                    <button class="btn btn-outline-secondary" @click="close">キャンセル</button>
-                </div>
-            </div>
-        </transition>
-{% endverbatim %}
-{% endif %}
-{% verbatim %}
-    </div>
-    {% endverbatim %}
     <div class="ts-attendance-columns">
         <div class="ts-column">
             <h3>入室中</h3>

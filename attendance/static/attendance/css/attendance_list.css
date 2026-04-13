@@ -111,6 +111,34 @@
     transform: scale(1.1);
 }
 
+.attendance-override-side-panel {
+    position: fixed;
+    right: 0;
+    top: var(--ts-header-height, 60px);
+    width: min(86vw, 920px);
+    max-width: 100vw;
+    height: calc(100vh - var(--ts-header-height, 60px));
+    background: #fff;
+    border-left: 2px solid #d39e00;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+    z-index: 10950;
+    padding: 16px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+.attendance-override-side-panel.is-open {
+    transform: translateX(0);
+}
+
+.attendance-override-side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+
 .ts-modal-actions {
     display: flex;
     justify-content: flex-end;

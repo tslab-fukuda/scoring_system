@@ -314,6 +314,20 @@ body.dark-mode .nfc-panel h4 {
 body.dark-mode .nfc-panel .border {
     border-color: #3a3a3a !important;
 }
+body.dark-mode .attendance-override-side-panel {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-left-color: #806208;
+}
+body.dark-mode .attendance-override-side-header h4 {
+    color: #f4f4f4;
+}
+body.dark-mode .attendance-override-side-panel .attendance-override-toggle {
+    color: #e0e0e0;
+}
+body.dark-mode .attendance-override-side-panel .text-muted {
+    color: #b0b0b0 !important;
+}
 body.dark-mode .score-column {
     background: #1e1e1e;
     border-color: #3a3a3a;

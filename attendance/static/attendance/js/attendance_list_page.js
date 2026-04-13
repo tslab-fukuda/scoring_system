@@ -33,6 +33,20 @@ document.addEventListener('DOMContentLoaded', function () {
     makeSortable(document.getElementById('in-table'));
     makeSortable(document.getElementById('out-table'));
 
+    const overridePanel = document.getElementById('attendance-override-panel');
+    const openOverrideBtn = document.getElementById('attendance-override-open-btn');
+    const closeOverrideBtn = document.getElementById('attendance-override-close-btn');
+    if (overridePanel && openOverrideBtn) {
+        openOverrideBtn.addEventListener('click', function () {
+            overridePanel.classList.add('is-open');
+        });
+    }
+    if (overridePanel && closeOverrideBtn) {
+        closeOverrideBtn.addEventListener('click', function () {
+            overridePanel.classList.remove('is-open');
+        });
+    }
+
     if (window.CAN_MANAGE_ATTENDANCE_OVERRIDES && window.SELECTED_OFFERING_ID) {
         document.querySelectorAll('.attendance-override-checkbox').forEach(function (checkbox) {
             checkbox.addEventListener('change', function () {
