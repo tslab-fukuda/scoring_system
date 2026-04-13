@@ -142,6 +142,15 @@ def _collect_requested_groups(request):
     return groups
 
 
+def _normalize_experiment_group_value(value):
+    normalized = str(value or '').strip()
+    if not normalized:
+        return ''
+    if normalized.isdigit():
+        return normalized.zfill(2)
+    return normalized
+
+
 def _ensure_course_system_items(course):
     for definition in SYSTEM_SCORING_DEFS:
         code = definition['code']
@@ -2215,7 +2224,7 @@ def admin_add_enrollment(request):
     offering_id = data.get('offering_id')
     role = data.get('role')
     exp_day = data.get('experiment_day', '')
-    exp_group = data.get('experiment_group', '')
+    exp_group = _normalize_experiment_group_value(data.get('experiment_group', ''))
     if not (user_id and offering_id and role):
         return JsonResponse({'status': 'error', 'message': 'user_id, offering_id, role are required'}, status=400)
     try:
@@ -3689,7 +3698,7 @@ def create_user_view(request):
                     email=data['email'],
                     student_id=data.get('student_id', '') or '',
                     experiment_day=data.get('experiment_day', ''),
-                    experiment_group=data.get('experiment_group', ''),
+                    experiment_group=_normalize_experiment_group_value(data.get('experiment_group', '')),
                     role='student'
                 )
             else:
@@ -3701,16 +3710,17 @@ def create_user_view(request):
                         email=user.email,
                         student_id=data.get('student_id', ''),
                         experiment_day=data.get('experiment_day', ''),
-                        experiment_group=data.get('experiment_group', ''),
+                        experiment_group=_normalize_experiment_group_value(data.get('experiment_group', '')),
                         role='student'
                     )
+            normalized_group = _normalize_experiment_group_value(data.get('experiment_group', ''))
             enr, created = Enrollment.objects.get_or_create(
                 user=user,
                 course_offering=offering,
                 role='student',
                 defaults={
                     'experiment_day': data.get('experiment_day', '') or profile.experiment_day,
-                    'experiment_group': data.get('experiment_group', '') or profile.experiment_group,
+                    'experiment_group': normalized_group or profile.experiment_group,
                 }
             )
             if not created:
@@ -3750,7 +3760,9 @@ def update_user_view(request, user_id):
         profile.full_name = data.get('full_name', profile.full_name)
         profile.student_id = data.get('student_id', profile.student_id)
         profile.experiment_day = data.get('experiment_day', profile.experiment_day)
-        profile.experiment_group = data.get('experiment_group', profile.experiment_group)
+        profile.experiment_group = _normalize_experiment_group_value(
+            data.get('experiment_group', profile.experiment_group)
+        )
         profile.role = new_role
 
         profile.save()
@@ -3851,7 +3863,9 @@ def bulk_create_users(request):
             full_name = (normalized_row.get('名前', '') or '').strip()
             student_id_val = (normalized_row.get('学生番号', '') or '').strip()
             day_val = (normalized_row.get('曜日', '') or '').strip()
-            group_val = (normalized_row.get('班', normalized_row.get('班番号', '')) or '').strip()
+            group_val = _normalize_experiment_group_value(
+                normalized_row.get('班', normalized_row.get('班番号', ''))
+            )
             email_lower = email.lower()
             # まず、選択中科目/年度で同メールのEnrollmentが既にある場合は重複扱い（ロール問わず）
             if offering and Enrollment.objects.filter(
