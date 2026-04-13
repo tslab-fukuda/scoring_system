@@ -3759,10 +3759,6 @@ def update_user_view(request, user_id):
         profile.email = new_email
         profile.full_name = data.get('full_name', profile.full_name)
         profile.student_id = data.get('student_id', profile.student_id)
-        profile.experiment_day = data.get('experiment_day', profile.experiment_day)
-        profile.experiment_group = _normalize_experiment_group_value(
-            data.get('experiment_group', profile.experiment_group)
-        )
         profile.role = new_role
 
         profile.save()
@@ -3778,20 +3774,17 @@ def update_user_view(request, user_id):
             except CourseOffering.DoesNotExist:
                 return JsonResponse({'status': 'error', 'message': 'offering not found'}, status=400)
 
-            enrollment = Enrollment.objects.filter(user=user, role=new_role).first()
-            if enrollment:
-                enrollment.course_offering = offering
-                enrollment.experiment_day = profile.experiment_day
-                enrollment.experiment_group = profile.experiment_group
-                enrollment.save()
-            else:
-                Enrollment.objects.create(
-                    user=user,
-                    course_offering=offering,
-                    role=new_role,
-                    experiment_day=profile.experiment_day,
-                    experiment_group=profile.experiment_group,
-                )
+            experiment_day = data.get('experiment_day', '')
+            experiment_group = _normalize_experiment_group_value(data.get('experiment_group', ''))
+
+            enrollment, _ = Enrollment.objects.get_or_create(
+                user=user,
+                course_offering=offering,
+                role=new_role,
+            )
+            enrollment.experiment_day = experiment_day
+            enrollment.experiment_group = experiment_group
+            enrollment.save()
         else:
             # 科目・年度が未選択の場合は当該ロールの履修情報を削除する
             Enrollment.objects.filter(user=user, role=new_role).delete()
