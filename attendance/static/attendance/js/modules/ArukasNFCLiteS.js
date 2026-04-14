@@ -120,23 +120,28 @@ class ArukasNFCLiteS {
 	/*
 	*	USBデバイス(カードリーダー)コネクト
 	----------------------------------------------------------------------*/
-	async connectUSBDevice() {
+	async connectUSBDevice( argDevice = null ) {
 		this.cL( 'connectUSBDevice : begin' ) ;
 		this.mProcName = 'Connect USBDevice' ;
 
-		const ud = await navigator.usb.getDevices() ;						// ペアリング設定済みデバイスのUSBDeviceインスタンス取得
-		let peared = 0 ;
-		if ( ud.length > 0 ) {
-			for( let dev of ud ) {
-				const td = this.DEVICEFILTERS.find( (fildev) => dev.vendorId == fildev.vendorId && dev.productId == fildev.productId ) ;
-				if ( td !== undefined ) {
-					++peared ;
-					this.USBDevice = dev ;
+		if ( argDevice != null ) {
+			this.USBDevice = argDevice ;
+		}
+		else {
+			const ud = await navigator.usb.getDevices() ;						// ペアリング設定済みデバイスのUSBDeviceインスタンス取得
+			let peared = 0 ;
+			if ( ud.length > 0 ) {
+				for( let dev of ud ) {
+					const td = this.DEVICEFILTERS.find( (fildev) => dev.vendorId == fildev.vendorId && dev.productId == fildev.productId ) ;
+					if ( td !== undefined ) {
+						++peared ;
+						this.USBDevice = dev ;
+					}
 				}
 			}
-		}
-		if ( peared != 1 ) {
-			this.USBDevice = await navigator.usb.requestDevice( { filters: this.DEVICEFILTERS } ) ;	// USB機器をペアリングフローから選択しデバイスのUSBDeviceインスタンス取得
+			if ( peared != 1 ) {
+				this.USBDevice = await navigator.usb.requestDevice( { filters: this.DEVICEFILTERS } ) ;	// USB機器をペアリングフローから選択しデバイスのUSBDeviceインスタンス取得
+			}
 		}
 
 		let proId = this.USBDevice.productId ;

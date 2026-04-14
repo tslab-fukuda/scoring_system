@@ -324,7 +324,7 @@ async function connectDevice(options) {
             appendDebugLog('deviceOverride の情報を適用');
         }
         appendDebugLog('connectUSBDevice 呼び出し開始');
-        await nfcDevice.connectUSBDevice();
+        await nfcDevice.connectUSBDevice(deviceOverride || null);
         appendDebugLog('connectUSBDevice 成功');
         appendDebugLog('openUSBDevice 呼び出し開始');
         await nfcDevice.openUSBDevice();
