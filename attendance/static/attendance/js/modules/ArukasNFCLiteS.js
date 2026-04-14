@@ -153,8 +153,38 @@ class ArukasNFCLiteS {
 		this.USBDeviceConfig.ProductName = this.USBDevice.productName ;
 		
 		this.USBDeviceConfig.Fillters = { ...this.DEVICEFILTERS } ;
-		this.USBDeviceConfig.confValue = this.USBDevice.configuration.configurationValue ;
-		this.USBDeviceConfig.intfaceNum = this.USBDevice.configuration.interfaces[ this.USBDeviceConfig.confValue ].interfaceNumber ;	// インターフェイス番号
+		const activeConfiguration =
+			this.USBDevice.configuration ||
+			(
+				this.USBDevice.configurations && this.USBDevice.configurations.length > 0
+					? this.USBDevice.configurations[0]
+					: null
+			) ;
+		if ( activeConfiguration == null ) {
+			throw new TypeError( 'USB configuration not found' ) ;
+		}
+		const interfaceInfo =
+			activeConfiguration.interfaces && activeConfiguration.interfaces.length > 0
+				? activeConfiguration.interfaces[0]
+				: null ;
+		if ( interfaceInfo == null ) {
+			throw new TypeError( 'USB interface not found' ) ;
+		}
+		const alternateInfo =
+			interfaceInfo.alternate ||
+			(
+				interfaceInfo.alternates && interfaceInfo.alternates.length > 0
+					? interfaceInfo.alternates[0]
+					: null
+			) ;
+		if ( alternateInfo == null ) {
+			throw new TypeError( 'USB alternate interface not found' ) ;
+		}
+
+		this.USBDeviceConfig.confValue = activeConfiguration.configurationValue || 1 ;
+		this.USBDeviceConfig.intfaceNum = interfaceInfo.interfaceNumber ;	// インターフェイス番号
+		this.USBDeviceConfig.interfaceInfo = interfaceInfo ;
+		this.USBDeviceConfig.alternateInfo = alternateInfo ;
 		let ep = this.getEndPoint('in') ;
 		this.USBDeviceConfig.endPointInNum = ep.endpointNumber ;			// 入力エンドポイント
 		this.USBDeviceConfig.endPointInPacketSize = ep.packetSize ;			// 入力パケットサイズ
@@ -173,7 +203,28 @@ class ArukasNFCLiteS {
 	----------------------------------------------------------------------*/
 	getEndPoint( argVal ) {
 		let retVal = false ;
-		for( const val of this.USBDevice.configuration.interfaces[ this.USBDevice.configuration.configurationValue ].alternate.endpoints ) {
+		const alternateInfo =
+			this.USBDeviceConfig.alternateInfo ||
+			(
+				this.USBDevice &&
+				this.USBDevice.configuration &&
+				this.USBDevice.configuration.interfaces &&
+				this.USBDevice.configuration.interfaces.length > 0
+					? (
+						this.USBDevice.configuration.interfaces[0].alternate ||
+						(
+							this.USBDevice.configuration.interfaces[0].alternates &&
+							this.USBDevice.configuration.interfaces[0].alternates.length > 0
+								? this.USBDevice.configuration.interfaces[0].alternates[0]
+								: null
+						)
+					)
+					: null
+			) ;
+		if ( alternateInfo == null || !alternateInfo.endpoints ) {
+			return retVal ;
+		}
+		for( const val of alternateInfo.endpoints ) {
 			if ( val.direction == argVal ) { retVal = val ; }
 		}
 		return retVal ;
