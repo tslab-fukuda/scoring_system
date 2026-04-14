@@ -117,6 +117,62 @@ class ArukasNFCLiteS {
 		this.SLOTNUMBER = 0 ;
 	}
 
+	buildInterfaceCandidates( argConfiguration ) {
+		const retVal = [] ;
+		if ( argConfiguration == null || !argConfiguration.interfaces || argConfiguration.interfaces.length === 0 ) {
+			return retVal ;
+		}
+
+		const indexes = [] ;
+		const confValue = Number( argConfiguration.configurationValue ) ;
+		if ( Number.isInteger( confValue ) && confValue >= 0 && confValue < argConfiguration.interfaces.length ) {
+			indexes.push( confValue ) ;
+		}
+		if ( Number.isInteger( confValue - 1 ) && confValue - 1 >= 0 && confValue - 1 < argConfiguration.interfaces.length ) {
+			indexes.push( confValue - 1 ) ;
+		}
+		for ( let idx = 0 ; idx < argConfiguration.interfaces.length ; ++idx ) {
+			indexes.push( idx ) ;
+		}
+
+		const seen = new Set() ;
+		for ( const idx of indexes ) {
+			if ( seen.has( idx ) ) { continue ; }
+			seen.add( idx ) ;
+			const interfaceInfo = argConfiguration.interfaces[ idx ] ;
+			if ( interfaceInfo == null ) { continue ; }
+			const alternateInfos =
+				interfaceInfo.alternates && interfaceInfo.alternates.length > 0
+					? interfaceInfo.alternates
+					: interfaceInfo.alternate
+						? [ interfaceInfo.alternate ]
+						: [] ;
+			for ( const alternateInfo of alternateInfos ) {
+				if ( alternateInfo == null || !alternateInfo.endpoints || alternateInfo.endpoints.length === 0 ) { continue ; }
+				const hasIn = alternateInfo.endpoints.some( (ep) => ep.direction == 'in' ) ;
+				const hasOut = alternateInfo.endpoints.some( (ep) => ep.direction == 'out' ) ;
+				if ( hasIn !== true || hasOut !== true ) { continue ; }
+				retVal.push( { index: idx, interfaceInfo, alternateInfo } ) ;
+			}
+		}
+		return retVal ;
+	}
+
+	applyInterfaceCandidate( argConfiguration, argCandidate ) {
+		if ( argConfiguration == null || argCandidate == null ) { return false ; }
+		this.USBDeviceConfig.confValue = argConfiguration.configurationValue || 1 ;
+		this.USBDeviceConfig.intfaceNum = argCandidate.interfaceInfo.interfaceNumber ;
+		this.USBDeviceConfig.interfaceInfo = argCandidate.interfaceInfo ;
+		this.USBDeviceConfig.alternateInfo = argCandidate.alternateInfo ;
+		let ep = this.getEndPoint('in') ;
+		this.USBDeviceConfig.endPointInNum = ep.endpointNumber ;
+		this.USBDeviceConfig.endPointInPacketSize = ep.packetSize ;
+		ep = this.getEndPoint('out') ;
+		this.USBDeviceConfig.endPointOutNum = ep.endpointNumber ;
+		this.USBDeviceConfig.endPointOutPacketSize = ep.packetSize ;
+		return true ;
+	}
+
 	/*
 	*	USBデバイス(カードリーダー)コネクト
 	----------------------------------------------------------------------*/
@@ -168,34 +224,12 @@ class ArukasNFCLiteS {
 		if ( activeConfiguration == null ) {
 			throw new TypeError( 'USB configuration not found' ) ;
 		}
-		const interfaceInfo =
-			activeConfiguration.interfaces && activeConfiguration.interfaces.length > 0
-				? activeConfiguration.interfaces[0]
-				: null ;
-		if ( interfaceInfo == null ) {
+		const interfaceCandidates = this.buildInterfaceCandidates( activeConfiguration ) ;
+		if ( interfaceCandidates.length === 0 ) {
 			throw new TypeError( 'USB interface not found' ) ;
 		}
-		const alternateInfo =
-			interfaceInfo.alternate ||
-			(
-				interfaceInfo.alternates && interfaceInfo.alternates.length > 0
-					? interfaceInfo.alternates[0]
-					: null
-			) ;
-		if ( alternateInfo == null ) {
-			throw new TypeError( 'USB alternate interface not found' ) ;
-		}
-
-		this.USBDeviceConfig.confValue = activeConfiguration.configurationValue || 1 ;
-		this.USBDeviceConfig.intfaceNum = interfaceInfo.interfaceNumber ;	// インターフェイス番号
-		this.USBDeviceConfig.interfaceInfo = interfaceInfo ;
-		this.USBDeviceConfig.alternateInfo = alternateInfo ;
-		let ep = this.getEndPoint('in') ;
-		this.USBDeviceConfig.endPointInNum = ep.endpointNumber ;			// 入力エンドポイント
-		this.USBDeviceConfig.endPointInPacketSize = ep.packetSize ;			// 入力パケットサイズ
-		ep = this.getEndPoint('out') ;
-		this.USBDeviceConfig.endPointOutNum = ep.endpointNumber ;			// 出力エンドポイント
-		this.USBDeviceConfig.endPointOutPacketSize = ep.packetSize ;		// 出力パケットサイズ
+		this.USBDeviceConfig.interfaceCandidates = interfaceCandidates ;
+		this.applyInterfaceCandidate( activeConfiguration, interfaceCandidates[0] ) ;
 
 		this.cL( 'connectUSBDevice : end', this.USBDevice, this.USBDeviceConfig ) ;
 		this.mProcName = '' ;
@@ -255,7 +289,46 @@ class ArukasNFCLiteS {
 
 		await this.USBDevice.open();
 		await this.USBDevice.selectConfiguration( this.USBDeviceConfig.confValue );
-		await this.USBDevice.claimInterface( this.USBDeviceConfig.intfaceNum );
+
+		const activeConfiguration =
+			this.USBDevice.configuration ||
+			(
+				this.USBDevice.configurations && this.USBDevice.configurations.length > 0
+					? this.USBDevice.configurations[0]
+					: null
+			) ;
+		const interfaceCandidates =
+			this.USBDeviceConfig.interfaceCandidates && this.USBDeviceConfig.interfaceCandidates.length > 0
+				? this.USBDeviceConfig.interfaceCandidates
+				: this.buildInterfaceCandidates( activeConfiguration ) ;
+		if ( interfaceCandidates.length === 0 ) {
+			throw new TypeError( 'USB claim candidate not found' ) ;
+		}
+
+		let claimError = null ;
+		let claimed = false ;
+		for ( const candidate of interfaceCandidates ) {
+			try {
+				const intfaceNum = candidate.interfaceInfo.interfaceNumber ;
+				this.cL( 'openUSBDevice : claim try', intfaceNum, candidate.alternateInfo?.alternateSetting ) ;
+				await this.USBDevice.claimInterface( intfaceNum );
+				if ( candidate.alternateInfo && candidate.alternateInfo.alternateSetting !== undefined ) {
+					await this.USBDevice.selectAlternateInterface( intfaceNum, candidate.alternateInfo.alternateSetting );
+				}
+				this.applyInterfaceCandidate( activeConfiguration, candidate ) ;
+				this.cL( 'openUSBDevice : claim success', intfaceNum, candidate.alternateInfo?.alternateSetting ) ;
+				claimed = true ;
+				claimError = null ;
+				break ;
+			}
+			catch( r ) {
+				claimError = r ;
+				this.WcL( 'openUSBDevice : claim failed', candidate.interfaceInfo.interfaceNumber, candidate.alternateInfo?.alternateSetting, r ) ;
+			}
+		}
+		if ( claimed !== true ) {
+			throw claimError || new TypeError( 'USB interface claim failed' ) ;
+		}
 
 		this.FelicaConfig.Polling = false ;
 		this.USBDeviceConfig.Open = {} ;
