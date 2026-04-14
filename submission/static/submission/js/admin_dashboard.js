@@ -1,3 +1,4 @@
+const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
 
 window.app = new Vue({
     el: '#admin-dashboard',
@@ -65,7 +66,7 @@ window.app = new Vue({
         equipmentAlertRows: [],
         equipmentCanEdit: false,
     },
-    computed: {
+    computed: Object.assign({}, offeringSelectorHelper.computed, {
         mainReportItems() {
             return this.submissions.filter(s => s.report_type === "main");
         },
@@ -104,19 +105,6 @@ window.app = new Vue({
             if (current && current.experiment_numbers && current.experiment_numbers.length) return current.experiment_numbers;
             return this.defaultExperimentNumbers;
         },
-        courseOptions() {
-            const map = {};
-            this.offerings.forEach(o => {
-                map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
-            });
-            return Object.values(map);
-        },
-        yearOptions() {
-            const years = this.offerings
-                .filter(o => !this.selectedCourseId || String(o.course_id) === String(this.selectedCourseId))
-                .map(o => o.year);
-            return Array.from(new Set(years)).sort((a, b) => a - b);
-        },
         allowOfferingSwitch() {
             return this.offerings && this.offerings.length > 0;
         },
@@ -125,8 +113,8 @@ window.app = new Vue({
             const dates = this.scheduleImportPreview.registerable_dates || [];
             return dates.length > 0;
         }
-    },
-    methods: {
+    }),
+    methods: Object.assign({}, offeringSelectorHelper.methods, {
         resetSchedulePdfImport() {
             this.scheduleImportFile = null;
             this.scheduleImportLoading = false;
@@ -238,28 +226,6 @@ window.app = new Vue({
                 this.fetchSchedule(true);
             } else if (this.tab === 'equipment_check') {
                 this.fetchEquipmentDashboard();
-            }
-        },
-        selectCourse(courseId) {
-            this.selectedCourseId = courseId;
-            const years = this.yearOptions;
-            if (years.length && !years.includes(this.selectedYear)) {
-                this.selectedYear = years[years.length - 1];
-            }
-            this.updateOfferingFromSelection();
-        },
-        selectYear(year) {
-            this.selectedYear = year;
-            this.updateOfferingFromSelection();
-        },
-        updateOfferingFromSelection() {
-            if (!this.selectedCourseId || !this.selectedYear) return;
-            const found = this.offerings.find(
-                o => String(o.course_id) === String(this.selectedCourseId) && String(o.year) === String(this.selectedYear)
-            );
-            if (found) {
-                this.selectedOfferingId = found.id;
-                this.refreshCurrentTab();
             }
         },
         fetchList() {
@@ -784,7 +750,7 @@ window.app = new Vue({
                     });
             }, 'image/png');
         },
-    },
+    }),
     watch: {
         tab(val) {
             if (val === 'submissions') {
@@ -813,18 +779,7 @@ window.app = new Vue({
         }
     },
     mounted() {
-        if (this.selectedOfferingId) {
-            const found = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
-            if (found) {
-                this.selectedCourseId = found.course_id;
-                this.selectedYear = found.year;
-            }
-        } else if (this.offerings.length) {
-            const latest = this.offerings.slice().sort((a, b) => (b.year - a.year) || (b.id - a.id))[0];
-            this.selectedOfferingId = latest.id;
-            this.selectedCourseId = latest.course_id;
-            this.selectedYear = latest.year;
-        }
+        this.ensureOfferingSelected();
         // ページ初期表示時 (初回tabがsubmissionsの場合のため)
         if (this.tab === 'submissions') {
             this.fetchList();

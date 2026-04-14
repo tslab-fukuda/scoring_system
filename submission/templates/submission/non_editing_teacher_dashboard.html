@@ -7,39 +7,14 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
 <link rel="stylesheet" href="{% static 'submission/css/teacher_dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
 {% endblock %}
 
 {% block content %}
 
 <div id="teacher-dashboard" class="container mt-4">
     <h2 class="mb-4">教師ダッシュボード</h2>
-    {% verbatim %}
-    <div class="mb-3">
-        <div class="d-flex align-items-center mb-2">
-            <span class="fw-semibold me-2">科目</span>
-            <div class="step-arrow">
-                <button v-for="c in courseOptions" :key="c.course_id"
-                        class="step-arrow-btn"
-                        :class="{ active: String(selectedCourseId) === String(c.course_id) }"
-                        @click.prevent="selectCourse(c.course_id)">
-                    {{ c.course_code }} {{ c.course_name }}
-                </button>
-            </div>
-        </div>
-        <div class="d-flex align-items-center">
-            <span class="fw-semibold me-2">年度</span>
-            <div class="step-arrow">
-                <button v-for="y in yearOptions" :key="y"
-                        class="step-arrow-btn"
-                        :class="{ active: String(selectedYear) === String(y) }"
-                        @click.prevent="selectYear(y)">
-                    {{ y }}
-                </button>
-            </div>
-        </div>
-        <div v-if="!offerings.length" class="text-muted small ms-2">割り当てられた科目/年度がありません</div>
-    </div>
-    {% endverbatim %}
+    {% include "submission/_offering_selector.html" %}
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
@@ -200,6 +175,7 @@
     window.csrfToken = '{{ csrf_token }}';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/offering_selector.js' %}"></script>
 <script src="{% static 'submission/js/non_editing_teacher_dashboard.js' %}"></script>
 
 {% endblock %}

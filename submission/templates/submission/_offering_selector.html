@@ -1,0 +1,27 @@
+{% verbatim %}
+<div v-if="showOfferingSelector" class="offering-selector mb-3">
+    <div class="d-flex align-items-center mb-2">
+        <span class="fw-semibold me-2">科目</span>
+        <div class="step-arrow">
+            <button v-for="c in courseOptions" :key="c.course_id"
+                    class="step-arrow-btn"
+                    :class="{ active: String(selectedCourseId) === String(c.course_id) }"
+                    @click.prevent="selectCourse(c.course_id)">
+                {{ c.course_code }} {{ c.course_name }}
+            </button>
+        </div>
+    </div>
+    <div class="d-flex align-items-center">
+        <span class="fw-semibold me-2">年度</span>
+        <div class="step-arrow">
+            <button v-for="y in yearOptions" :key="y"
+                    class="step-arrow-btn"
+                    :class="{ active: String(selectedYear) === String(y) }"
+                    @click.prevent="selectYear(y)">
+                {{ y }}
+            </button>
+        </div>
+    </div>
+    <div v-if="!offerings.length" class="text-muted small ms-2">割り当てられた科目/年度がありません</div>
+</div>
+{% endverbatim %}

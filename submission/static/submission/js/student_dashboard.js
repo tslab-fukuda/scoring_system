@@ -1,3 +1,5 @@
+const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
+
 new Vue({
     el: "#student-dashboard",
     data: {
@@ -19,20 +21,7 @@ new Vue({
         selectedCourseId: null,
         selectedYear: null,
     },
-    computed: {
-        courseOptions() {
-            const map = {};
-            this.offerings.forEach(o => {
-                map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
-            });
-            return Object.values(map);
-        },
-        yearOptions() {
-            const years = this.offerings
-                .filter(o => !this.selectedCourseId || String(o.course_id) === String(this.selectedCourseId))
-                .map(o => o.year);
-            return Array.from(new Set(years)).sort((a, b) => a - b);
-        },
+    computed: Object.assign({}, offeringSelectorHelper.computed, {
         filteredStatusList() {
             if (this.allowOfferingSwitch && this.selectedOfferingId) {
                 return this.statusList.filter(
@@ -51,8 +40,8 @@ new Vue({
             }
             return list;
         }
-    },
-    methods: {
+    }),
+    methods: Object.assign({}, offeringSelectorHelper.methods, {
         isPast(dateStr) {
             if (!dateStr) return false;
             // 今日の日付をYYYY-MM-DD形式で取得
@@ -85,6 +74,11 @@ new Vue({
         showScoreDetail(item) {
             this.scoreDetail = item.score_details || "詳細情報なし";
             this.showScoreModal = true;
+        },
+        updateStudentOfferingMeta() {
+            const found = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
+            this.experimentDay = found ? (found.experiment_day || '') : '';
+            this.experimentGroup = found ? (found.experiment_group || '') : '';
         },
         deleteSubmission(submissionId) {
             if (!confirm("本当に削除しますか？")) return;
@@ -153,41 +147,6 @@ new Vue({
                 this.editError = "更新に失敗しました";
             });
         },
-        selectOffering(id) {
-            if (!this.allowOfferingSwitch) return;
-            const numericId = Number(id);
-            const found = this.offerings.find(o => Number(o.id) === numericId);
-            if (!found) return;
-            this.selectedOfferingId = numericId;
-            this.experimentDay = found.experiment_day || this.experimentDay;
-            this.experimentGroup = found.experiment_group || this.experimentGroup;
-            this.syncOfferingState();
-            this.fetchSchedule();
-        },
-        selectCourse(courseId) {
-            if (!this.allowOfferingSwitch) return;
-            this.selectedCourseId = courseId;
-            // course change resets year if not available
-            const years = this.yearOptions;
-            if (!years.includes(this.selectedYear)) {
-                this.selectedYear = years[years.length - 1] || null;
-            }
-            this.updateOfferingFromSelection();
-        },
-        selectYear(year) {
-            if (!this.allowOfferingSwitch) return;
-            this.selectedYear = year;
-            this.updateOfferingFromSelection();
-        },
-        updateOfferingFromSelection() {
-            if (!this.selectedCourseId || !this.selectedYear) return;
-            const found = this.offerings.find(
-                o => String(o.course_id) === String(this.selectedCourseId) && String(o.year) === String(this.selectedYear)
-            );
-            if (found) {
-                this.selectOffering(found.id);
-            }
-        },
         fetchSchedule() {
             const params = [];
             if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
@@ -212,18 +171,22 @@ new Vue({
             url.searchParams.set('offering_id', this.selectedOfferingId);
             window.history.replaceState({}, '', url.toString());
         }
-    },
+    }),
     mounted() {
-        if (this.selectedOfferingId) {
-            const found = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
-            if (found) {
-                this.selectedCourseId = found.course_id;
-                this.selectedYear = found.year;
-            }
-            this.syncOfferingState();
-        }
+        this.ensureOfferingSelected();
+        this.updateStudentOfferingMeta();
+        if (this.selectedOfferingId) this.syncOfferingState();
         if (this.allowOfferingSwitch && this.selectedOfferingId) {
             this.fetchSchedule();
+        }
+    },
+    watch: {
+        selectedOfferingId() {
+            this.updateStudentOfferingMeta();
+            this.syncOfferingState();
+            if (this.allowOfferingSwitch) {
+                this.fetchSchedule();
+            }
         }
     }
 });

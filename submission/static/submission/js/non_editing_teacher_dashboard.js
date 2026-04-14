@@ -21,6 +21,7 @@ Vue.component('graded-list', {
 });
 
 const offeringContext = window.teacherOfferings || { offerings: [], defaultOfferingId: null };
+const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
 
 new Vue({
     el: '#teacher-dashboard',
@@ -61,23 +62,7 @@ new Vue({
         equipmentAlertRows: [],
         equipmentCanEdit: false,
     },
-    computed: {
-        courseOptions() {
-            const map = {};
-            this.offerings.forEach(o => {
-                if (!map[o.course_id]) {
-                    map[o.course_id] = { course_id: o.course_id, course_code: o.course_code, course_name: o.course_name };
-                }
-            });
-            return Object.values(map);
-        },
-        yearOptions() {
-            if (!this.selectedCourseId) return [];
-            const years = this.offerings
-                .filter(o => String(o.course_id) === String(this.selectedCourseId))
-                .map(o => o.year);
-            return [...new Set(years)].sort((a, b) => b - a);
-        },
+    computed: Object.assign({}, offeringSelectorHelper.computed, {
         currentTabComponent() {
             return this.tab === 'grading' ? 'grading-list'
                  : this.tab === 'graded' ? 'graded-list'
@@ -93,34 +78,8 @@ new Vue({
             if (current && current.experiment_numbers && current.experiment_numbers.length) return current.experiment_numbers;
             return this.defaultExperimentNumbers;
         }
-    },
-    methods: {
-        resolveOfferingId(courseId, year) {
-            const candidate = this.offerings
-                .filter(o => String(o.course_id) === String(courseId) && String(o.year) === String(year))
-                .sort((a, b) => (b.year - a.year) || (b.id - a.id));
-            return candidate.length ? candidate[0].id : null;
-        },
-        ensureOfferingSelected() {
-            if (this.selectedOfferingId) {
-                const cur = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
-                if (cur) {
-                    this.selectedCourseId = cur.course_id;
-                    this.selectedYear = cur.year;
-                }
-                return;
-            }
-            if (!this.offerings.length) return;
-            const sorted = [...this.offerings].sort((a, b) => (b.year - a.year) || (b.id - a.id));
-            const latest = sorted[0];
-            if (latest) {
-                this.selectedCourseId = latest.course_id;
-                this.selectedYear = latest.year;
-                this.selectedOfferingId = Number(latest.id);
-            } else {
-                this.selectedOfferingId = null;
-            }
-        },
+    }),
+    methods: Object.assign({}, offeringSelectorHelper.methods, {
         refreshCurrentTab() {
             if (this.tab === 'experiment_record') {
                 this.fetchStudents();
@@ -129,26 +88,6 @@ new Vue({
             } else {
                 this.fetchList();
             }
-        },
-        selectCourse(courseId) {
-            if (String(this.selectedCourseId) === String(courseId)) return;
-            this.selectedCourseId = courseId;
-            // その科目の最新年度を選択
-            const years = this.offerings
-                .filter(o => String(o.course_id) === String(courseId))
-                .map(o => o.year)
-                .sort((a, b) => b - a);
-            this.selectedYear = years[0] || null;
-            this.selectedOfferingId = this.selectedYear ? this.resolveOfferingId(courseId, this.selectedYear) : null;
-            this.experimentNumbers = this.experimentOptions;
-            this.refreshCurrentTab();
-        },
-        selectYear(year) {
-            if (String(this.selectedYear) === String(year)) return;
-            this.selectedYear = year;
-            this.selectedOfferingId = this.resolveOfferingId(this.selectedCourseId, year);
-            this.experimentNumbers = this.experimentOptions;
-            this.refreshCurrentTab();
         },
         fetchList() {
             this.ensureOfferingSelected();
@@ -347,7 +286,7 @@ new Vue({
                     this.equipmentLoading = false;
                 });
         }
-    },
+    }),
     watch: {
         tab(newTab) {
             this.refreshCurrentTab();

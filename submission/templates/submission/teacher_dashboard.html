@@ -7,23 +7,14 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
 <link rel="stylesheet" href="{% static 'submission/css/teacher_dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
 {% endblock %}
 
 {% block content %}
 
 <div id="teacher-dashboard" class="container mt-4">
     <h2 class="mb-4">教師ダッシュボード</h2>
-    {% verbatim %}
-    <div class="step-arrow mb-3">
-        <button v-for="off in offerings" :key="off.id"
-                class="step-arrow-btn"
-                :class="{ active: Number(selectedOfferingId) === Number(off.id) }"
-                @click.prevent="selectOffering(off.id)">
-            {{ off.year }}
-        </button>
-        <div v-if="!offerings.length" class="text-muted small ms-2">割り当てられた科目/年度がありません</div>
-    </div>
-    {% endverbatim %}
+    {% include "submission/_offering_selector.html" %}
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
@@ -201,6 +192,7 @@
     window.csrfToken = '{{ csrf_token }}';
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/offering_selector.js' %}"></script>
 <script src="{% static 'submission/js/teacher_dashboard.js' %}"></script>
 
 {% endblock %}

@@ -21,6 +21,7 @@ Vue.component('graded-list', {
 });
 
 const offeringContext = window.teacherOfferings || { offerings: [], defaultOfferingId: null };
+const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
 
 new Vue({
     el: '#teacher-dashboard',
@@ -30,6 +31,8 @@ new Vue({
         items: [],
         offerings: offeringContext.offerings || [],
         selectedOfferingId: offeringContext.defaultOfferingId || null,
+        selectedCourseId: null,
+        selectedYear: null,
         defaultExperimentNumbers: [
             'I-01,02', 'I-03,04', 'I-05,06', 'I-07,08', 'I-09,10',
             'II-01,02', 'II-03,04', 'II-05,06', 'II-07,08', 'II-09,10'
@@ -64,7 +67,7 @@ new Vue({
         equipmentAlertRows: [],
         equipmentCanEdit: false,
     },
-    computed: {
+    computed: Object.assign({}, offeringSelectorHelper.computed, {
         currentTabComponent() {
             return this.tab === 'grading' ? 'grading-list'
                 : this.tab === 'graded' ? 'graded-list'
@@ -86,14 +89,8 @@ new Vue({
         canEditProgress() {
             return (window.USER_ROLE || '').trim() === 'teacher';
         }
-    },
-    methods: {
-        ensureOfferingSelected() {
-            if (this.selectedOfferingId || !this.offerings.length) return;
-            const sorted = [...this.offerings].sort((a, b) => (b.year - a.year) || (b.id - a.id));
-            const latest = sorted[0];
-            this.selectedOfferingId = latest ? Number(latest.id) : null;
-        },
+    }),
+    methods: Object.assign({}, offeringSelectorHelper.methods, {
         refreshCurrentTab() {
             if (this.tab === 'experiment_record') {
                 this.fetchStudents();
@@ -102,13 +99,6 @@ new Vue({
             } else {
                 this.fetchList();
             }
-        },
-        selectOffering(id) {
-            const numericId = Number(id);
-            if (this.selectedOfferingId === numericId) return;
-            this.selectedOfferingId = numericId;
-            this.experimentNumbers = this.experimentOptions;
-            this.refreshCurrentTab();
         },
         fetchList() {
             this.ensureOfferingSelected();
@@ -359,13 +349,14 @@ new Vue({
                     this.equipmentLoading = false;
                 });
         }
-    },
+    }),
     watch: {
         tab() {
             this.refreshCurrentTab();
         },
         selectedOfferingId() {
             this.fetchTaskConfigs();
+            this.experimentNumbers = this.experimentOptions;
             this.refreshCurrentTab();
         }
     },
