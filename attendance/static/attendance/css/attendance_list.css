@@ -45,6 +45,35 @@
     color: #555;
 }
 
+.nfc-debug-panel {
+    margin: 8px 0 18px;
+    border: 1px solid #d9ddeb;
+    border-radius: 10px;
+    background: #f9fbff;
+    padding: 10px 14px;
+}
+
+.nfc-debug-panel summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: #3c2669;
+}
+
+.nfc-debug-log {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #e2e6f0;
+    color: #333;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    max-height: 220px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .attendance-column-visibility {
     display: flex;
     flex-wrap: wrap;

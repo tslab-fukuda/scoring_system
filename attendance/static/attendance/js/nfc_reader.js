@@ -13,10 +13,43 @@ let scanInFlight = false;
 let selectedUsbDevice = null;
 let isConnected = false;
 let isSpeaking = false;
+let debugLogLines = [];
 
 function setStatus(message) {
     const el = document.getElementById('nfc-status');
     if (el) el.textContent = message;
+}
+
+function formatDebugTime(date) {
+    return date.toLocaleTimeString('ja-JP', { hour12: false });
+}
+
+function formatError(err) {
+    if (!err) return 'unknown error';
+    if (typeof err === 'string') return err;
+    const parts = [];
+    if (err.name) parts.push(err.name);
+    if (err.message) parts.push(err.message);
+    if (err.code !== undefined) parts.push(`code=${err.code}`);
+    return parts.join(' / ') || String(err);
+}
+
+function appendDebugLog(message, err = null) {
+    const line = `[${formatDebugTime(new Date())}] ${message}${err ? ` :: ${formatError(err)}` : ''}`;
+    debugLogLines.push(line);
+    if (debugLogLines.length > 80) {
+        debugLogLines = debugLogLines.slice(-80);
+    }
+    const el = document.getElementById('nfc-debug-log');
+    if (el) {
+        el.textContent = debugLogLines.join('\n');
+        el.scrollTop = el.scrollHeight;
+    }
+    if (err) {
+        console.error(line, err);
+    } else {
+        console.log(line);
+    }
 }
 
 function setOverlayVisible(visible) {
@@ -205,12 +238,15 @@ async function requestUsbDevice() {
     if (!navigator.usb) {
         setStatus('WebUSB非対応のブラウザです');
         updateConnectionState(false);
+        appendDebugLog('navigator.usb が存在しません');
         return null;
     }
+    appendDebugLog('USBデバイス選択を開始');
     setStatus('USB選択中...');
     const device = await navigator.usb.requestDevice({
         filters: [{ vendorId: SUPPORTED_VENDOR_ID }]
     });
+    appendDebugLog(`USBデバイス選択完了 vendorId=${device.vendorId} productId=${device.productId}`);
     setStatus('USB選択完了');
     selectedUsbDevice = device;
     return device;
@@ -237,10 +273,13 @@ function ensureDeviceInfo(device) {
 
 async function disconnectDevice() {
     polling = false;
+    appendDebugLog('NFCデバイス切断処理を開始');
     if (nfcDevice && typeof nfcDevice.closeUSBDevice === 'function') {
         try {
             await nfcDevice.closeUSBDevice();
+            appendDebugLog('NFCデバイス切断処理が完了');
         } catch (err) {
+            appendDebugLog('NFCデバイス切断処理で例外', err);
             // ignore disconnect errors
         }
     }
@@ -254,6 +293,7 @@ async function connectDevice(options) {
     if (!navigator.usb) {
         setStatus('WebUSB非対応のブラウザです');
         updateConnectionState(false);
+        appendDebugLog('接続処理中に navigator.usb が存在しません');
         return;
     }
     if (nfcDevice) {
@@ -261,34 +301,46 @@ async function connectDevice(options) {
         await disconnectDevice();
     }
     nfcDevice = new ArukasNFCLiteS({ warning: false });
-    nfcDevice.EcL = () => {};
+    nfcDevice.EcL = (...args) => appendDebugLog('ArukasNFCLiteS error log', args && args.length ? args.join(' ') : null);
+    nfcDevice.cL = (...args) => appendDebugLog(args.join(' '));
     try {
+        appendDebugLog('connectDevice 開始');
         if (!userInitiated && !deviceOverride) {
             const devices = await navigator.usb.getDevices();
             const matched = (devices || []).filter(d =>
                 d.vendorId === SUPPORTED_VENDOR_ID && SUPPORTED_PRODUCT_IDS.has(d.productId)
             );
+            appendDebugLog(`接続候補検出件数=${matched.length}`);
             if (matched.length !== 1) {
                 setStatus('NFC未接続（接続ボタンで許可）');
                 updateConnectionState(false);
                 nfcDevice = null;
+                appendDebugLog('自動接続条件を満たさず終了');
                 return;
             }
         }
         if (deviceOverride) {
             ensureDeviceInfo(deviceOverride);
+            appendDebugLog('deviceOverride の情報を適用');
         }
+        appendDebugLog('connectUSBDevice 呼び出し開始');
         await nfcDevice.connectUSBDevice();
+        appendDebugLog('connectUSBDevice 成功');
+        appendDebugLog('openUSBDevice 呼び出し開始');
         await nfcDevice.openUSBDevice();
+        appendDebugLog('openUSBDevice 成功');
         setStatus('NFC接続済み');
         updateConnectionState(true);
+        appendDebugLog('NFC接続済み状態へ遷移');
         if (startPollingAfter) {
+            appendDebugLog('ポーリング開始');
             startPolling();
         }
     } catch (err) {
         nfcDevice = null;
         setStatus('NFC接続失敗');
         updateConnectionState(false);
+        appendDebugLog('connectDevice 例外', err);
         if (userInitiated) {
             alert('NFCリーダーの接続に失敗しました');
         }
@@ -359,6 +411,7 @@ async function startPolling() {
                 setStatus('NFC待機中');
             } else {
                 setStatus('NFC読み取りエラー');
+                appendDebugLog('ポーリング中の読み取り例外', err);
             }
         }
         if (nfcDevice && typeof nfcDevice.sleep === 'function') {
@@ -370,6 +423,7 @@ async function startPolling() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    appendDebugLog('attendance NFC reader 初期化');
     setStatus('NFC未接続');
     updateConnectionState(false);
     window.addEventListener('attendance-record-updated', event => {

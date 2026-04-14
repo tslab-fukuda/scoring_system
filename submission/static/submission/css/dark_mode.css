@@ -336,6 +336,18 @@ body.dark-mode .attendance-column-visibility-label,
 body.dark-mode .attendance-column-visibility-toggle {
     color: #e0e0e0;
 }
+body.dark-mode .nfc-debug-panel {
+    background: #1f1f1f;
+    border-color: #3a3a3a;
+}
+body.dark-mode .nfc-debug-panel summary {
+    color: #e0e0e0;
+}
+body.dark-mode .nfc-debug-log {
+    background: #161616;
+    border-color: #333;
+    color: #d8d8d8;
+}
 body.dark-mode .score-column {
     background: #1e1e1e;
     border-color: #3a3a3a;
