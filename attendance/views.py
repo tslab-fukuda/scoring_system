@@ -227,15 +227,43 @@ def _calc_lab_time_points(diff_minutes):
     return 0
 
 
+def _submission_has_score_code(submission, code):
+    for item in (submission.score_details or []):
+        if not isinstance(item, dict):
+            continue
+        if item.get('code') == code:
+            return True
+    return False
+
+
+def _late_target_submissions(user, course_offering, target_date):
+    base_qs = Submission.objects.filter(
+        student=user,
+        course_offering=course_offering,
+    ).order_by('submitted_at', 'id')
+    day_specific = list(base_qs.filter(date=target_date))
+    if day_specific:
+        return day_specific
+    late_scored = [sub for sub in base_qs if _submission_has_score_code(sub, 'late')]
+    if late_scored:
+        return late_scored
+    return list(base_qs)
+
+
+def _lab_time_target_submissions(user, course_offering, target_date):
+    return Submission.objects.filter(
+        student=user,
+        report_type='prep',
+        date=target_date,
+        course_offering=course_offering,
+    ).order_by('submitted_at', 'id')
+
+
 def _apply_check_in_effects(user, course_offering, action_at):
     local_action = timezone.localtime(action_at, JST)
     if local_action.time() <= CLASS_START:
         return
-    submissions = Submission.objects.filter(
-        student=user,
-        graded=False,
-        course_offering=course_offering,
-    )
+    submissions = _late_target_submissions(user, course_offering, _submission_date_for(action_at))
     _increment_score(submissions, "late", 1, course_offering)
 
 
@@ -251,13 +279,7 @@ def _apply_check_out_effects(user, course_offering, action_at, previous_out):
     if delta_points == 0:
         return
 
-    submissions = Submission.objects.filter(
-        student=user,
-        graded=True,
-        report_type='prep',
-        date=_submission_date_for(action_at),
-        course_offering=course_offering,
-    )
+    submissions = _lab_time_target_submissions(user, course_offering, _submission_date_for(action_at))
     _increment_score(submissions, "lab_time", delta_points, course_offering)
 
 
@@ -390,27 +412,6 @@ def _effective_override_flags(global_override=None, user_override=None):
 
 
 def _apply_attendance_override_delta(user, course_offering, target_date, old_flags, new_flags):
-    def _has_score_code(submission, code):
-        for item in (submission.score_details or []):
-            if not isinstance(item, dict):
-                continue
-            if item.get('code') == code:
-                return True
-        return False
-
-    def _late_target_submissions():
-        base_qs = Submission.objects.filter(
-            student=user,
-            course_offering=course_offering,
-        ).order_by('submitted_at', 'id')
-        day_specific = list(base_qs.filter(date=target_date))
-        if day_specific:
-            return day_specific
-        late_scored = [sub for sub in base_qs if _has_score_code(sub, 'late')]
-        if late_scored:
-            return late_scored
-        return list(base_qs.filter(graded=False))
-
     record = AttendanceRecord.objects.filter(
         user=user,
         course_offering=course_offering,
@@ -427,7 +428,7 @@ def _apply_attendance_override_delta(user, course_offering, target_date, old_fla
         new_late = local_in.time() > CLASS_START and not new_flags.get('ignore_late', False)
     late_delta = (1 if new_late else 0) - (1 if old_late else 0)
     if late_delta:
-        submissions = _late_target_submissions()
+        submissions = _late_target_submissions(user, course_offering, target_date)
         _increment_score(submissions, "late", late_delta, course_offering)
 
     old_lab_points = 0
@@ -439,13 +440,7 @@ def _apply_attendance_override_delta(user, course_offering, target_date, old_fla
         new_lab_points = 0 if new_flags.get('ignore_lab_time', False) else base_points
     lab_delta = new_lab_points - old_lab_points
     if lab_delta:
-        submissions = Submission.objects.filter(
-            student=user,
-            graded=True,
-            report_type='prep',
-            date=target_date,
-            course_offering=course_offering,
-        )
+        submissions = _lab_time_target_submissions(user, course_offering, target_date)
         _increment_score(submissions, "lab_time", lab_delta, course_offering)
 
 
