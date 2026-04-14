@@ -28,7 +28,7 @@ echo "[prod] Apply migrations..."
 "$PY_BIN" manage.py migrate --settings=scoring_system.settings_prod
 
 echo "[prod] Collect static files..."
-"$PY_BIN" manage.py collectstatic --noinput --settings=scoring_system.settings_prod
+"$PY_BIN" manage.py collectstatic --clear --noinput --settings=scoring_system.settings_prod
 
 echo "[prod] Restart services..."
 sudo systemctl restart scoring-system
