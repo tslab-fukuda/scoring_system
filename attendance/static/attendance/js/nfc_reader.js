@@ -1,4 +1,4 @@
-import { ArukasNFCLiteS } from './modules/ArukasNFCLiteS.js';
+import { ArukasNFCLiteS } from './modules/ArukasNFCLiteS.js?v=20260414a';
 
 const POLL_INTERVAL_MS = 500;
 const CHATTERING_MS = 30000;
