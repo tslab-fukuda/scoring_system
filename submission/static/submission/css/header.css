@@ -47,6 +47,27 @@ body {
     padding: 0;
     z-index: 12002;
 }
+.ts-home-button {
+    position: absolute;
+    left: 4.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    color: #fff;
+    text-decoration: none;
+    font-size: 1.2rem;
+    line-height: 1;
+    z-index: 12002;
+    transition: color 0.18s;
+}
+.ts-home-button:hover {
+    color: #fff;
+    text-decoration: none;
+}
 .burger-menu span {
     width: 30px;
     height: 3px;

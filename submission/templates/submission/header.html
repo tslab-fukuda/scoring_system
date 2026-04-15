@@ -4,6 +4,11 @@
     <span :class="{ open: showMenu }"></span>
     <span :class="{ open: showMenu }"></span>
   </button>
+  {% if attendance_only %}
+  <a href="{% url 'attendance_list' %}" class="ts-home-button" aria-label="出席確認へ移動">🏠</a>
+  {% else %}
+  <a href="{% url 'index_redirect' %}" class="ts-home-button" aria-label="ダッシュボードへ移動">🏠</a>
+  {% endif %}
   <span class="ts-header-title">情報工学実験　管理システム</span>
   <span v-if="overrideActive" class="view-as-indicator">閲覧ロール: [[ viewRoleLabel ]]</span>
   <!-- <sub class="subtitle">presented by TSlab</sub> -->
@@ -19,15 +24,6 @@
     <div v-if="showMenu" class="menu-overlay" @click="closeMenu">
       <aside class="menu-panel glass" @click.stop>
         <ul class="menu-list">
-          {% if attendance_only %}
-          <a href="{% url 'attendance_list' %}" class="menu-link">
-            <span class="menu-ico">🕒</span> 出席確認
-          </a>
-          {% else %}
-          <a href="{% url 'index_redirect' %}" class="menu-link">
-            <span class="menu-ico">🏠</span> ダッシュボード
-          </a>
-          {% endif %}
           {% if not attendance_only %}
           <template v-if="role === 'admin'">
             <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
