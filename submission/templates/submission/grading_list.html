@@ -49,7 +49,7 @@
             {% if is_admin == 'true' %}
             {% verbatim %}
             <td>
-                <button v-if="row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="showScoreDetail(row)">
+                <button v-if="row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="$emit('show-score-detail', row)">
                     {{ row.score }} 点
                 </button>
                 <span v-else>-</span>

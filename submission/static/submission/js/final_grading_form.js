@@ -109,6 +109,16 @@ new Vue({
         criterionIsMissing(criterionId) {
             return this.rubricValidationAttempted && !this.rubricSelectedOptionIds[String(criterionId)];
         },
+        criterionPhaseClass(title) {
+            const text = String(title || '');
+            if (text.includes('前半')) {
+                return 'rubric-criterion-phase-first';
+            }
+            if (text.includes('後半')) {
+                return 'rubric-criterion-phase-second';
+            }
+            return '';
+        },
         handleRubricSubmit(event) {
             if (!this.rubricExists) {
                 event.preventDefault();
@@ -243,6 +253,18 @@ new Vue({
             const nextState = !this.showRubric;
             this.showRubric = nextState;
             if (nextState) this.showDeduction = false;
+        },
+        handleGlobalKeydown(event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            if (this.showRubric) {
+                this.showRubric = false;
+                return;
+            }
+            if (this.showDeduction) {
+                this.showDeduction = false;
+            }
         },
         toggleCompare() {
             this.showCompare = !this.showCompare;
@@ -405,8 +427,10 @@ new Vue({
     },
     mounted() {
         this.renderMainPdf();
+        window.addEventListener('keydown', this.handleGlobalKeydown);
     },
     beforeDestroy() {
         this.clearSimilarityProgressTimer();
+        window.removeEventListener('keydown', this.handleGlobalKeydown);
     }
 });

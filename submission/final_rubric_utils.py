@@ -552,6 +552,51 @@ def build_rubric_state_for_submission(submission):
     }
 
 
+def build_readonly_rubric_result_for_submission(submission):
+    existing_score = getattr(submission, 'final_rubric_score', None)
+    if not existing_score or not existing_score.rubric_id:
+        return None
+
+    rubric = existing_score.rubric
+    if rubric is None:
+        return None
+
+    selected_option_ids = {
+        item.criterion_id: item.selected_option_id
+        for item in existing_score.items.all()
+    }
+    criteria = []
+    for criterion in rubric.criteria.all().order_by('order', 'id'):
+        criteria.append({
+            'id': criterion.id,
+            'title': criterion.title,
+            'max_points': criterion.max_points,
+            'options': [
+                {
+                    'id': option.id,
+                    'label': option.label,
+                    'description': option.description,
+                    'points': option.points,
+                }
+                for option in criterion.options.all().order_by('order', 'id')
+            ],
+            'selected_option_id': selected_option_ids.get(criterion.id),
+        })
+
+    return {
+        'exists': True,
+        'rubric': {
+            'id': rubric.id,
+            'version': rubric.version,
+            'scope': rubric.scope,
+            'scope_label': rubric.get_scope_display(),
+        },
+        'criteria': criteria,
+        'adjustment_score': float(existing_score.adjustment_score),
+        'total_score': float(existing_score.total_score),
+    }
+
+
 def validate_rubric_selection(rubric, selected_option_ids):
     criterion_map = {criterion.id: criterion for criterion in rubric.criteria.all().order_by('order', 'id')}
     option_map = {}

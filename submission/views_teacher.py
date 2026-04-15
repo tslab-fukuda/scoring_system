@@ -31,6 +31,7 @@ from submission.enrollment_utils import (
     filter_queryset_by_student_enrollment,
     get_student_context,
 )
+from submission.final_rubric_utils import build_readonly_rubric_result_for_submission
 
 TEACHER_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 JST = ZoneInfo("Asia/Tokyo")
@@ -170,6 +171,27 @@ def _display_user_name(user):
         return ''
     profile = getattr(user, 'userprofile', None)
     return profile.full_name if profile and profile.full_name else user.username
+
+
+def _sum_score_details(submissions):
+    totals = {}
+    order = []
+    for sub in submissions:
+        for detail in sub.score_details or []:
+            key = detail.get('code') or detail.get('label') or ''
+            if not key:
+                continue
+            if key not in totals:
+                totals[key] = {
+                    'label': detail.get('label') or key,
+                    'weight': detail.get('weight', 1),
+                    'value': 0,
+                }
+                order.append(key)
+            totals[key]['value'] += detail.get('value', 0)
+            if totals[key].get('weight') in (None, '') and detail.get('weight') is not None:
+                totals[key]['weight'] = detail.get('weight')
+    return [totals[k] for k in order]
 
 
 def _local_now():
@@ -351,7 +373,14 @@ def get_graded_main_reports(request):
         accepted=True,
         final_evaluated=True,
         report_type='main',
-    ).select_related('student', 'student__userprofile')
+    ).select_related(
+        'student',
+        'student__userprofile',
+        'final_rubric_score__rubric',
+    ).prefetch_related(
+        'final_rubric_score__items',
+        'final_rubric_score__rubric__criteria__options',
+    )
     qs = qs.filter(
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
@@ -362,7 +391,6 @@ def get_graded_main_reports(request):
     result = []
     for items in qs:
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
-        pre_total = 0
         pre_subs = Submission.objects.filter(
             student=items.student,
             experiment_number=items.experiment_number,
@@ -371,9 +399,11 @@ def get_graded_main_reports(request):
         )
         if items.course_offering_id:
             pre_subs = pre_subs.filter(course_offering_id=items.course_offering_id)
-        for p in pre_subs:
-            pre_total += sum(detail.get('value', 0) * detail.get('weight', 1) for detail in p.score_details)
-        total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details) if items.score_details else 0
+        pre_subs = pre_subs.order_by('submitted_at', 'id')
+        pre_score_details = _sum_score_details(pre_subs)
+        pre_total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in pre_score_details)
+        main_score_details = items.score_details if items.score_details else []
+        total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in main_score_details) if main_score_details else 0
         final_value = None
         if items.final_score is not None:
             try:
@@ -390,11 +420,14 @@ def get_graded_main_reports(request):
             'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': final_value,
-            'score_details': items.score_details if items.score_details else '',
+            'score_details': main_score_details if main_score_details else '',
+            'pre_score_details': pre_score_details,
+            'main_score_details': main_score_details,
             'pre_total': pre_total,
             'main_total': total,
             'final_total': float(items.final_score) if items.final_score is not None else None,
             'final_comment': items.final_comment or "",
+            'rubric_result': build_readonly_rubric_result_for_submission(items),
         })
     return JsonResponse(result, safe=False)
 

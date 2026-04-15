@@ -283,6 +283,9 @@ body.dark-mode .score-modal-float {
     color: #e0e0e0;
     border-left-color: #3a3a3a;
 }
+body.dark-mode .score-modal-header {
+    border-bottom-color: #3a3a3a;
+}
 body.dark-mode .score-modal-float h5,
 body.dark-mode .score-modal-float .score-total {
     color: #e0e0e0;

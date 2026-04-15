@@ -154,9 +154,9 @@
     </transition>
 
     {% verbatim %}
-    <div class="modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showScoreModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
+    <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered modal-lg" style="margin-top:calc(var(--ts-header-height, 64px) + 16px); margin-bottom:88px;">
+            <div class="modal-content" style="max-height:calc(100vh - var(--ts-header-height, 64px) - 104px); overflow-y:auto;">
                 <div class="modal-header">
                     <h5 class="modal-title">得点詳細</h5>
                     <button type="button" class="btn-close" @click="showScoreModal=false"></button>

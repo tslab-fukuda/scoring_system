@@ -168,42 +168,50 @@
     </div>
     <transition name="slide-right">
       <div v-if="showDeduction" class="score-modal-float deduction-modal-float">
-        <h5>減点詳細</h5>
-        <table class="table">
-          <thead>
-            <tr>
-              <th colspan="2">予習レポート</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in pre_items %}
-            <tr>
-              <td>{{ item.label }}</td>
-              <td>{{ item.value }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-          <thead>
-            <tr>
-              <th colspan="2">本レポート</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in main_items %}
-            <tr>
-              <td>{{ item.label }}</td>
-              <td>{{ item.value }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <button type="button" class="btn btn-outline-secondary w-100 mt-2" @click="toggleDeduction">閉じる</button>
+        <div class="score-modal-header">
+          <h5>減点詳細</h5>
+          <button type="button" class="btn btn-outline-secondary btn-sm score-modal-close-top" @click="toggleDeduction" aria-label="減点詳細を閉じる">×</button>
+        </div>
+        <div class="score-modal-body">
+          <table class="table">
+            <thead>
+              <tr>
+                <th colspan="2">予習レポート</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in pre_items %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <thead>
+              <tr>
+                <th colspan="2">本レポート</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in main_items %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-outline-secondary w-100 mt-2" @click="toggleDeduction">閉じる</button>
+        </div>
       </div>
     </transition>
     <transition name="slide-right">
       <div v-if="showRubric" class="score-modal-float rubric-modal-float">
-        <h5>採点</h5>
-        <form method="post" class="mt-3" @submit="handleRubricSubmit">
+        <div class="score-modal-header">
+          <h5>採点</h5>
+          <button type="button" class="btn btn-outline-secondary btn-sm score-modal-close-top" @click="toggleRubric" aria-label="採点モーダルを閉じる">×</button>
+        </div>
+        <form method="post" class="score-modal-body" @submit="handleRubricSubmit">
           {% csrf_token %}
           {% if rubric_error %}
           <div class="alert alert-danger small">{{ rubric_error }}</div>
@@ -226,7 +234,8 @@
                   class="rubric-criterion-card"
                   :class="{
                     'rubric-criterion-review': criterionNeedsReview(criterion.id),
-                    'rubric-criterion-missing': criterionIsMissing(criterion.id)
+                    'rubric-criterion-missing': criterionIsMissing(criterion.id),
+                    [criterionPhaseClass(criterion.title)]: !!criterionPhaseClass(criterion.title)
                   }"
                 >
                   <div class="rubric-criterion-header">

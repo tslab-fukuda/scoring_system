@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{% static 'submission/css/fade.css' %}">
 <link rel="stylesheet" href="{% static 'submission/css/teacher_dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/final_rubric.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -96,9 +97,6 @@
         <div v-else-if="tab === 'graded'" key="graded">
             {% include "submission/graded_list.html" %}
         </div>
-    </transition>
-    <transition name="fade" mode="out-in">
-        <component :is="currentTabComponent" :items="items" @row-click="goToGrading"></component>
     </transition>
     <transition name="fade" mode="out-in">
         <div v-if="tab === 'experiment_record'">

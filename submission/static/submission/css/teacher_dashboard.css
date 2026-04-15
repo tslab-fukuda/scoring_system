@@ -97,6 +97,47 @@ tr.clickable-row:hover {
     border-radius: 50%;
 }
 
+.score-detail-modal-dialog {
+    width: max-content;
+    max-width: calc(100vw - 32px);
+}
+
+.score-detail-modal-content {
+    width: max-content;
+    min-width: min(720px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+}
+
+.score-detail-rubric {
+    width: max-content;
+    max-width: 100%;
+}
+
+.score-detail-rubric .rubric-panel {
+    width: max-content;
+    max-width: 100%;
+}
+
+.score-detail-rubric .rubric-criterion-card {
+    width: max-content;
+    min-width: 100%;
+}
+
+.score-detail-rubric .rubric-options-row {
+    width: max-content;
+}
+
+.score-detail-rubric .rubric-option-card {
+    min-width: 180px;
+}
+
+.score-detail-rubric .rubric-option-description {
+    min-height: 0;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
 .step-arrow {
     display: flex;
     flex-wrap: wrap;

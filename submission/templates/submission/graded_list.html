@@ -36,7 +36,7 @@
                 </td>
                 <td>
                     <!-- {{ item.score == null ? '' : item.score }} -->
-                    <button v-if="item.score !== null" class="btn btn-link p-0" @click="showScoreDetail(item)">
+                    <button v-if="item.score !== null" class="btn btn-link p-0" @click.stop="showScoreDetail(item)">
                         {{ item.score }} 点
                     </button>
                     <span v-else>-</span>
@@ -46,9 +46,9 @@
     </table>
     </div>
     <!-- 得点詳細のポップアップ -->
-    <div class="modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showScoreModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
+    <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+        <div class="modal-dialog modal-dialog-centered score-detail-modal-dialog" style="margin-top:calc(var(--ts-header-height, 64px) + 16px); margin-bottom:88px;">
+            <div class="modal-content score-detail-modal-content" style="max-height:calc(100vh - var(--ts-header-height, 64px) - 104px); overflow-y:auto;">
                 <div class="modal-header">
                     <h5 class="modal-title">得点詳細</h5>
                     <button type="button" class="btn-close" @click="showScoreModal=false"></button>
@@ -56,11 +56,88 @@
                 <div class="modal-body">
                     <div v-if="showScoreSummary" class="mb-3">
                         <div>予習レポート合計: {{ (scoreSummary.pre_total !== null && scoreSummary.pre_total !== undefined) ? scoreSummary.pre_total : '-' }}</div>
+                    </div>
+                    <table v-if="showScoreSummary && Array.isArray(preScoreDetail) && preScoreDetail.length" class="table table-bordered mb-3">
+                        <thead>
+                            <tr>
+                                <th>項目</th>
+                                <th>値</th>
+                                <th>係数</th>
+                                <th>小計</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in preScoreDetail">
+                                <td>{{ item.label }}</td>
+                                <td>{{ item.value }}</td>
+                                <td>{{ item.weight }}</td>
+                                <td>{{ item.value * item.weight }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="showScoreSummary" class="mb-3">
                         <div>本レポート合計: {{ (scoreSummary.main_total !== null && scoreSummary.main_total !== undefined) ? scoreSummary.main_total : '-' }}</div>
+                    </div>
+                    <table v-if="showScoreSummary && Array.isArray(mainScoreDetail) && mainScoreDetail.length" class="table table-bordered mb-3">
+                        <thead>
+                            <tr>
+                                <th>項目</th>
+                                <th>値</th>
+                                <th>係数</th>
+                                <th>小計</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in mainScoreDetail">
+                                <td>{{ item.label }}</td>
+                                <td>{{ item.value }}</td>
+                                <td>{{ item.weight }}</td>
+                                <td>{{ item.value * item.weight }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="showScoreSummary" class="mb-3">
                         <div>最終評価合計: {{ (scoreSummary.final_total !== null && scoreSummary.final_total !== undefined) ? scoreSummary.final_total : '-' }}</div>
                         <div>コメント: <span v-text="scoreSummary.final_comment || '-'"></span></div>
                     </div>
-                    <table v-if="Array.isArray(scoreDetail)" class="table table-bordered mb-0">
+                    <div v-if="showScoreRubric && scoreRubric && scoreRubric.exists" class="mb-3 score-detail-rubric">
+                        <div class="fw-semibold mb-1">ルーブリック採点結果</div>
+                        <div class="small text-muted mb-2">
+                            {{ scoreRubric.rubric.scope_label }} / version {{ scoreRubric.rubric.version }}
+                        </div>
+                        <div class="rubric-panel">
+                            <div
+                                v-for="criterion in scoreRubric.criteria"
+                                :key="'score-rubric-' + criterion.id"
+                                class="rubric-criterion-card"
+                                :class="{
+                                    'rubric-criterion-phase-first': criterion.title && criterion.title.includes('前半'),
+                                    'rubric-criterion-phase-second': criterion.title && criterion.title.includes('後半')
+                                }"
+                            >
+                                <div class="rubric-criterion-header">
+                                    <div class="fw-semibold">{{ criterion.title }}</div>
+                                    <div class="small text-muted">{{ criterion.max_points }}点満点</div>
+                                </div>
+                                <div
+                                    class="rubric-options-row"
+                                    :style="{ gridTemplateColumns: 'repeat(' + Math.max((criterion.options || []).length, 1) + ', minmax(0, 1fr))' }"
+                                >
+                                    <div
+                                        v-for="option in criterion.options"
+                                        :key="'score-rubric-option-' + option.id"
+                                        class="rubric-option-card"
+                                        :class="{ selected: option.id === criterion.selected_option_id }"
+                                    >
+                                        <div class="rubric-option-label">{{ option.label }}</div>
+                                        <div class="rubric-option-description">{{ option.description || '　' }}</div>
+                                        <div class="rubric-option-points">{{ option.points }}点</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <table v-else-if="Array.isArray(scoreDetail)" class="table table-bordered mb-0">
                         <thead>
                             <tr>
                                 <th>項目</th>

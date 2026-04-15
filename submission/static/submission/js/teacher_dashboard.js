@@ -43,10 +43,14 @@ new Vue({
         experimentNumbers: [],
         completeMap: {},
         scoreDetail: "",
+        preScoreDetail: [],
+        mainScoreDetail: [],
         showScoreModal: false,
+        scoreRubric: null,
         scoreSummary: { pre_total: null, main_total: null, final_total: null, final_comment: "" },
         hasScoreSummary: false,
         showScoreSummary: false,
+        showScoreRubric: false,
         taskConfigs: [],
         taskConfigMap: {},
         showTaskModal: false,
@@ -123,7 +127,10 @@ new Vue({
             window.location.href = '/grading_form/' + id + '/';
         },
         showScoreDetail(item) {
-            this.scoreDetail = item.score_details || "詳細情報なし";
+            this.preScoreDetail = Array.isArray(item.pre_score_details) ? item.pre_score_details : [];
+            this.mainScoreDetail = Array.isArray(item.main_score_details) ? item.main_score_details : (Array.isArray(item.score_details) ? item.score_details : []);
+            this.scoreDetail = this.mainScoreDetail.length ? this.mainScoreDetail : (item.score_details || "詳細情報なし");
+            this.scoreRubric = item.rubric_result || null;
             this.scoreSummary = {
                 pre_total: item.pre_total ?? null,
                 main_total: item.main_total ?? null,
@@ -361,12 +368,6 @@ new Vue({
         }
     },
     mounted() {
-        const updateScoreSummaryVisibility = () => {
-            const role = (window.USER_ROLE || '').trim();
-            this.showScoreSummary = role === 'non-editing teacher';
-        };
-        updateScoreSummaryVisibility();
-        setTimeout(updateScoreSummaryVisibility, 0);
         this.ensureOfferingSelected();
         this.experimentNumbers = this.experimentOptions;
         this.fetchTaskConfigs();

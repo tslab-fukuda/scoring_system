@@ -67,6 +67,14 @@
     background: #fff6f6;
 }
 
+.rubric-criterion-phase-first {
+    background: #fff1f5;
+}
+
+.rubric-criterion-phase-second {
+    background: #eef6ff;
+}
+
 .rubric-criterion-header {
     display: flex;
     justify-content: space-between;
@@ -192,4 +200,12 @@
 
 .dark-mode .rubric-criterion-missing {
     background: #372124;
+}
+
+.dark-mode .rubric-criterion-phase-first {
+    background: #3a2830;
+}
+
+.dark-mode .rubric-criterion-phase-second {
+    background: #253244;
 }
