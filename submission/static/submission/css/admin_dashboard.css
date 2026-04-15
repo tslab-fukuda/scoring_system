@@ -122,6 +122,29 @@ tr.clickable-row:hover {
     z-index: 1050;
 }
 
+.experiment-log-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.experiment-log-table th:nth-child(1),
+.experiment-log-table td.experiment-log-number {
+    width: 110px;
+    white-space: nowrap;
+}
+
+.experiment-log-table th:nth-child(2),
+.experiment-log-table td.experiment-log-status {
+    width: 90px;
+    white-space: nowrap;
+}
+
+.experiment-log-table td.experiment-log-tasks {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .step-arrow {
     display: flex;
     flex-wrap: wrap;

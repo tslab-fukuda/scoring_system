@@ -48,7 +48,7 @@
         <div class="mb-3">
           <div class="fw-semibold mb-1">実験ログ</div>
           <div class="table-responsive">
-            <table class="table table-sm">
+            <table class="table table-sm experiment-log-table">
               <thead>
                 <tr>
                   <th>実験番号</th>
@@ -58,9 +58,9 @@
               </thead>
               <tbody>
                 <tr v-for="log in experimentLogs" :key="'exp-' + log.experiment_number">
-                  <td>{{ log.experiment_number }}</td>
-                  <td>{{ log.status }}</td>
-                  <td>{{ log.completed_tasks }}</td>
+                  <td class="experiment-log-number">{{ log.experiment_number }}</td>
+                  <td class="experiment-log-status">{{ log.status }}</td>
+                  <td class="experiment-log-tasks" :title="log.completed_tasks || '-'">{{ log.completed_tasks || '-' }}</td>
                 </tr>
                 <tr v-if="!experimentLogs.length">
                   <td colspan="3" class="text-center text-muted">実験ログがありません</td>
