@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 
 # Create your models here.
 from django.contrib.auth.models import User
@@ -156,6 +157,153 @@ class ExperimentTaskConfig(models.Model):
 
     def __str__(self):
         return f"{self.course_offering} / {self.experiment_number}"
+
+
+class FinalRubric(models.Model):
+    SCOPE_DEFAULT = 'default'
+    SCOPE_OFFERING = 'offering'
+    SCOPE_CHOICES = [
+        (SCOPE_DEFAULT, 'デフォルト'),
+        (SCOPE_OFFERING, '年度個別'),
+    ]
+
+    course_offering = models.ForeignKey(
+        'submission.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='final_rubrics'
+    )
+    experiment_number = models.CharField(max_length=32)
+    scope = models.CharField(max_length=16, choices=SCOPE_CHOICES, default=SCOPE_OFFERING)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    source_rubric = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_rubrics'
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_final_rubrics'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['course_offering', 'scope', 'experiment_number', '-version']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['course_offering', 'experiment_number', 'scope', 'version'],
+                name='uniq_final_rubric_scope_version',
+            ),
+            models.UniqueConstraint(
+                fields=['course_offering', 'experiment_number', 'scope'],
+                condition=Q(is_active=True),
+                name='uniq_active_final_rubric_per_scope',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.course_offering} / {self.get_scope_display()} / {self.experiment_number} / v{self.version}"
+
+
+class FinalRubricCriterion(models.Model):
+    rubric = models.ForeignKey(
+        FinalRubric,
+        on_delete=models.CASCADE,
+        related_name='criteria'
+    )
+    title = models.CharField(max_length=255)
+    max_points = models.PositiveIntegerField(default=5)
+    order = models.PositiveIntegerField(default=0)
+    source_criterion = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_criteria'
+    )
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.rubric} / {self.title}"
+
+
+class FinalRubricOption(models.Model):
+    criterion = models.ForeignKey(
+        FinalRubricCriterion,
+        on_delete=models.CASCADE,
+        related_name='options'
+    )
+    label = models.CharField(max_length=64)
+    description = models.CharField(max_length=255, blank=True, default='')
+    points = models.PositiveIntegerField(default=0)
+    order = models.PositiveIntegerField(default=0)
+    source_option = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_options'
+    )
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.criterion} / {self.label} ({self.points})"
+
+
+class FinalRubricScore(models.Model):
+    submission = models.OneToOneField(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name='final_rubric_score'
+    )
+    rubric = models.ForeignKey(
+        FinalRubric,
+        on_delete=models.PROTECT,
+        related_name='scores'
+    )
+    adjustment_score = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    total_score = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.submission_id} / {self.rubric} / {self.total_score}"
+
+
+class FinalRubricScoreItem(models.Model):
+    rubric_score = models.ForeignKey(
+        FinalRubricScore,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    criterion = models.ForeignKey(
+        FinalRubricCriterion,
+        on_delete=models.PROTECT,
+        related_name='score_items'
+    )
+    selected_option = models.ForeignKey(
+        FinalRubricOption,
+        on_delete=models.PROTECT,
+        related_name='score_items'
+    )
+    points = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['criterion__order', 'id']
+        unique_together = ('rubric_score', 'criterion')
+
+    def __str__(self):
+        return f"{self.rubric_score_id} / {self.criterion_id} / {self.points}"
 
 
 class ExperimentProgress(models.Model):

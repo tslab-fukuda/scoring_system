@@ -5,17 +5,21 @@ from submission.decorators import role_required
 from submission.models import (
     ScoringItem,
     CourseOffering,
+    Enrollment,
     SubmissionTextIndex,
     SimilarityJob,
     ExperimentProgress,
     ExperimentTaskConfig,
+    FinalRubric,
 )
 from submission.models import Stamp
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.http import FileResponse, Http404
+from django.urls import reverse
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from urllib.parse import urlencode
 
 import os
 import io
@@ -29,6 +33,249 @@ from functools import lru_cache
 from difflib import SequenceMatcher
 from decimal import Decimal
 from PIL import Image
+from openpyxl import Workbook, load_workbook
+
+from submission.final_rubric_utils import (
+    build_rubric_editor_payload,
+    build_rubric_state_for_submission,
+    get_copy_source_candidates,
+    get_copy_source_rubric,
+    get_active_default_final_rubric,
+    get_active_final_rubric,
+    get_effective_final_rubric,
+    save_new_rubric_version,
+    save_rubric_score,
+    serialize_rubric_definition,
+)
+
+
+RUBRIC_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
+
+
+def _get_rubric_accessible_offerings(user):
+    if not hasattr(user, 'userprofile'):
+        return CourseOffering.objects.none()
+    if user.userprofile.role == 'admin':
+        return CourseOffering.objects.select_related('course').all()
+    course_ids = (
+        Enrollment.objects
+        .filter(user=user, role__in=RUBRIC_ACCESS_ROLES)
+        .values_list('course_offering__course_id', flat=True)
+        .distinct()
+    )
+    return (
+        CourseOffering.objects
+        .filter(course_id__in=course_ids)
+        .select_related('course')
+        .distinct()
+    )
+
+
+def _resolve_rubric_offering(user, offering_id):
+    offerings = list(_get_rubric_accessible_offerings(user))
+    if not offerings:
+        return None, offerings, JsonResponse(
+            {'status': 'error', 'message': 'アクセス可能な科目/年度がありません'},
+            status=404,
+        )
+    allowed_ids = {off.id for off in offerings}
+    selected_id = None
+    if offering_id:
+        try:
+            candidate = int(offering_id)
+        except (TypeError, ValueError):
+            candidate = None
+        if candidate and candidate not in allowed_ids:
+            return None, offerings, JsonResponse(
+                {'status': 'error', 'message': '対象の科目/年度にはアクセスできません'},
+                status=403,
+            )
+        selected_id = candidate
+    if not selected_id:
+        latest = max(offerings, key=lambda off: (off.year, off.id))
+        selected_id = latest.id
+    return selected_id, offerings, None
+
+
+def _serialize_rubric_offerings(offerings):
+    return [
+        {
+            'id': off.id,
+            'course_id': off.course_id,
+            'course_code': off.course.code,
+            'course_name': off.course.name,
+            'year': off.year,
+            'meeting_days': off.course.meeting_days,
+            'experiment_numbers': off.course.experiment_numbers,
+        }
+        for off in offerings
+    ]
+
+
+def _normalize_experiment_number(offering, experiment_number):
+    if not offering:
+        return ''
+    experiment_numbers = [str(item).strip() for item in (offering.course.experiment_numbers or []) if str(item).strip()]
+    requested = str(experiment_number or '').strip()
+    if requested and requested in experiment_numbers:
+        return requested
+    return experiment_numbers[0] if experiment_numbers else ''
+
+
+def _final_rubric_settings_url(offering_id=None, experiment_number=None):
+    params = {}
+    if offering_id:
+        params['offering_id'] = offering_id
+    if experiment_number:
+        params['experiment_number'] = experiment_number
+    base_url = reverse('final_rubric_settings')
+    return f"{base_url}?{urlencode(params)}" if params else base_url
+
+
+def _normalize_rubric_scope(scope):
+    if scope == FinalRubric.SCOPE_DEFAULT:
+        return FinalRubric.SCOPE_DEFAULT
+    return FinalRubric.SCOPE_OFFERING
+
+
+def _rubric_scope_label(scope):
+    return 'デフォルト' if scope == FinalRubric.SCOPE_DEFAULT else '年度個別'
+
+
+def _build_rubric_export_workbook(offering, experiment_number, scope, payload, active_version=None):
+    workbook = Workbook()
+    rubric_sheet = workbook.active
+    rubric_sheet.title = 'rubric'
+    criteria = payload.get('criteria') or []
+    max_option_count = max((len(criterion.get('options') or []) for criterion in criteria), default=0)
+    headers = ['クライテリア', '満点']
+    for option_index in range(max_option_count):
+        headers.extend([
+            f'評価{option_index + 1}ラベル',
+            f'評価{option_index + 1}説明',
+        ])
+    for col_index, header in enumerate(headers, start=1):
+        rubric_sheet.cell(row=1, column=col_index, value=header)
+
+    row_index = 2
+    for criterion in criteria:
+        rubric_sheet.cell(row=row_index, column=1, value=criterion.get('title', ''))
+        rubric_sheet.cell(row=row_index, column=2, value=criterion.get('max_points', 0))
+        column_index = 3
+        for option in (criterion.get('options') or []):
+            rubric_sheet.cell(row=row_index, column=column_index, value=option.get('label', ''))
+            rubric_sheet.cell(row=row_index, column=column_index + 1, value=option.get('description', ''))
+            column_index += 2
+        row_index += 1
+    return workbook
+
+
+def _parse_rubric_import_workbook(uploaded_file):
+    workbook = load_workbook(uploaded_file, data_only=True)
+    sheet = workbook['rubric'] if 'rubric' in workbook.sheetnames else workbook.active
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    headers = [str(cell or '').strip() for cell in (header_row or [])]
+
+    if len(headers) >= 2 and headers[0] == 'クライテリア' and headers[1] == '満点':
+        criteria = []
+        for row_index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=0):
+            if not row or all(value in (None, '') for value in row):
+                continue
+            title = str(row[0] or '').strip()
+            if not title:
+                raise ValueError('クライテリア が空の行があります')
+            try:
+                max_points = int(row[1] or 0)
+            except (TypeError, ValueError):
+                raise ValueError('満点 は整数で入力してください')
+            options = []
+            option_order = 0
+            for column_index in range(2, len(headers), 2):
+                label = str(row[column_index] or '').strip() if column_index < len(row) else ''
+                description = str(row[column_index + 1] or '').strip() if column_index + 1 < len(row) else ''
+                if not label and not description:
+                    continue
+                if not label:
+                    raise ValueError(f'{title} の評価{option_order + 1}ラベルが空です')
+                options.append({
+                    'source_option_id': None,
+                    'label': label,
+                    'description': description,
+                    'order': option_order,
+                })
+                option_order += 1
+            if not options:
+                raise ValueError(f'{title} に選択肢がありません')
+            criteria.append({
+                'source_criterion_id': None,
+                'title': title,
+                'max_points': max_points,
+                'order': row_index,
+                'options': options,
+            })
+        if not criteria:
+            raise ValueError('rubric シートにクライテリアがありません')
+        return {'criteria': criteria}
+
+    if 'criteria' in workbook.sheetnames:
+        criteria_sheet = workbook['criteria']
+        header_row = next(criteria_sheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        headers = [str(cell or '').strip() for cell in (header_row or [])]
+        expected = [
+            'criterion_order',
+            'criterion_title',
+            'max_points',
+            'option_order',
+            'option_label',
+            'option_description',
+        ]
+        if headers[:len(expected)] != expected:
+            raise ValueError('Excel のヘッダ形式が不正です')
+
+        criterion_map = {}
+        for row in criteria_sheet.iter_rows(min_row=2, values_only=True):
+            if not row or all(value in (None, '') for value in row):
+                continue
+            try:
+                criterion_order = int(row[0] or 0)
+                max_points = int(row[2] or 0)
+                option_order = int(row[3] or 0)
+            except (TypeError, ValueError):
+                raise ValueError('criterion_order / max_points / option_order は整数で入力してください')
+            title = str(row[1] or '').strip()
+            label = str(row[4] or '').strip()
+            description = str(row[5] or '').strip()
+            if not title:
+                raise ValueError('criterion_title が空の行があります')
+            if not label:
+                raise ValueError('option_label が空の行があります')
+            criterion = criterion_map.setdefault(criterion_order, {
+                'source_criterion_id': None,
+                'title': title,
+                'max_points': max_points,
+                'order': criterion_order,
+                'options': [],
+            })
+            criterion['title'] = title
+            criterion['max_points'] = max_points
+            criterion['options'].append({
+                'source_option_id': None,
+                'label': label,
+                'description': description,
+                'order': option_order,
+            })
+
+        if not criterion_map:
+            raise ValueError('criteria シートにクライテリアがありません')
+
+        criteria = []
+        for criterion_order in sorted(criterion_map.keys()):
+            criterion = criterion_map[criterion_order]
+            criterion['options'] = sorted(criterion['options'], key=lambda option: option['order'])
+            criteria.append(criterion)
+        return {'criteria': criteria}
+
+    raise ValueError('rubric シートがありません')
 
 @login_required
 @role_required('teacher','admin','course-teacher','non-editing teacher')
@@ -178,8 +425,232 @@ def stamps_api(request):
 
 @login_required
 @role_required('non-editing teacher', 'admin')
+def final_rubric_settings(request):
+    default_offering_id, offerings, error_response = _resolve_rubric_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    if error_response:
+        return error_response
+    offering_map = {off.id: off for off in offerings}
+    selected_offering = offering_map.get(default_offering_id)
+    selected_experiment_number = _normalize_experiment_number(
+        selected_offering,
+        request.GET.get('experiment_number'),
+    )
+    initial_scope = FinalRubric.SCOPE_OFFERING
+    if selected_offering:
+        if get_active_default_final_rubric(selected_offering):
+            initial_scope = FinalRubric.SCOPE_DEFAULT
+    return render(request, 'submission/final_rubric_settings.html', {
+        'offerings_json': json.dumps(_serialize_rubric_offerings(offerings), ensure_ascii=False),
+        'default_offering_id': default_offering_id,
+        'initial_experiment_number_json': json.dumps(selected_experiment_number, ensure_ascii=False),
+        'initial_scope_json': json.dumps(initial_scope, ensure_ascii=False),
+        'can_edit_default_json': json.dumps(request.user.userprofile.role == 'admin'),
+    })
+
+
+@login_required
+@role_required('non-editing teacher', 'admin')
+def final_rubric_definition_api(request):
+    if request.method == 'GET':
+        default_offering_id, offerings, error_response = _resolve_rubric_offering(
+            request.user,
+            request.GET.get('offering_id'),
+        )
+        if error_response:
+            return error_response
+        offering = next((off for off in offerings if off.id == default_offering_id), None)
+        scope = _normalize_rubric_scope(request.GET.get('scope'))
+        experiment_number = _normalize_experiment_number(offering, request.GET.get('experiment_number'))
+        if scope != FinalRubric.SCOPE_DEFAULT and not experiment_number:
+            return JsonResponse({
+                'status': 'error',
+                'message': '対象科目に実験項目が設定されていません',
+            }, status=400)
+        source_rubric_id = request.GET.get('source_rubric_id')
+        if source_rubric_id:
+            loaded_from = get_copy_source_rubric(offering, scope, source_rubric_id)
+            if loaded_from is None:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': '継承元の評価基準が見つかりません',
+                }, status=404)
+            payload = serialize_rubric_definition(loaded_from)
+            active_rubric = get_active_final_rubric(offering, experiment_number, scope)
+            copied_from = loaded_from
+        else:
+            editor_state = build_rubric_editor_payload(offering, experiment_number, scope)
+            payload = editor_state['payload']
+            active_rubric = editor_state['active_rubric']
+            copied_from = editor_state['copied_from']
+            loaded_from = editor_state['loaded_from']
+        return JsonResponse({
+            'status': 'ok',
+            'offering_id': offering.id,
+            'scope': scope,
+            'experiment_number': experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '',
+            'experiment_numbers': offering.course.experiment_numbers or [],
+            'rubric_payload': payload,
+            'active_version': active_rubric.version if active_rubric else None,
+            'loaded_from': {
+                'id': loaded_from.id,
+                'scope': loaded_from.scope,
+                'scope_label': loaded_from.get_scope_display(),
+                'year': loaded_from.course_offering.year if loaded_from.course_offering else None,
+                'experiment_number': loaded_from.experiment_number,
+                'version': loaded_from.version,
+            } if loaded_from else None,
+            'copy_candidates': get_copy_source_candidates(offering, experiment_number, scope),
+            'can_edit': request.user.userprofile.role == 'admin' or scope != FinalRubric.SCOPE_DEFAULT,
+        })
+
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': '不正なリクエストです'}, status=400)
+
+    default_offering_id, offerings, error_response = _resolve_rubric_offering(
+        request.user,
+        data.get('offering_id'),
+    )
+    if error_response:
+        return error_response
+    offering = next((off for off in offerings if off.id == default_offering_id), None)
+    scope = _normalize_rubric_scope(data.get('scope'))
+    experiment_number = _normalize_experiment_number(offering, data.get('experiment_number'))
+    if scope != FinalRubric.SCOPE_DEFAULT and not experiment_number:
+        return JsonResponse({
+            'status': 'error',
+            'message': '対象科目に実験項目が設定されていません',
+        }, status=400)
+    if scope == FinalRubric.SCOPE_DEFAULT and request.user.userprofile.role != 'admin':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'デフォルト基準は admin のみ編集できます',
+        }, status=403)
+
+    payload = data.get('payload') or {}
+    if not (payload.get('criteria') or []):
+        return JsonResponse({'status': 'error', 'message': 'クライテリアを1件以上設定してください'}, status=400)
+
+    source_rubric = get_copy_source_rubric(offering, scope, data.get('source_rubric_id'))
+    rubric = save_new_rubric_version(
+        offering,
+        experiment_number,
+        scope,
+        payload,
+        request.user,
+        source_rubric=source_rubric,
+    )
+    return JsonResponse({
+        'status': 'ok',
+        'message': '最終評価基準を保存しました',
+        'scope': rubric.scope,
+        'rubric_payload': serialize_rubric_definition(rubric),
+        'active_version': rubric.version,
+    })
+
+
+@login_required
+@role_required('non-editing teacher', 'admin')
+def final_rubric_export_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'method not allowed'}, status=405)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': '不正なリクエストです'}, status=400)
+
+    default_offering_id, offerings, error_response = _resolve_rubric_offering(
+        request.user,
+        data.get('offering_id'),
+    )
+    if error_response:
+        return error_response
+    offering = next((off for off in offerings if off.id == default_offering_id), None)
+    scope = _normalize_rubric_scope(data.get('scope'))
+    experiment_number = _normalize_experiment_number(offering, data.get('experiment_number'))
+    payload = data.get('payload') or {}
+    if scope != FinalRubric.SCOPE_DEFAULT and not experiment_number:
+        return JsonResponse({'status': 'error', 'message': '実験項目が不正です'}, status=400)
+    if not (payload.get('criteria') or []):
+        return JsonResponse({'status': 'error', 'message': 'エクスポートするクライテリアがありません'}, status=400)
+
+    active_rubric = get_active_final_rubric(offering, experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '', scope)
+    workbook = _build_rubric_export_workbook(
+        offering,
+        experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '',
+        scope,
+        payload,
+        active_version=active_rubric.version if active_rubric else None,
+    )
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    filename_suffix = experiment_number if scope != FinalRubric.SCOPE_DEFAULT else 'default'
+    filename = f"final_rubric_{offering.course.code}_{offering.year}_{filename_suffix}_{scope}.xlsx"
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@role_required('non-editing teacher', 'admin')
+def final_rubric_import_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'method not allowed'}, status=405)
+
+    default_offering_id, offerings, error_response = _resolve_rubric_offering(
+        request.user,
+        request.POST.get('offering_id'),
+    )
+    if error_response:
+        return error_response
+    offering = next((off for off in offerings if off.id == default_offering_id), None)
+    scope = _normalize_rubric_scope(request.POST.get('scope'))
+    experiment_number = _normalize_experiment_number(offering, request.POST.get('experiment_number'))
+    if scope == FinalRubric.SCOPE_DEFAULT and request.user.userprofile.role != 'admin':
+        return JsonResponse({'status': 'error', 'message': 'デフォルト基準は admin のみ編集できます'}, status=403)
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return JsonResponse({'status': 'error', 'message': 'Excel ファイルを選択してください'}, status=400)
+
+    try:
+        payload = _parse_rubric_import_workbook(uploaded_file)
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({'status': 'error', 'message': 'Excel の読み込みに失敗しました'}, status=400)
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': 'Excel を読み込みました。内容を確認してから保存してください。',
+        'offering_id': offering.id,
+        'experiment_number': experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '',
+        'scope': scope,
+        'rubric_payload': payload,
+    })
+
+
+@login_required
+@role_required('non-editing teacher', 'admin')
 def final_grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
+    rubric_error = ''
+    submitted_selection = None
+    final_comment_value = submission.final_comment or ''
+    existing_rubric_score = getattr(submission, 'final_rubric_score', None)
+    adjustment_score_value = existing_rubric_score.adjustment_score if existing_rubric_score else Decimal('0')
 
     def calc_total(sub):
         if not sub or not sub.score_details:
@@ -273,21 +744,33 @@ def final_grading_form(request, submission_id):
         + sum(i['value'] * i.get('weight', 1) for i in main_items)
     )
 
-    if request.method == 'POST':
-        try:
-            final_val = Decimal(request.POST.get('final_value', '0'))
-        except Exception:
-            final_val = Decimal('0')
-        submission.final_score = final_val
-        submission.final_evaluated = True
-        submission.final_comment = request.POST.get('final_comment', '').strip()
-        submission.save()
-        return redirect('/submission/non_editing_teacher_dashboard/')
+    active_rubric = get_effective_final_rubric(submission.course_offering, submission.experiment_number)
 
-    final_value = (
-        float(submission.final_score)
-        if submission.final_score is not None else ''
-    )
+    if request.method == 'POST':
+        final_comment = request.POST.get('final_comment', '').strip()
+        final_comment_value = final_comment
+        try:
+            adjustment_score_value = Decimal(str(request.POST.get('adjustment_score', '0') or '0'))
+        except Exception:
+            adjustment_score_value = Decimal('0')
+        if active_rubric is None:
+            rubric_error = '最終評価基準が未設定です。先に評価基準を作成してください。'
+        else:
+            try:
+                submitted_selection = json.loads(request.POST.get('rubric_selection_json') or '{}')
+            except json.JSONDecodeError:
+                submitted_selection = {}
+            _, missing = save_rubric_score(
+                submission,
+                active_rubric,
+                submitted_selection,
+                final_comment,
+                adjustment_score_value,
+            )
+            if not missing:
+                return redirect('/submission/non_editing_teacher_dashboard/')
+            rubric_error = '未選択のクライテリアがあります: ' + ' / '.join(missing)
+
     candidates = []
     candidate_qs = Submission.objects.filter(
         experiment_number=submission.experiment_number,
@@ -326,15 +809,42 @@ def final_grading_form(request, submission_id):
     ordered_completed_tasks = [task for task in configured_tasks if task in completed_tasks]
     ordered_completed_tasks.extend(sorted(completed_tasks - set(ordered_completed_tasks)))
 
+    rubric_state = build_rubric_state_for_submission(submission)
+    if isinstance(submitted_selection, dict) and rubric_state.get('exists'):
+        rubric_state['selected_option_ids'] = {
+            str(key): value for key, value in submitted_selection.items()
+        }
+        rubric_state['total_score'] = None
+    rubric_state['adjustment_score'] = float(adjustment_score_value)
+
+    rubric_total = rubric_state.get('total_score')
+    if rubric_total is None and submission.final_score is not None:
+        rubric_total = float(submission.final_score)
+
     return render(request, 'submission/final_grading_form.html', {
         'submission': submission,
         'total_score': total_score,
-        'final_value': final_value,
         'pre_items': pre_items,
         'main_items': main_items,
-        'final_comment': submission.final_comment or '',
+        'final_comment': final_comment_value,
         'completed_tasks_text': ', '.join(ordered_completed_tasks) if ordered_completed_tasks else '-',
         'compare_candidates': json.dumps(candidates, ensure_ascii=False),
+        'rubric_state_json': json.dumps(rubric_state, ensure_ascii=False),
+        'rubric_error': rubric_error,
+        'rubric_error_json': json.dumps(rubric_error, ensure_ascii=False),
+        'rubric_total': rubric_total if rubric_total is not None else '',
+        'adjustment_score': adjustment_score_value,
+        'rubric_settings_url': _final_rubric_settings_url(
+            submission.course_offering_id,
+            submission.experiment_number,
+        ),
+        'rubric_settings_url_json': json.dumps(
+            _final_rubric_settings_url(
+                submission.course_offering_id,
+                submission.experiment_number,
+            ),
+            ensure_ascii=False,
+        ),
     })
 
 

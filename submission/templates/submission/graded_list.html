@@ -46,7 +46,7 @@
     </table>
     </div>
     <!-- 得点詳細のポップアップ -->
-    <div v-if="showScoreModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+    <div class="modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showScoreModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">

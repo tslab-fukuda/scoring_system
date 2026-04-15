@@ -3,7 +3,8 @@
 new Vue({
     el: '#final-grading-form',
     data: {
-        showScore: false,
+        showDeduction: false,
+        showRubric: false,
         showCompare: false,
         syncScroll: true,
         compareUserId: "",
@@ -22,8 +23,104 @@ new Vue({
         sectionExpandState: {},
         detailAccordionState: {},
         syncingScroll: false,
+        rubricState: window.finalRubricState || {},
+        rubricSelectedOptionIds: Object.assign({}, (window.finalRubricState && window.finalRubricState.selected_option_ids) || {}),
+        rubricNeedsReviewCriterionIds: (window.finalRubricState && window.finalRubricState.needs_review_criterion_ids) || [],
+        rubricValidationAttempted: false,
+        rubricSubmitError: window.finalRubricError || "",
+        rubricSavedTotal: window.finalRubricSavedTotal,
+        scoreDetailsTotal: window.finalScoreDetailsTotal,
+        adjustmentScoreInput: String(window.finalAdjustmentScore ?? 0),
+    },
+    computed: {
+        rubricExists() {
+            return !!this.rubricState.exists;
+        },
+        rubricCriteria() {
+            return this.rubricState.criteria || [];
+        },
+        rubricVersion() {
+            return this.rubricState.rubric ? this.rubricState.rubric.version : "-";
+        },
+        rubricScopeLabel() {
+            return this.rubricState.rubric ? (this.rubricState.rubric.scope_label || '-') : '-';
+        },
+        rubricMissingCriterionIds() {
+            return this.rubricCriteria
+                .filter((criterion) => !this.rubricSelectedOptionIds[String(criterion.id)])
+                .map((criterion) => String(criterion.id));
+        },
+        rubricNeedsReview() {
+            return this.rubricNeedsReviewCriterionIds.some((criterionId) => {
+                return !this.rubricSelectedOptionIds[String(criterionId)];
+            });
+        },
+        rubricMaxOptionCount() {
+            return Math.max(1, ...this.rubricCriteria.map((criterion) => (criterion.options || []).length || 0));
+        },
+        rubricOptionGridStyle() {
+            return {
+                gridTemplateColumns: `repeat(${this.rubricMaxOptionCount}, minmax(110px, 1fr))`,
+            };
+        },
+        rubricPanelInnerStyle() {
+            return {};
+        },
+        rubricTotalScore() {
+            const optionMap = {};
+            this.rubricCriteria.forEach((criterion) => {
+                (criterion.options || []).forEach((option) => {
+                    optionMap[String(option.id)] = Number(option.points || 0);
+                });
+            });
+            return Object.values(this.rubricSelectedOptionIds).reduce((sum, optionId) => {
+                return sum + (optionMap[String(optionId)] || 0);
+            }, 0);
+        },
+        adjustmentScoreValue() {
+            const parsed = Number(this.adjustmentScoreInput);
+            return Number.isFinite(parsed) ? parsed : 0;
+        },
+        displayedFinalScore() {
+            if (this.rubricExists) {
+                return this.rubricTotalScore + this.adjustmentScoreValue;
+            }
+            if (this.rubricSavedTotal !== null && this.rubricSavedTotal !== '' && this.rubricSavedTotal !== undefined) {
+                return this.rubricSavedTotal;
+            }
+            return this.scoreDetailsTotal;
+        },
+        serializedRubricSelection() {
+            return JSON.stringify(this.rubricSelectedOptionIds || {});
+        },
     },
     methods: {
+        selectRubricOption(criterionId, optionId) {
+            this.$set(this.rubricSelectedOptionIds, String(criterionId), optionId);
+            this.rubricSubmitError = "";
+        },
+        isRubricOptionSelected(criterionId, optionId) {
+            return String(this.rubricSelectedOptionIds[String(criterionId)]) === String(optionId);
+        },
+        criterionNeedsReview(criterionId) {
+            return this.rubricNeedsReviewCriterionIds.includes(String(criterionId))
+                && !this.rubricSelectedOptionIds[String(criterionId)];
+        },
+        criterionIsMissing(criterionId) {
+            return this.rubricValidationAttempted && !this.rubricSelectedOptionIds[String(criterionId)];
+        },
+        handleRubricSubmit(event) {
+            if (!this.rubricExists) {
+                event.preventDefault();
+                this.rubricSubmitError = "最終評価基準が未設定です。";
+                return;
+            }
+            if (this.rubricMissingCriterionIds.length) {
+                event.preventDefault();
+                this.rubricValidationAttempted = true;
+                this.rubricSubmitError = "未選択のクライテリアがあります。すべて選択してから保存してください。";
+            }
+        },
         riskLabel(level) {
             if (level === 'high') return '高';
             if (level === 'medium') return '中';
@@ -137,8 +234,15 @@ new Vue({
                     }, 180);
                 });
         },
-        toggleScore() {
-            this.showScore = !this.showScore;
+        toggleDeduction() {
+            const nextState = !this.showDeduction;
+            this.showDeduction = nextState;
+            if (nextState) this.showRubric = false;
+        },
+        toggleRubric() {
+            const nextState = !this.showRubric;
+            this.showRubric = nextState;
+            if (nextState) this.showDeduction = false;
         },
         toggleCompare() {
             this.showCompare = !this.showCompare;

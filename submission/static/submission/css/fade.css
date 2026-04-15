@@ -33,6 +33,10 @@
     gap: 16px;
     animation: modal-pop-in 0.23s cubic-bezier(.36,1.8,.64,1);
 }
+
+.ts-modal-hidden {
+    display: none !important;
+}
 @keyframes modal-pop-in {
     0% { opacity: 0; transform: scale(0.95);}
     100% { opacity: 1; transform: scale(1);}

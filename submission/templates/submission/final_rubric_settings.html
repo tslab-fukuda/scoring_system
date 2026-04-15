@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}最終評価基準設定{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/final_rubric.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="final-rubric-settings" class="container mt-4" v-cloak>
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h2 class="mb-2">最終評価基準設定</h2>
+      <div class="text-muted small">科目/年度と実験項目ごとに、最終評価ルーブリックを設定します。</div>
+    </div>
+  </div>
+
+  {% include "submission/_offering_selector.html" %}
+
+  {% verbatim %}
+  <div class="row g-3 align-items-end mb-4">
+    <div v-if="requiresExperimentNumber" class="col-md-4">
+      <label class="form-label">実験項目</label>
+      <select class="form-select" v-model="selectedExperimentNumber">
+        <option value="" disabled>実験項目を選択</option>
+        <option v-for="experimentNumber in experimentNumberOptions" :key="experimentNumber" :value="experimentNumber">
+          {{ experimentNumber }}
+        </option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">基準種別</label>
+      <div class="btn-group w-100 rubric-scope-toggle" role="group">
+        <button type="button" class="btn" :class="selectedScope === 'default' ? 'btn-primary' : 'btn-outline-primary'" @click="selectScope('default')">
+          デフォルト
+        </button>
+        <button type="button" class="btn" :class="selectedScope === 'offering' ? 'btn-primary' : 'btn-outline-primary'" @click="selectScope('offering')">
+          年度個別
+        </button>
+      </div>
+    </div>
+    <div class="col-md-auto">
+      <button class="btn btn-outline-secondary" @click="loadRubricDefinition" :disabled="loading || (requiresExperimentNumber && !selectedExperimentNumber)">
+        {{ loading ? '読込中...' : '再読み込み' }}
+      </button>
+    </div>
+    <div class="col">
+      <div class="small text-muted">
+        <div v-if="activeVersion">現在の公開版: {{ selectedScopeLabel }} / version {{ activeVersion }}</div>
+        <div v-else-if="loadedFrom">
+          初期表示: {{ loadedFrom.year }}年度 / {{ loadedFrom.scope_label }}
+          <span v-if="loadedFrom.experiment_number"> / {{ loadedFrom.experiment_number }}</span>
+          / v{{ loadedFrom.version }}
+        </div>
+        <div v-else>公開済み基準はありません。新規作成してください。</div>
+        <div v-if="selectedScope === 'default' && !canEditDefault" class="text-warning mt-1">
+          デフォルト基準の編集は admin のみ行えます。閲覧は可能です。
+        </div>
+        <div v-if="selectedScope === 'default'" class="mt-1">
+          デフォルト基準は、この科目/年度の全実験項目に共通で適用されます。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="copyCandidates.length" class="rubric-copy-panel mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-8">
+        <label class="form-label">継承元</label>
+        <select class="form-select" v-model="selectedSourceRubricId">
+          <option value="">継承元を選択</option>
+          <option v-for="candidate in copyCandidates" :key="candidate.id" :value="String(candidate.id)">
+            {{ candidate.label }}
+          </option>
+        </select>
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-outline-secondary" @click="applyCopySource" :disabled="loading || !selectedSourceRubricId">
+          継承して読込
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+  <div v-if="saveMessage" class="alert alert-success">{{ saveMessage }}</div>
+
+  <div v-if="requiresExperimentNumber && !experimentNumberOptions.length" class="alert alert-warning">
+    対象科目に実験項目が設定されていません。
+  </div>
+
+  <div v-else>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="small text-muted">合計満点: {{ rubricMaxScore }} 点</div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" @click="openExportGuide" :disabled="loading || (requiresExperimentNumber && !selectedExperimentNumber) || !criteria.length">
+          エクスポート
+        </button>
+        <button class="btn btn-outline-secondary" @click="triggerImport" :disabled="loading || !canEditCurrent">
+          インポート
+        </button>
+        <button class="btn btn-outline-primary" @click="addCriterion" :disabled="!canEditCurrent">クライテリア追加</button>
+        <button class="btn btn-primary" @click="saveRubric" :disabled="saving || (requiresExperimentNumber && !selectedExperimentNumber) || !canEditCurrent">
+          {{ saving ? '保存中...' : '新しい版として保存' }}
+        </button>
+      </div>
+    </div>
+
+    <input ref="importFileInput" type="file" accept=".xlsx" class="d-none" @change="handleImportFile">
+
+    <div v-for="(criterion, criterionIndex) in criteria" :key="'criterion-editor-' + criterionIndex" class="rubric-editor-card mb-3">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div class="flex-grow-1">
+          <label class="form-label">クライテリア名</label>
+          <input type="text" class="form-control" v-model="criterion.title" placeholder="クライテリア名を入力" :disabled="!canEditCurrent">
+        </div>
+        <div class="rubric-editor-side">
+          <label class="form-label">満点</label>
+          <input type="number" min="0" class="form-control" v-model.number="criterion.max_points" @input="refreshCriterionPoints(criterion)" :disabled="!canEditCurrent">
+        </div>
+        <div class="rubric-editor-side">
+          <label class="form-label">段階数</label>
+          <input type="number" min="2" max="10" class="form-control" :value="criterion.options.length" @change="changeOptionCount(criterion, $event.target.value)" :disabled="!canEditCurrent">
+        </div>
+        <div class="rubric-editor-actions">
+          <button class="btn btn-outline-danger" @click="removeCriterion(criterionIndex)" :disabled="criteria.length <= 1 || !canEditCurrent">削除</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle rubric-option-editor-table">
+          <thead>
+            <tr>
+              <th style="width: 120px;">評価ラベル</th>
+              <th>説明文</th>
+              <th style="width: 100px;">点数</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(option, optionIndex) in criterion.options" :key="'criterion-' + criterionIndex + '-option-' + optionIndex">
+              <td><input type="text" class="form-control" v-model="option.label" :disabled="!canEditCurrent"></td>
+              <td><input type="text" class="form-control" v-model="option.description" :disabled="!canEditCurrent"></td>
+              <td><input type="text" class="form-control" :value="option.points" readonly></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showExportGuide" class="rubric-guide-backdrop" @click.self="closeExportGuide">
+    <div class="rubric-guide-modal">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <h5 class="mb-1">エクスポート形式の説明</h5>
+          <div class="small text-muted">この内容を確認したあと、現在のルーブリックを Excel 形式で出力します。</div>
+        </div>
+        <button type="button" class="btn-close" aria-label="Close" @click="closeExportGuide"></button>
+      </div>
+
+      <div class="rubric-guide-section mb-3">
+        <div class="fw-semibold mb-2">ファイル形式</div>
+        <ul class="mb-0 small">
+          <li>`rubric` シート 1枚だけを使用します。</li>
+          <li>1行が1つのクライテリアです。</li>
+          <li>行の並び順が、そのままクライテリアの表示順になります。</li>
+        </ul>
+      </div>
+
+      <div class="rubric-guide-section mb-3">
+        <div class="fw-semibold mb-2">各カラムの意味</div>
+        <ul class="mb-0 small">
+          <li>`クライテリア`: 評価項目名です。編集できます。</li>
+          <li>`満点`: そのクライテリアの満点です。編集できます。</li>
+          <li>`評価Nラベル`: 各選択肢のラベルです。編集できます。</li>
+          <li>`評価N説明`: 各選択肢の説明文です。編集できます。</li>
+        </ul>
+      </div>
+
+      <div class="rubric-guide-section mb-3">
+        <div class="fw-semibold mb-2">編集できる箇所</div>
+        <ul class="mb-0 small">
+          <li>クライテリア名、満点、評価ラベル、評価説明を編集できます。</li>
+          <li>不要なクライテリアは行ごと削除できます。</li>
+          <li>不要な選択肢は、右側の `評価Nラベル / 評価N説明` の列を空欄にしてください。</li>
+          <li>点数は入力しません。満点と選択肢数から自動計算されます。</li>
+        </ul>
+      </div>
+
+      <div class="rubric-guide-section mb-4">
+        <div class="fw-semibold mb-2">編集例</div>
+        <ul class="mb-0 small">
+          <li>評価ラベルを3つにしたい場合:
+            `評価1ラベル/説明`, `評価2ラベル/説明`, `評価3ラベル/説明` だけを残し、`評価4` 以降を空欄にします。</li>
+          <li>クライテリアを追加したい場合:
+            最下行に新しい行を追加して、`クライテリア` と `満点`、必要な評価列を入力します。</li>
+          <li>クライテリア順を変えたい場合:
+            Excel 上で行を入れ替えるだけで反映されます。</li>
+        </ul>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary" @click="closeExportGuide">キャンセル</button>
+        <button type="button" class="btn btn-primary" @click="exportRubric">エクスポート</button>
+      </div>
+    </div>
+  </div>
+  {% endverbatim %}
+</div>
+
+<script>
+  window.finalRubricOfferings = {
+    offerings: {{ offerings_json|safe }},
+    defaultOfferingId: {{ default_offering_id|default:"null" }}
+  };
+  window.finalRubricSettings = {
+    initialExperimentNumber: {{ initial_experiment_number_json|safe }},
+    initialScope: {{ initial_scope_json|safe }},
+    canEditDefault: {{ can_edit_default_json|safe }}
+  };
+  window.csrfToken = '{{ csrf_token }}';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="{% static 'submission/js/offering_selector.js' %}"></script>
+<script src="{% static 'submission/js/final_rubric_settings.js' %}"></script>
+{% endblock %}

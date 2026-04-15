@@ -87,7 +87,7 @@
                 {% endverbatim %}
             </div>
             <!-- モーダル: 実験一覧+終了判定 -->
-            <div v-if="showStudentModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+            <div class="modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showStudentModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
                 <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" style="max-width:95vw; margin-top:calc(var(--ts-header-height, 64px) + 16px);">
                     {% verbatim %}
                     <div class="modal-content">

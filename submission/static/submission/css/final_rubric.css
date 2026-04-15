@@ -1,0 +1,195 @@
+.rubric-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rubric-panel-scroll {
+    overflow: visible;
+}
+
+.rubric-panel-inner {
+    width: 100%;
+    min-width: 0;
+}
+
+.rubric-copy-panel {
+    border: 1px solid #d8dee8;
+    border-radius: 12px;
+    background: #fff;
+    padding: 14px;
+}
+
+.rubric-guide-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 1400;
+}
+
+.rubric-guide-modal {
+    width: min(820px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #d8dee8;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+}
+
+.rubric-guide-section {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 14px 16px;
+}
+
+.rubric-criterion-card,
+.rubric-editor-card {
+    border: 1px solid #d8dee8;
+    border-radius: 12px;
+    background: #fff;
+    padding: 14px;
+}
+
+.rubric-criterion-review {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.15);
+}
+
+.rubric-criterion-missing {
+    border-color: #dc3545;
+    background: #fff6f6;
+}
+
+.rubric-criterion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.rubric-options-row {
+    display: grid;
+    gap: 10px;
+    justify-content: start;
+}
+
+.rubric-option-card {
+    border: 1px solid #cfd7e3;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 10px;
+    text-align: left;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    min-width: 0;
+}
+
+.rubric-option-card.selected {
+    border-color: #198754;
+    background: #eefaf3;
+    box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.15);
+}
+
+.rubric-option-label {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.rubric-option-description {
+    min-height: 2.4em;
+    color: #495057;
+    font-size: 0.88rem;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.rubric-option-points {
+    margin-top: 8px;
+    font-weight: 700;
+    text-align: right;
+    font-size: 0.95rem;
+}
+
+.rubric-editor-side {
+    width: 120px;
+}
+
+.rubric-editor-actions {
+    display: flex;
+    align-items: end;
+}
+
+.rubric-option-editor-table th,
+.rubric-option-editor-table td {
+    white-space: nowrap;
+}
+
+.rubric-option-editor-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.rubric-option-editor-table th:nth-child(1),
+.rubric-option-editor-table td:nth-child(1) {
+    width: 120px;
+}
+
+.rubric-option-editor-table td:nth-child(2),
+.rubric-option-editor-table th:nth-child(2) {
+    width: calc(100% - 220px);
+}
+
+.rubric-option-editor-table th:nth-child(3),
+.rubric-option-editor-table td:nth-child(3) {
+    width: 100px;
+}
+
+.rubric-option-editor-table td:nth-child(2) .form-control,
+.rubric-option-editor-table th:nth-child(2) .form-control {
+    font-size: 0.92rem;
+}
+
+.rubric-option-editor-table td:nth-child(3) .form-control {
+    min-width: 84px;
+    text-align: right;
+}
+
+.dark-mode .rubric-criterion-card,
+.dark-mode .rubric-editor-card,
+.dark-mode .rubric-copy-panel,
+.dark-mode .rubric-guide-modal,
+.dark-mode .rubric-guide-section {
+    background: #1f2430;
+    border-color: #495057;
+}
+
+.dark-mode .rubric-guide-backdrop {
+    background: rgba(0, 0, 0, 0.58);
+}
+
+.dark-mode .rubric-option-card {
+    background: #2b303b;
+    border-color: #495057;
+    color: #f8f9fa;
+}
+
+.dark-mode .rubric-option-card.selected {
+    background: #173126;
+    border-color: #36a269;
+}
+
+.dark-mode .rubric-option-description {
+    color: #d0d4db;
+}
+
+.dark-mode .rubric-criterion-missing {
+    background: #372124;
+}
