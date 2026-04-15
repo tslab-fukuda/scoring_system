@@ -273,3 +273,56 @@
     -webkit-user-select: auto;
     user-select: auto;
 }
+
+.pdf-page-layer {
+    position: relative;
+}
+
+.text-tool-controls {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+.text-annotation-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.text-annotation-view,
+.text-annotation-editor {
+    position: absolute;
+    padding: 2px 4px;
+    color: #ff0000;
+    background: transparent;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+    pointer-events: auto;
+}
+
+.text-annotation-view {
+    border: 1px solid transparent;
+    outline: none;
+    cursor: default;
+    pointer-events: none;
+}
+
+.text-annotation-view.text-annotation-editable {
+    cursor: move;
+    pointer-events: auto;
+}
+
+.text-annotation-view.text-annotation-editable:hover {
+    border-color: rgba(255, 0, 0, 0.35);
+}
+
+.text-annotation-editor {
+    resize: none;
+    overflow: hidden;
+    border: 1px dashed rgba(255, 0, 0, 0.65);
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.08);
+}

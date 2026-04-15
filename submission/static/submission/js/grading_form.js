@@ -17,6 +17,7 @@ new Vue({
         stamps: [],
         selectedStamp: "",
         penWidth: 2,
+        textFontSize: 18,
         defaultPenColor: '#ff0000',
         penColor: '#ff0000',
         penColors: ['#ff0000', '#1d4ed8', '#16a34a', '#111827'],
@@ -65,10 +66,20 @@ new Vue({
         currentEraserPoint: null,
         highlightStraightMode: false,
         highlightStraightTimer: null,
+        activeTextEditor: null,
+        activeTextDrag: null,
+        nextTextAnnotationId: 1,
     },
     computed: {
         totalScore() {
             return this.scoreItems.reduce((acc, item) => acc + (item.value * (item.weight || 1)), 0);
+        }
+    },
+    watch: {
+        textFontSize(nextValue) {
+            if (!this.activeTextEditor) return;
+            this.activeTextEditor.fontSize = Math.max(10, Number(nextValue) || 18);
+            this.syncTextEditorSize();
         }
     },
     methods: {
@@ -81,6 +92,11 @@ new Vue({
                 cssHeight: rect.height || canvas.clientHeight || canvas.height,
                 dpr: 1,
             };
+        },
+        setTool(nextTool) {
+            if (this.tool === nextTool) return;
+            this.finalizeActiveTextEditor();
+            this.tool = nextTool;
         },
         getCanvasPoint(idx, canvas, e) {
             const rect = canvas.getBoundingClientRect();
@@ -246,15 +262,334 @@ new Vue({
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         },
         ensurePageState(idx) {
-            if (!this.drawData[idx]) this.drawData[idx] = [];
-            if (!this.historyStack[idx]) this.historyStack[idx] = [];
-            if (!this.undoStack[idx]) this.undoStack[idx] = [];
+            if (!this.drawData[idx]) this.$set(this.drawData, idx, []);
+            if (!this.historyStack[idx]) this.$set(this.historyStack, idx, []);
+            if (!this.undoStack[idx]) this.$set(this.undoStack, idx, []);
         },
         cloneStroke(stroke) {
             return {
                 ...stroke,
                 points: (stroke.points || []).map(point => ({ ...point })),
             };
+        },
+        generateTextAnnotationId() {
+            const id = this.nextTextAnnotationId;
+            this.nextTextAnnotationId += 1;
+            return `text-${id}`;
+        },
+        pageTextAnnotations(idx) {
+            return (this.drawData[idx] || [])
+                .map((stroke, index) => ({ stroke, index }))
+                .filter(entry => entry.stroke.tool === 'text');
+        },
+        isEditingText(pageIdx, strokeIndex) {
+            return !!this.activeTextEditor
+                && this.activeTextEditor.pageIdx === pageIdx
+                && this.activeTextEditor.strokeIndex === strokeIndex;
+        },
+        resolveTextFontSize(idx, stroke) {
+            const meta = this.pageMeta[idx];
+            const cssWidth = meta ? meta.cssWidth || 1 : 1;
+            const fallback = Math.max(10, this.textFontSize || 18);
+            const ratio = stroke && stroke.fontSizeRatio;
+            return Math.max(10, Math.round((ratio || (fallback / cssWidth)) * cssWidth));
+        },
+        resolveTextBoxWidth(idx, stroke) {
+            const meta = this.pageMeta[idx];
+            const cssWidth = meta ? meta.cssWidth || 0 : 0;
+            const defaultWidth = Math.min(260, Math.max(180, cssWidth * 0.28 || 220));
+            const ratio = stroke && stroke.widthRatio;
+            return Math.max(140, Math.round((ratio || (defaultWidth / Math.max(cssWidth, 1))) * Math.max(cssWidth, 1)));
+        },
+        textAnnotationStyle(idx, stroke) {
+            const meta = this.pageMeta[idx];
+            const cssWidth = meta ? meta.cssWidth || 0 : 0;
+            const cssHeight = meta ? meta.cssHeight || 0 : 0;
+            const left = (stroke.xRatio || 0) * cssWidth;
+            const top = (stroke.yRatio || 0) * cssHeight;
+            const isEditing = this.activeTextEditor && this.activeTextEditor.strokeId === stroke.id;
+            const fontSize = isEditing
+                ? Math.max(10, this.activeTextEditor.fontSize || this.textFontSize || 18)
+                : this.resolveTextFontSize(idx, stroke);
+            const width = this.resolveTextBoxWidth(idx, stroke);
+            return {
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${width}px`,
+                fontSize: `${fontSize}px`,
+                lineHeight: `${Math.round(fontSize * 1.35)}px`,
+            };
+        },
+        syncTextEditorSize() {
+            if (!this.activeTextEditor) return;
+            const editorRef = this.$refs[this.activeTextEditor.refKey];
+            const editor = Array.isArray(editorRef) ? editorRef[0] : editorRef;
+            if (!editor) return;
+            editor.style.height = 'auto';
+            editor.style.height = `${Math.max(editor.scrollHeight, Math.round(this.activeTextEditor.fontSize * 1.8))}px`;
+        },
+        focusActiveTextEditor() {
+            if (!this.activeTextEditor) return;
+            this.$nextTick(() => {
+                const editorRef = this.$refs[this.activeTextEditor.refKey];
+                const editor = Array.isArray(editorRef) ? editorRef[0] : editorRef;
+                if (!editor) return;
+                editor.focus();
+                if (typeof editor.selectionStart === 'number') {
+                    const text = editor.value || '';
+                    editor.selectionStart = text.length;
+                    editor.selectionEnd = text.length;
+                }
+                this.syncTextEditorSize();
+            });
+        },
+        openTextEditor(pageIdx, strokeIndex, options = {}) {
+            const stroke = (this.drawData[pageIdx] || [])[strokeIndex];
+            if (!stroke || stroke.tool !== 'text') return;
+            if (
+                this.activeTextEditor &&
+                (this.activeTextEditor.pageIdx !== pageIdx || this.activeTextEditor.strokeIndex !== strokeIndex)
+            ) {
+                this.finalizeActiveTextEditor();
+            }
+            this.activeTextEditor = {
+                pageIdx,
+                strokeIndex,
+                strokeId: stroke.id,
+                originalText: stroke.text || '',
+                draftText: stroke.text || '',
+                isNew: !!options.isNew,
+                fontSize: this.resolveTextFontSize(pageIdx, stroke),
+                refKey: `textEditor${pageIdx}-${stroke.id}`,
+            };
+            this.textFontSize = this.activeTextEditor.fontSize;
+            this.focusActiveTextEditor();
+        },
+        createTextAnnotation(idx, point) {
+            this.ensurePageState(idx);
+            this.snapshotForHistory(idx);
+            this.clearRedoHistory(idx);
+            const widthRatio = Math.min(0.6, Math.max(0.18, 220 / Math.max(point.cssWidth, 1)));
+            const fontSizeRatio = Math.max(10, this.textFontSize || 18) / Math.max(point.cssWidth, 1);
+            const stroke = {
+                tool: 'text',
+                id: this.generateTextAnnotationId(),
+                text: '',
+                xRatio: point.x / point.cssWidth,
+                yRatio: point.y / point.cssHeight,
+                widthRatio,
+                fontSizeRatio,
+            };
+            this.drawData[idx].push(stroke);
+            const strokeIndex = this.drawData[idx].length - 1;
+            this.openTextEditor(idx, strokeIndex, { isNew: true, force: true });
+        },
+        editTextAnnotation(pageIdx, strokeIndex) {
+            this.openTextEditor(pageIdx, strokeIndex);
+        },
+        onTextEditorInput(e) {
+            if (!this.activeTextEditor) return;
+            this.activeTextEditor.draftText = e.target.value;
+            this.syncTextEditorSize();
+        },
+        removeTextStroke(pageIdx, strokeIndex) {
+            if (!this.drawData[pageIdx]) return;
+            this.drawData[pageIdx].splice(strokeIndex, 1);
+            this.redraw(pageIdx);
+        },
+        finalizeActiveTextEditor() {
+            if (!this.activeTextEditor) return;
+            this.commitTextEditor();
+        },
+        commitTextEditor() {
+            if (!this.activeTextEditor) return;
+            const editorState = this.activeTextEditor;
+            const stroke = (this.drawData[editorState.pageIdx] || [])[editorState.strokeIndex];
+            this.activeTextEditor = null;
+            if (!stroke || stroke.tool !== 'text') return;
+            const rawText = editorState.draftText || '';
+            const nextText = rawText.replace(/\r\n/g, '\n');
+            if (!nextText.trim()) {
+                if (!editorState.isNew) {
+                    this.snapshotForHistory(editorState.pageIdx);
+                    this.clearRedoHistory(editorState.pageIdx);
+                }
+                this.removeTextStroke(editorState.pageIdx, editorState.strokeIndex);
+                return;
+            }
+            if (stroke.text !== nextText) {
+                if (!editorState.isNew) {
+                    this.snapshotForHistory(editorState.pageIdx);
+                    this.clearRedoHistory(editorState.pageIdx);
+                }
+                stroke.text = nextText;
+            }
+            const meta = this.pageMeta[editorState.pageIdx];
+            if (meta && meta.cssWidth) {
+                stroke.fontSizeRatio = Math.max(10, editorState.fontSize || this.textFontSize || 18) / meta.cssWidth;
+            }
+            this.redraw(editorState.pageIdx);
+        },
+        cancelTextEditor() {
+            if (!this.activeTextEditor) return;
+            const editorState = this.activeTextEditor;
+            const stroke = (this.drawData[editorState.pageIdx] || [])[editorState.strokeIndex];
+            this.activeTextEditor = null;
+            if (!stroke || stroke.tool !== 'text') return;
+            if (editorState.isNew && !(stroke.text || '').trim()) {
+                this.removeTextStroke(editorState.pageIdx, editorState.strokeIndex);
+                return;
+            }
+            stroke.text = editorState.originalText || stroke.text || '';
+            this.redraw(editorState.pageIdx);
+        },
+        startTextAnnotationDrag(pageIdx, strokeIndex, e) {
+            if (this.activeTextEditor) {
+                this.finalizeActiveTextEditor();
+            }
+            const stroke = (this.drawData[pageIdx] || [])[strokeIndex];
+            if (!stroke || stroke.tool !== 'text') return;
+            const meta = this.pageMeta[pageIdx];
+            if (!meta) return;
+            this.activeTextDrag = {
+                pageIdx,
+                strokeIndex,
+                strokeId: stroke.id,
+                startClientX: e.clientX,
+                startClientY: e.clientY,
+                startXRatio: stroke.xRatio || 0,
+                startYRatio: stroke.yRatio || 0,
+                moved: false,
+                historySaved: false,
+            };
+            if (e.currentTarget && e.currentTarget.setPointerCapture && e.pointerId != null) {
+                try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                } catch (err) {
+                    // ignore
+                }
+            }
+            if (e.cancelable) e.preventDefault();
+        },
+        dragTextAnnotation(e) {
+            if (!this.activeTextDrag) return;
+            const drag = this.activeTextDrag;
+            const stroke = (this.drawData[drag.pageIdx] || [])[drag.strokeIndex];
+            const meta = this.pageMeta[drag.pageIdx];
+            if (!stroke || !meta) return;
+            const dx = e.clientX - drag.startClientX;
+            const dy = e.clientY - drag.startClientY;
+            const moveThreshold = 4;
+            if (!drag.moved && Math.abs(dx) < moveThreshold && Math.abs(dy) < moveThreshold) {
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
+            if (!drag.historySaved) {
+                this.snapshotForHistory(drag.pageIdx);
+                this.clearRedoHistory(drag.pageIdx);
+                drag.historySaved = true;
+            }
+            drag.moved = true;
+            const nextXRatio = drag.startXRatio + (dx / Math.max(meta.cssWidth, 1));
+            const nextYRatio = drag.startYRatio + (dy / Math.max(meta.cssHeight, 1));
+            const maxX = Math.max(0, 1 - (stroke.widthRatio || 0.18));
+            stroke.xRatio = Math.max(0, Math.min(maxX, nextXRatio));
+            stroke.yRatio = Math.max(0, Math.min(0.98, nextYRatio));
+            if (e.cancelable) e.preventDefault();
+        },
+        finishTextAnnotationDrag(e) {
+            if (!this.activeTextDrag) return;
+            const drag = this.activeTextDrag;
+            if (e.currentTarget && e.currentTarget.releasePointerCapture && e.pointerId != null) {
+                try {
+                    e.currentTarget.releasePointerCapture(e.pointerId);
+                } catch (err) {
+                    // ignore
+                }
+            }
+            this.activeTextDrag = null;
+            if (!drag.moved) {
+                this.editTextAnnotation(drag.pageIdx, drag.strokeIndex);
+            } else {
+                this.redraw(drag.pageIdx);
+            }
+            if (e.cancelable) e.preventDefault();
+        },
+        cancelTextAnnotationDrag(e) {
+            if (!this.activeTextDrag) return;
+            const drag = this.activeTextDrag;
+            const stroke = (this.drawData[drag.pageIdx] || [])[drag.strokeIndex];
+            if (stroke) {
+                stroke.xRatio = drag.startXRatio;
+                stroke.yRatio = drag.startYRatio;
+            }
+            this.activeTextDrag = null;
+            this.redraw(drag.pageIdx);
+            if (e.cancelable) e.preventDefault();
+        },
+        splitTextIntoLines(ctx, text, maxWidth) {
+            const paragraphs = String(text || '').split('\n');
+            const lines = [];
+            paragraphs.forEach((paragraph) => {
+                if (!paragraph) {
+                    lines.push('');
+                    return;
+                }
+                let current = '';
+                for (const char of Array.from(paragraph)) {
+                    const candidate = current + char;
+                    if (!current || ctx.measureText(candidate).width <= maxWidth) {
+                        current = candidate;
+                        continue;
+                    }
+                    lines.push(current);
+                    current = char;
+                }
+                if (current) lines.push(current);
+            });
+            return lines.length ? lines : [''];
+        },
+        drawTextAnnotation(ctx, idx, stroke) {
+            const meta = this.pageMeta[idx];
+            if (!meta) return;
+            const cssWidth = meta.cssWidth;
+            const cssHeight = meta.cssHeight;
+            const x = (stroke.xRatio || 0) * cssWidth;
+            const y = (stroke.yRatio || 0) * cssHeight;
+            const width = this.resolveTextBoxWidth(idx, stroke);
+            const fontSize = this.resolveTextFontSize(idx, stroke);
+            const lineHeight = Math.round(fontSize * 1.35);
+            ctx.save();
+            ctx.fillStyle = '#ff0000';
+            ctx.font = `${fontSize}px sans-serif`;
+            ctx.textBaseline = 'top';
+            const lines = this.splitTextIntoLines(ctx, stroke.text || '', Math.max(40, width));
+            lines.forEach((line, lineIndex) => {
+                ctx.fillText(line, x, y + (lineIndex * lineHeight));
+            });
+            ctx.restore();
+        },
+        exportCanvasDataUrl(idx) {
+            const canvas = this.$refs['drawCanvas' + idx]?.[0];
+            if (!canvas) return null;
+            const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
+            if (!hasDraw) return null;
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height;
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.drawImage(canvas, 0, 0);
+            const meta = this.pageMeta[idx];
+            if (meta) {
+                const dpr = meta.dpr || 1;
+                exportCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                (this.drawData[idx] || []).forEach((stroke) => {
+                    if (stroke.tool === 'text' && (stroke.text || '').trim()) {
+                        this.drawTextAnnotation(exportCtx, idx, stroke);
+                    }
+                });
+            }
+            return exportCanvas.toDataURL();
         },
         clonePageDrawData(idx) {
             return (this.drawData[idx] || []).map(stroke => this.cloneStroke(stroke));
@@ -830,6 +1165,22 @@ new Vue({
             this.activePointerId = e.pointerId != null ? e.pointerId : null;
             this.activePointerType = pointerType;
             this.ensurePageState(idx);
+            if (this.tool === 'text') {
+                const point = this.getCanvasPoint(idx, canvas, e);
+                this.currentPage = idx;
+                this.createTextAnnotation(idx, point);
+                if (pointerType === 'pen') {
+                    canvas.style.touchAction = 'none';
+                    if (scrollArea) {
+                        scrollArea.style.overflowY = this.previousOverflowY || 'auto';
+                    }
+                    this.previousOverflowY = '';
+                }
+                this.activePointerId = null;
+                this.activePointerType = "";
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
             if (pointerType === 'pen') {
                 canvas.style.touchAction = 'none';
                 this.lastPenTime = Date.now();
@@ -1055,6 +1406,9 @@ new Vue({
                     ctx.restore();
                     return;
                 }
+                if (stroke.tool === 'text') {
+                    return;
+                }
                 if (!stroke.points || stroke.points.length === 0) return;
                 if (stroke.tool === 'highlight') {
                     ctx.globalCompositeOperation = 'source-over';
@@ -1096,12 +1450,10 @@ new Vue({
             this.restorePageDrawData(idx, snapshot);
         },
         saveGrading() {
+            this.finalizeActiveTextEditor();
             let images = [];
             this.pdfPages.forEach((_, idx) => {
-                const canvas = this.$refs['drawCanvas' + idx][0];
-            const scrollArea = this.$refs.pdfArea;
-                const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
-                images.push(hasDraw ? canvas.toDataURL() : null);
+                images.push(this.exportCanvasDataUrl(idx));
             });
             const mergedScoreItems = this.scoreItems.concat(this.hiddenScoreItems);
             fetch(window.location.pathname, {
@@ -1178,8 +1530,8 @@ new Vue({
                 drawCanvas.height = Math.floor(cssHeight * dpr);
                 drawCanvas.style.width = `${cssWidth}px`;
                 drawCanvas.style.height = `${cssHeight}px`;
-                this.pageMeta[i] = { cssWidth, cssHeight, dpr };
-                this.loadedPages[i] = true;
+                this.$set(this.pageMeta, i, { cssWidth, cssHeight, dpr });
+                this.$set(this.loadedPages, i, true);
                 if (this.drawData[i] && this.drawData[i].length > 0) {
                     this.redraw(i);
                 }
@@ -1315,6 +1667,7 @@ new Vue({
         });
     },
     beforeDestroy() {
+        this.finalizeActiveTextEditor();
         this.clearSimilarityProgressTimer();
     }
 });

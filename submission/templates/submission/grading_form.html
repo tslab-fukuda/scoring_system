@@ -42,14 +42,16 @@
                 <div class="pdf-toolbar mb-2">
                     {% if effective_role != 'non-editing teacher' %}
                     <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
-                        @click="tool='pen'">ペン</button>
+                        @click="setTool('pen')">ペン</button>
                     <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
-                        @click="tool='highlight'">蛍光ペン</button>
+                        @click="setTool('highlight')">蛍光ペン</button>
+                    <button class="btn btn-outline-secondary" :class="{active: tool==='text'}"
+                        @click="setTool('text')">テキスト</button>
                     {% endif %}
                     <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
-                        @click="tool='eraser'">消しゴム</button>
+                        @click="setTool('eraser')">消しゴム</button>
                     <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
-                        @click="tool='stamp'">スタンプ</button>
+                        @click="setTool('stamp')">スタンプ</button>
                     <select v-if="tool==='stamp'" v-model="selectedStamp" class="form-select d-inline-block ms-2" style="width:auto;">
                         {% verbatim %}
                         <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
@@ -93,6 +95,19 @@
                         class="form-range d-inline-block ms-2"
                         style="width:100px;"
                     >
+                    <div v-if="tool==='text'" class="text-tool-controls ms-2">
+                        <span class="small text-muted">文字サイズ</span>
+                        <input
+                            type="range"
+                            min="10"
+                            max="40"
+                            step="1"
+                            v-model.number="textFontSize"
+                            class="form-range d-inline-block ms-2"
+                            style="width:120px;"
+                        >
+                        <span class="small text-muted ms-1" v-text="textFontSize + 'px'"></span>
+                    </div>
                     {% endverbatim %}
                     <input v-if="tool==='eraser'" type="range" min="1" max="60" step="5" v-model.number="eraserWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                     <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
@@ -194,7 +209,7 @@
                     style="position:relative;width:100%;background:#eee;overflow:auto;max-height:80vh;">
                     <div id="pdf-pages">
                         <!-- 各ページcanvas＋手書きcanvasをVueで生成 -->
-                        <div v-for="(page, idx) in pdfPages" :key="idx" style="position:relative;">
+                        <div v-for="(page, idx) in pdfPages" :key="idx" class="pdf-page-layer">
                             <canvas :ref="'pdfCanvas' + idx"></canvas>
                             <canvas :ref="'drawCanvas' + idx" class="draw-canvas" style="position:absolute;left:0;top:0;touch-action: none;pointer-events:{% if effective_role == 'non-editing teacher' %}none{% else %}auto{% endif %};"
                                 {% if effective_role != 'non-editing teacher' %}
@@ -203,6 +218,37 @@
                                 @touchstart="onTouchStart(idx, $event)" @touchmove="onTouchMove(idx, $event)"
                                 @touchend="onTouchEnd(idx, $event)" @touchcancel="onTouchEnd(idx, $event)"
                                 {% endif %}></canvas>
+                            <div class="text-annotation-layer">
+                                <template v-for="entry in pageTextAnnotations(idx)">
+                                    <textarea
+                                        v-if="isEditingText(idx, entry.index)"
+                                        :key="'text-edit-' + idx + '-' + entry.stroke.id"
+                                        :ref="'textEditor' + idx + '-' + entry.stroke.id"
+                                        class="text-annotation-editor"
+                                        :style="textAnnotationStyle(idx, entry.stroke)"
+                                        :value="activeTextEditor.draftText"
+                                        @input="onTextEditorInput($event)"
+                                        @blur="commitTextEditor"
+                                        @keydown.esc.prevent="cancelTextEditor"
+                                        @keydown.ctrl.enter.prevent="commitTextEditor"
+                                        @keydown.meta.enter.prevent="commitTextEditor"
+                                    ></textarea>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        :key="'text-view-' + idx + '-' + entry.stroke.id"
+                                        class="text-annotation-view"
+                                        :class="{ 'text-annotation-editable': tool === 'text' }"
+                                        :style="textAnnotationStyle(idx, entry.stroke)"
+                                        :title="tool === 'text' ? 'クリックで編集 / ドラッグで移動' : ''"
+                                        @pointerdown.stop="tool === 'text' && startTextAnnotationDrag(idx, entry.index, $event)"
+                                        @pointermove.stop="tool === 'text' && dragTextAnnotation($event)"
+                                        @pointerup.stop="tool === 'text' && finishTextAnnotationDrag($event)"
+                                        @pointercancel.stop="tool === 'text' && cancelTextAnnotationDrag($event)"
+                                        v-text="entry.stroke.text"
+                                    ></button>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>
