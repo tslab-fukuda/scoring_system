@@ -11,7 +11,7 @@
     <div>班: {{ stu.experiment_group }}</div>
   </div>
 </div>
-<div class="modal photo-modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showPhotoModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+<div v-if="showPhotoModal" class="modal photo-modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
@@ -32,7 +32,7 @@
   </div>
 </div>
 {% endverbatim %}
-<div class="modal student-modal ts-modal-hidden" :class="{ 'ts-modal-hidden': !showStudentModal }" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
+<div v-if="showStudentModal" class="modal student-modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
   <div class="modal-dialog modal-dialog-centered" style="margin-top:calc(var(--ts-header-height, 64px) + 16px);">
     <div class="modal-content">
       <div class="modal-header">
