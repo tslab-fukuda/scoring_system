@@ -801,19 +801,8 @@ new Vue({
                 { x: rect.left, y: rect.bottom },
                 { x: rect.right, y: rect.bottom },
                 { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 },
-                start,
-                end,
-                { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
             ];
-            return samples.some(point => {
-                const expanded = (
-                    point.x >= rect.left - radius &&
-                    point.x <= rect.right + radius &&
-                    point.y >= rect.top - radius &&
-                    point.y <= rect.bottom + radius
-                );
-                return expanded || this.isPointNearEraserSegment(point, start, end, radius);
-            });
+            return samples.some(point => this.isPointNearEraserSegment(point, start, end, radius));
         },
         applyEraserSegmentToPage(idx, start, end) {
             const canvas = this.$refs['drawCanvas' + idx]?.[0];
