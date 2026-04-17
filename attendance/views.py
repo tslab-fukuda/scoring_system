@@ -259,15 +259,37 @@ def _lab_time_target_submissions(user, course_offering, target_date):
     ).order_by('submitted_at', 'id')
 
 
+def _current_override_flags(user, course_offering, target_date):
+    global_override = AttendanceOverride.objects.filter(
+        course_offering=course_offering,
+        target_date=target_date,
+        user__isnull=True,
+    ).first()
+    user_override = AttendanceOverride.objects.filter(
+        course_offering=course_offering,
+        target_date=target_date,
+        user=user,
+    ).first()
+    return _effective_override_flags(global_override, user_override)
+
+
 def _apply_check_in_effects(user, course_offering, action_at):
     local_action = timezone.localtime(action_at, JST)
     if local_action.time() <= CLASS_START:
         return
-    submissions = _late_target_submissions(user, course_offering, _submission_date_for(action_at))
+    target_date = _submission_date_for(action_at)
+    effective_flags = _current_override_flags(user, course_offering, target_date)
+    if effective_flags.get('ignore_late', False):
+        return
+    submissions = _late_target_submissions(user, course_offering, target_date)
     _increment_score(submissions, "late", 1, course_offering)
 
 
 def _apply_check_out_effects(user, course_offering, action_at, previous_out):
+    target_date = _submission_date_for(action_at)
+    effective_flags = _current_override_flags(user, course_offering, target_date)
+    if effective_flags.get('ignore_lab_time', False):
+        return
     prev_points = 0
     if previous_out:
         prev_local = timezone.localtime(previous_out, JST)
@@ -279,7 +301,7 @@ def _apply_check_out_effects(user, course_offering, action_at, previous_out):
     if delta_points == 0:
         return
 
-    submissions = _lab_time_target_submissions(user, course_offering, _submission_date_for(action_at))
+    submissions = _lab_time_target_submissions(user, course_offering, target_date)
     _increment_score(submissions, "lab_time", delta_points, course_offering)
 
 
