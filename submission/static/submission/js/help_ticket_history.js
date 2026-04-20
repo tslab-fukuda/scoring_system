@@ -65,8 +65,10 @@
                     offering_id: this.selectedOfferingId,
                     status: this.filters.status,
                     request_type: this.filters.requestType,
-                    resolution_category: this.filters.resolutionCategory,
                 });
+                if (!this.isStudent) {
+                    params.set('resolution_category', this.filters.resolutionCategory);
+                }
                 if (this.filters.experimentGroup) params.set('experiment_group', this.filters.experimentGroup);
                 if (this.filters.experimentNumber) params.set('experiment_number', this.filters.experimentNumber);
                 if (this.filters.createdDate) params.set('created_date', this.filters.createdDate);

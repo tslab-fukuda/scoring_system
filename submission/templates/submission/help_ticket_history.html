@@ -40,7 +40,7 @@
             <option value="call">呼び出し</option>
           </select>
         </div>
-        <div class="col-md-2">
+        <div v-if="!isStudent" class="col-md-2">
           <label class="form-label">対応分類</label>
           <select class="form-select" v-model="filters.resolutionCategory">
             <option value="all">すべて</option>
@@ -146,7 +146,7 @@
           </template>
           <div v-if="selectedTicket.handled_by_name"><strong>対応者:</strong> {{ selectedTicket.handled_by_name }}</div>
           <div v-if="selectedTicket.resolved_at"><strong>対応完了時刻:</strong> {{ selectedTicket.resolved_at }}</div>
-          <div v-if="selectedTicket.resolution_category_label"><strong>対応分類:</strong> {{ selectedTicket.resolution_category_label }}</div>
+          <div v-if="!isStudent && selectedTicket.resolution_category_label"><strong>対応分類:</strong> {{ selectedTicket.resolution_category_label }}</div>
         </div>
 
         <div class="history-message-block">
