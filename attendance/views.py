@@ -34,6 +34,7 @@ from submission.enrollment_utils import (
 JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 40)
 CLASS_END = time(16, 50)
+CLASS_ANALYTICS_START = time(13, 20)
 MAX_EARLY_MINUTES = 30
 FORGET_REQUEST_ALLOWED_ROLES = {'admin', 'course-teacher'}
 HELP_TICKET_ALLOWED_ROLES = {'admin', 'teacher'}
@@ -992,6 +993,13 @@ def _weekday_label_from_date(target_date):
     return labels[target_date.weekday()]
 
 
+def _time_bucket_label(bucket_index):
+    total_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute + bucket_index * 5
+    hour = total_minutes // 60
+    minute = total_minutes % 60
+    return f'{hour:02d}:{minute:02d}'
+
+
 def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from_filter='', date_to_filter=''):
     tickets = list(ticket_qs)
     course = getattr(selected_offering, 'course', None)
@@ -1000,18 +1008,32 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
     total_count = len(tickets)
     request_type_counts = Counter(ticket.request_type for ticket in tickets)
     resolution_counts = Counter(_resolution_category_key(ticket) for ticket in tickets)
-    hour_counts = Counter()
-    group_counts = Counter()
+    time_bucket_counts = Counter()
+    group_weekday_counts = defaultdict(Counter)
     handled_by_counts = Counter()
     resolution_experiment_counts = defaultdict(Counter)
     response_minutes = []
     session_counts = Counter()
+    enrollment_map = {
+        enrollment.user_id: (enrollment.experiment_day or '').strip()
+        for enrollment in Enrollment.objects.filter(
+            course_offering=selected_offering,
+            role='student',
+            user_id__in=[ticket.student_id for ticket in tickets],
+        )
+    }
 
     for ticket in tickets:
         created_local = timezone.localtime(ticket.created_at, JST)
-        hour_counts[created_local.hour] += 1
+        created_minutes = created_local.hour * 60 + created_local.minute
+        min_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute
+        max_minutes = CLASS_END.hour * 60 + CLASS_END.minute
+        if min_minutes <= created_minutes <= max_minutes:
+            bucket_index = (created_minutes - min_minutes) // 5
+            time_bucket_counts[bucket_index] += 1
         if ticket.experiment_group:
-            group_counts[ticket.experiment_group] += 1
+            weekday_label = enrollment_map.get(ticket.student_id) or _weekday_label_from_date(created_local.date())
+            group_weekday_counts[weekday_label][ticket.experiment_group] += 1
         category_key = _resolution_category_key(ticket)
         resolution_experiment_counts[category_key][ticket.experiment_number or '未設定'] += 1
 
@@ -1083,9 +1105,12 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
         'counts': [request_type_counts.get('question', 0), request_type_counts.get('call', 0)],
         'keys': ['question', 'call'],
     }
+    min_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute
+    max_minutes = CLASS_END.hour * 60 + CLASS_END.minute
+    bucket_count = ((max_minutes - min_minutes) // 5) + 1
     hour_chart = {
-        'labels': [f'{hour:02d}:00' for hour in range(24)],
-        'counts': [hour_counts.get(hour, 0) for hour in range(24)],
+        'labels': [_time_bucket_label(bucket_index) for bucket_index in range(bucket_count)],
+        'counts': [time_bucket_counts.get(bucket_index, 0) for bucket_index in range(bucket_count)],
     }
     session_labels = [f'{index}回' for index in range(1, max_session_index + 1)]
     session_chart = {
@@ -1113,10 +1138,33 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
         {'label': label, 'count': count}
         for label, count in sorted(handled_by_counts.items(), key=lambda item: (-item[1], item[0]))
     ]
-    group_items = [
-        {'label': label, 'count': count}
-        for label, count in sorted(group_counts.items(), key=lambda item: (-item[1], item[0]))
-    ]
+    all_group_labels = {
+        (enrollment.experiment_group or '').strip()
+        for enrollment in Enrollment.objects.filter(course_offering=selected_offering, role='student')
+        if (enrollment.experiment_group or '').strip()
+    }
+    all_group_labels.update({
+        ticket.experiment_group
+        for ticket in tickets
+        if (ticket.experiment_group or '').strip()
+    })
+
+    def _group_sort_key(label):
+        return int(label) if str(label).isdigit() else 9999
+
+    group_labels = sorted(all_group_labels, key=lambda label: (_group_sort_key(label), label))
+    group_labels_desc = list(reversed(group_labels))
+    weekday_dataset_order = weekday_order or sorted(group_weekday_counts.keys())
+    experiment_group_chart = {
+        'labels': group_labels_desc,
+        'datasets': [
+            {
+                'label': weekday_label,
+                'counts': [group_weekday_counts[weekday_label].get(group_label, 0) for group_label in group_labels_desc],
+            }
+            for weekday_label in weekday_dataset_order
+        ],
+    }
     response_time = {
         'resolved_count': len(response_minutes),
         'average_minutes': round(sum(response_minutes) / len(response_minutes), 1) if response_minutes else 0,
@@ -1140,7 +1188,7 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
         },
         'tables': {
             'handled_by': handled_by_items,
-            'experiment_group': group_items,
+            'experiment_group': experiment_group_chart,
         },
         'response_time': response_time,
     }

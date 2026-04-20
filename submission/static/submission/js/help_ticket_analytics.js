@@ -223,7 +223,10 @@
                             maintainAspectRatio: false,
                             plugins: { legend: { labels: { color: tickColor } } },
                             scales: {
-                                x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                                x: {
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 0, minRotation: 0 },
+                                    grid: { color: gridColor },
+                                },
                                 y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
                             },
                         },
@@ -284,18 +287,18 @@
                     this.charts.experimentGroup = new Chart(groupCtx, {
                         type: 'bar',
                         data: {
-                            labels: (this.analytics.tables.experiment_group || []).map((item) => item.label),
-                            datasets: [{
-                                label: '件数',
-                                data: (this.analytics.tables.experiment_group || []).map((item) => item.count),
-                                backgroundColor: colors[2],
-                            }],
+                            labels: ((this.analytics.tables.experiment_group || {}).labels || []),
+                            datasets: (((this.analytics.tables.experiment_group || {}).datasets) || []).map((dataset, index) => ({
+                                label: dataset.label,
+                                data: dataset.counts,
+                                backgroundColor: colors[index % colors.length],
+                            })),
                         },
                         options: {
                             indexAxis: 'y',
                             responsive: true,
                             maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
+                            plugins: { legend: { labels: { color: tickColor } } },
                             scales: {
                                 x: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
                                 y: { ticks: { color: tickColor }, grid: { color: gridColor } },
