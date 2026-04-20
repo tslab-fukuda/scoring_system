@@ -73,17 +73,17 @@
             },
         },
         methods: Object.assign({}, window.offeringSelectorHelper.methods, {
-            chartPanelStyle(kind) {
+            chartWrapStyle(kind) {
                 if (kind === 'handledBy') {
                     const count = ((this.analytics.tables.handled_by || []).length);
                     return {
-                        minHeight: `${Math.max(340, count * 42)}px`,
+                        height: `${Math.max(280, count * 38)}px`,
                     };
                 }
                 if (kind === 'experimentGroup') {
                     const count = ((((this.analytics.tables.experiment_group || {}).labels) || []).length);
                     return {
-                        minHeight: `${Math.max(340, count * 34)}px`,
+                        height: `${Math.max(460, count * 30)}px`,
                     };
                 }
                 return {};

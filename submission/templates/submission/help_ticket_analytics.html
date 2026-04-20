@@ -97,70 +97,34 @@
 
   <div class="analytics-dashboard">
     <div class="analytics-panels-grid">
-      <div class="card analytics-panel">
+      <div class="card analytics-panel analytics-panel-compact">
         <div class="card-body">
           <h5 class="analytics-panel-title">対応分類別件数</h5>
-          <div class="analytics-chart-shell">
-            <div class="analytics-chart-wrap"><canvas id="analytics-resolution-chart"></canvas></div>
+          <div class="analytics-chart-shell analytics-chart-shell-compact">
+            <div class="analytics-chart-wrap analytics-chart-wrap-compact"><canvas id="analytics-resolution-chart"></canvas></div>
           </div>
         </div>
       </div>
 
-      <div class="card analytics-panel">
+      <div class="card analytics-panel analytics-panel-compact">
         <div class="card-body">
           <h5 class="analytics-panel-title">種別比率</h5>
-          <div class="analytics-chart-shell">
-            <div class="analytics-chart-wrap"><canvas id="analytics-request-type-chart"></canvas></div>
+          <div class="analytics-chart-shell analytics-chart-shell-compact">
+            <div class="analytics-chart-wrap analytics-chart-wrap-compact"><canvas id="analytics-request-type-chart"></canvas></div>
           </div>
         </div>
       </div>
 
-      <div class="card analytics-panel analytics-panel-full">
-        <div class="card-body">
-          <h5 class="analytics-panel-title">時間帯別件数</h5>
-          <div class="analytics-chart-shell">
-            <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-hourly-chart"></canvas></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card analytics-panel analytics-panel-wide">
-        <div class="card-body">
-          <h5 class="analytics-panel-title">回数別件数</h5>
-          <div class="analytics-chart-shell">
-            <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-daily-chart"></canvas></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card analytics-panel analytics-panel-wide">
-        <div class="card-body">
-          <h5 class="analytics-panel-title">対応分類 × 実験項目</h5>
-          <div class="analytics-chart-shell">
-            <div class="analytics-chart-wrap analytics-chart-wrap-xl"><canvas id="analytics-resolution-experiment-chart"></canvas></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card analytics-panel">
+      <div class="card analytics-panel analytics-panel-compact">
         <div class="card-body">
           <h5 class="analytics-panel-title">対応者別件数</h5>
-          <div class="analytics-chart-shell" :style="chartPanelStyle('handledBy')">
-            <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-handler-chart"></canvas></div>
+          <div class="analytics-chart-shell analytics-chart-shell-compact">
+            <div class="analytics-chart-wrap analytics-chart-wrap-compact" :style="chartWrapStyle('handledBy')"><canvas id="analytics-handler-chart"></canvas></div>
           </div>
         </div>
       </div>
 
-      <div class="card analytics-panel">
-        <div class="card-body">
-          <h5 class="analytics-panel-title">班番号別件数</h5>
-          <div class="analytics-chart-shell" :style="chartPanelStyle('experimentGroup')">
-            <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-group-chart"></canvas></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card analytics-panel">
+      <div class="card analytics-panel analytics-panel-compact">
         <div class="card-body">
           <h5 class="analytics-panel-title">対応完了までの時間</h5>
           <div class="analytics-response-grid">
@@ -180,6 +144,42 @@
               <div class="analytics-response-label">最大分</div>
               <div class="analytics-response-value">{{ analytics.response_time.max_minutes }}</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card analytics-panel analytics-panel-wide">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">時間帯別件数</h5>
+          <div class="analytics-chart-shell analytics-chart-shell-wide">
+            <div class="analytics-chart-wrap analytics-chart-wrap-wide"><canvas id="analytics-hourly-chart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card analytics-panel analytics-panel-wide">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">回数別件数</h5>
+          <div class="analytics-chart-shell analytics-chart-shell-wide">
+            <div class="analytics-chart-wrap analytics-chart-wrap-wide"><canvas id="analytics-daily-chart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card analytics-panel analytics-panel-wide">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">対応分類 × 実験項目</h5>
+          <div class="analytics-chart-shell analytics-chart-shell-wide">
+            <div class="analytics-chart-wrap analytics-chart-wrap-wide analytics-chart-wrap-wide-xl"><canvas id="analytics-resolution-experiment-chart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card analytics-panel analytics-panel-tall">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">班番号別件数</h5>
+          <div class="analytics-chart-shell analytics-chart-shell-tall">
+            <div class="analytics-chart-wrap analytics-chart-wrap-tall" :style="chartWrapStyle('experimentGroup')"><canvas id="analytics-group-chart"></canvas></div>
           </div>
         </div>
       </div>
