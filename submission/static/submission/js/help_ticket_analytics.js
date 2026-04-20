@@ -73,6 +73,21 @@
             },
         },
         methods: Object.assign({}, window.offeringSelectorHelper.methods, {
+            chartPanelStyle(kind) {
+                if (kind === 'handledBy') {
+                    const count = ((this.analytics.tables.handled_by || []).length);
+                    return {
+                        minHeight: `${Math.max(340, count * 42)}px`,
+                    };
+                }
+                if (kind === 'experimentGroup') {
+                    const count = ((((this.analytics.tables.experiment_group || {}).labels) || []).length);
+                    return {
+                        minHeight: `${Math.max(340, count * 34)}px`,
+                    };
+                }
+                return {};
+            },
             clearFilters() {
                 this.filters.dateFrom = '';
                 this.filters.dateTo = '';
@@ -151,7 +166,10 @@
                             maintainAspectRatio: false,
                             plugins: { legend: { display: false } },
                             scales: {
-                                x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                                x: {
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 0, minRotation: 0 },
+                                    grid: { color: gridColor },
+                                },
                                 y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
                             },
                         },
@@ -199,7 +217,10 @@
                             maintainAspectRatio: false,
                             plugins: { legend: { display: false } },
                             scales: {
-                                x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                                x: {
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 55, minRotation: 55, font: { size: 10 } },
+                                    grid: { color: gridColor },
+                                },
                                 y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
                             },
                         },
@@ -250,7 +271,11 @@
                             maintainAspectRatio: false,
                             plugins: { legend: { labels: { color: tickColor } } },
                             scales: {
-                                x: { stacked: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+                                x: {
+                                    stacked: true,
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 35, minRotation: 35, font: { size: 10 } },
+                                    grid: { color: gridColor },
+                                },
                                 y: { stacked: true, beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
                             },
                         },
@@ -276,7 +301,7 @@
                             plugins: { legend: { display: false } },
                             scales: {
                                 x: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
-                                y: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                                y: { ticks: { color: tickColor, autoSkip: false }, grid: { color: gridColor } },
                             },
                         },
                     });
@@ -301,7 +326,7 @@
                             plugins: { legend: { labels: { color: tickColor } } },
                             scales: {
                                 x: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
-                                y: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                                y: { ticks: { color: tickColor, autoSkip: false }, grid: { color: gridColor } },
                             },
                         },
                     });

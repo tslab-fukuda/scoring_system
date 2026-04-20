@@ -35,6 +35,7 @@ JST = ZoneInfo("Asia/Tokyo")
 CLASS_START = time(13, 40)
 CLASS_END = time(16, 50)
 CLASS_ANALYTICS_START = time(13, 20)
+CLASS_ANALYTICS_BUCKET_MINUTES = 10
 MAX_EARLY_MINUTES = 30
 FORGET_REQUEST_ALLOWED_ROLES = {'admin', 'course-teacher'}
 HELP_TICKET_ALLOWED_ROLES = {'admin', 'teacher'}
@@ -994,7 +995,11 @@ def _weekday_label_from_date(target_date):
 
 
 def _time_bucket_label(bucket_index):
-    total_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute + bucket_index * 5
+    total_minutes = (
+        CLASS_ANALYTICS_START.hour * 60
+        + CLASS_ANALYTICS_START.minute
+        + bucket_index * CLASS_ANALYTICS_BUCKET_MINUTES
+    )
     hour = total_minutes // 60
     minute = total_minutes % 60
     return f'{hour:02d}:{minute:02d}'
@@ -1029,7 +1034,7 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
         min_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute
         max_minutes = CLASS_END.hour * 60 + CLASS_END.minute
         if min_minutes <= created_minutes <= max_minutes:
-            bucket_index = (created_minutes - min_minutes) // 5
+            bucket_index = (created_minutes - min_minutes) // CLASS_ANALYTICS_BUCKET_MINUTES
             time_bucket_counts[bucket_index] += 1
         if ticket.experiment_group:
             weekday_label = enrollment_map.get(ticket.student_id) or _weekday_label_from_date(created_local.date())
@@ -1107,7 +1112,7 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
     }
     min_minutes = CLASS_ANALYTICS_START.hour * 60 + CLASS_ANALYTICS_START.minute
     max_minutes = CLASS_END.hour * 60 + CLASS_END.minute
-    bucket_count = ((max_minutes - min_minutes) // 5) + 1
+    bucket_count = ((max_minutes - min_minutes) // CLASS_ANALYTICS_BUCKET_MINUTES) + 1
     hour_chart = {
         'labels': [_time_bucket_label(bucket_index) for bucket_index in range(bucket_count)],
         'counts': [time_bucket_counts.get(bucket_index, 0) for bucket_index in range(bucket_count)],

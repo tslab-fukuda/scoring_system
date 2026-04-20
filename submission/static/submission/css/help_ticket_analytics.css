@@ -2,6 +2,20 @@
     display: none;
 }
 
+.analytics-page {
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.analytics-top-content {
+    max-width: 1320px;
+    margin: 0 auto 24px;
+}
+
+.analytics-dashboard {
+    width: 100%;
+}
+
 .analytics-filter-card,
 .analytics-panel,
 .analytics-summary-card {
@@ -14,6 +28,53 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
+}
+
+.analytics-panels-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (min-width: 1100px) {
+    .analytics-panels-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1600px) {
+    .analytics-panels-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 2100px) {
+    .analytics-panels-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1100px) {
+    .analytics-panel-wide {
+        grid-column: span 2;
+    }
+
+    .analytics-panel-full {
+        grid-column: span 2;
+    }
+}
+
+@media (min-width: 1600px) {
+    .analytics-panel-full {
+        grid-column: span 3;
+    }
+}
+
+@media (min-width: 2100px) {
+    .analytics-panel-full {
+        grid-column: span 4;
+    }
 }
 
 .analytics-summary-card {
@@ -39,17 +100,30 @@
 
 .analytics-panel .card-body {
     padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .analytics-panel-title {
-    margin-bottom: 16px;
+    margin-bottom: 0;
     font-size: 1.05rem;
     font-weight: 700;
+}
+
+.analytics-chart-shell {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding: 8px 10px 0;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
 }
 
 .analytics-chart-wrap {
     position: relative;
     height: 280px;
+    width: 100%;
 }
 
 .analytics-chart-wrap-lg {
@@ -98,4 +172,8 @@ body.dark-mode .analytics-response-label {
 
 body.dark-mode .analytics-response-item {
     background: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .analytics-chart-shell {
+    background: rgba(255, 255, 255, 0.03);
 }
