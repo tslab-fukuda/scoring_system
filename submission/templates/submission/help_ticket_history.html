@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}質問/呼び出し履歴{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/help_ticket_history.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="help-ticket-history-app" class="container mt-4" v-cloak>
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h2 class="mb-2">質問/呼び出し履歴</h2>
+      <div class="text-muted small">過去の質問・呼び出しを科目/年度ごとに確認できます。</div>
+    </div>
+  </div>
+
+  {% include "submission/_offering_selector.html" %}
+
+  {% verbatim %}
+  <div class="card history-filter-card mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">状態</label>
+          <select class="form-select" v-model="filters.status">
+            <option value="resolved">対応済み</option>
+            <option value="pending">未対応</option>
+            <option value="in_progress">対応中</option>
+            <option value="all">すべて</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">種別</label>
+          <select class="form-select" v-model="filters.requestType">
+            <option value="all">すべて</option>
+            <option value="question">質問</option>
+            <option value="call">呼び出し</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">対応分類</label>
+          <select class="form-select" v-model="filters.resolutionCategory">
+            <option value="all">すべて</option>
+            <option value="none">未登録</option>
+            <option value="experiment">実験内容</option>
+            <option value="device_trouble">機器トラブル</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">班番号</label>
+          <input type="text" class="form-control" v-model.trim="filters.experimentGroup" placeholder="例: 01">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">実験番号</label>
+          <select class="form-select" v-model="filters.experimentNumber">
+            <option value="">すべて</option>
+            <option v-for="experimentNumber in experimentNumberOptions" :key="experimentNumber" :value="experimentNumber">
+              {{ experimentNumber }}
+            </option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">日付</label>
+          <input type="date" class="form-control" v-model="filters.createdDate">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-primary flex-fill" @click="fetchTickets" :disabled="loading || !selectedOfferingId">
+            {{ loading ? '読込中...' : '検索' }}
+          </button>
+          <button class="btn btn-outline-secondary" @click="clearFilters" :disabled="loading">クリア</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="small text-muted" v-if="selectedOffering">
+      表示中: {{ selectedOffering.course_code }} {{ selectedOffering.course_name }} / {{ selectedOffering.year }}
+    </div>
+    <div class="small text-muted">件数: {{ tickets.length }}</div>
+  </div>
+
+  <div class="card history-table-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 help-ticket-history-table">
+        <thead>
+          <tr>
+            <th>依頼日時</th>
+            <th>種別</th>
+            <th>班番号</th>
+            <th>実験番号</th>
+            <th v-if="!isStudent">学生名</th>
+            <th v-if="!isStudent">学籍番号</th>
+            <th>状態</th>
+            <th>対応者</th>
+            <th class="text-center">詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!tickets.length">
+            <td :colspan="isStudent ? 7 : 9" class="text-center text-muted py-4">該当する履歴はありません</td>
+          </tr>
+          <tr v-for="ticket in tickets" :key="ticket.id">
+            <td>{{ ticket.created_at }}</td>
+            <td>{{ ticket.request_type_label }}</td>
+            <td>{{ ticket.experiment_group || '-' }}</td>
+            <td>{{ ticket.experiment_number || '-' }}</td>
+            <td v-if="!isStudent">{{ ticket.student_name }}</td>
+            <td v-if="!isStudent">{{ ticket.student_id || '-' }}</td>
+            <td>
+              <span class="history-status-badge" :class="'status-' + ticket.status">{{ ticket.status_label }}</span>
+            </td>
+            <td>{{ ticket.handled_by_name || '-' }}</td>
+            <td class="text-center">
+              <button class="btn btn-outline-secondary btn-sm" @click="openDetail(ticket)">詳細</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div v-if="showDetailModal && selectedTicket" class="history-modal-overlay" @click="closeDetail">
+    <div class="history-modal-card" @click.stop>
+      <div class="history-modal-head">
+        <h3>質問/呼び出し詳細</h3>
+        <button type="button" class="history-modal-close" @click="closeDetail">×</button>
+      </div>
+      <div class="history-modal-body">
+        <div class="history-detail-grid">
+          <div><strong>科目/年度:</strong> {{ selectedTicket.offering.label }}</div>
+          <div><strong>依頼日時:</strong> {{ selectedTicket.created_at }}</div>
+          <div><strong>種別:</strong> {{ selectedTicket.request_type_label }}</div>
+          <div><strong>状態:</strong> {{ selectedTicket.status_label }}</div>
+          <div><strong>班番号:</strong> {{ selectedTicket.experiment_group || '-' }}</div>
+          <div><strong>実験番号:</strong> {{ selectedTicket.experiment_number || '-' }}</div>
+          <template v-if="!isStudent">
+            <div><strong>学生:</strong> {{ selectedTicket.student_name }}</div>
+            <div><strong>学籍番号:</strong> {{ selectedTicket.student_id || '-' }}</div>
+          </template>
+          <div v-if="selectedTicket.handled_by_name"><strong>対応者:</strong> {{ selectedTicket.handled_by_name }}</div>
+          <div v-if="selectedTicket.resolved_at"><strong>対応完了時刻:</strong> {{ selectedTicket.resolved_at }}</div>
+          <div v-if="selectedTicket.resolution_category_label"><strong>対応分類:</strong> {{ selectedTicket.resolution_category_label }}</div>
+        </div>
+
+        <div class="history-message-block">
+          <div class="fw-semibold mb-2">質問内容</div>
+          <div class="history-message-body">{{ selectedTicket.message || '-' }}</div>
+        </div>
+
+        <div class="history-message-block">
+          <div class="fw-semibold mb-2">回答</div>
+          <div class="history-message-body">{{ selectedTicket.teacher_response || '回答はありません' }}</div>
+        </div>
+
+        <div v-if="!isStudent" class="history-message-block">
+          <div class="fw-semibold mb-2">内部向け対応メモ</div>
+          <div class="history-message-body">{{ selectedTicket.internal_note || '内部メモはありません' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endverbatim %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  window.helpTicketHistoryConfig = {
+    offerings: {{ offerings_json|safe }},
+    defaultOfferingId: {{ default_offering_id|default:"null" }},
+    actualRole: {{ help_ticket_history_actual_role_json|safe }}
+  };
+</script>
+<script src="{% static 'submission/js/offering_selector.js' %}"></script>
+<script src="{% static 'submission/js/help_ticket_history.js' %}"></script>
+{% endblock %}

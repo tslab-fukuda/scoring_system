@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}質問/呼び出し分析{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
+<link rel="stylesheet" href="{% static 'submission/css/help_ticket_analytics.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="help-ticket-analytics-app" class="container mt-4" v-cloak>
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h2 class="mb-2">質問/呼び出し分析</h2>
+      <div class="text-muted small">質問・呼び出しの傾向を科目/年度ごとに分析します。</div>
+    </div>
+  </div>
+
+  {% include "submission/_offering_selector.html" %}
+
+  {% verbatim %}
+  <div class="card analytics-filter-card mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">開始日</label>
+          <input type="date" class="form-control" v-model="filters.dateFrom">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">終了日</label>
+          <input type="date" class="form-control" v-model="filters.dateTo">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">状態</label>
+          <select class="form-select" v-model="filters.status">
+            <option value="resolved">対応済み</option>
+            <option value="pending">未対応</option>
+            <option value="in_progress">対応中</option>
+            <option value="all">すべて</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">種別</label>
+          <select class="form-select" v-model="filters.requestType">
+            <option value="all">すべて</option>
+            <option value="question">質問</option>
+            <option value="call">呼び出し</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">対応分類</label>
+          <select class="form-select" v-model="filters.resolutionCategory">
+            <option value="all">すべて</option>
+            <option value="none">未登録</option>
+            <option value="experiment">実験内容</option>
+            <option value="device_trouble">機器トラブル</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-primary flex-fill" @click="fetchAnalytics" :disabled="loading || !selectedOfferingId">
+            {{ loading ? '読込中...' : '検索' }}
+          </button>
+          <button class="btn btn-outline-secondary" @click="clearFilters" :disabled="loading">クリア</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="errorMessage" class="alert alert-danger">{{ errorMessage }}</div>
+
+  <div class="small text-muted mb-3" v-if="selectedOffering">
+    表示中: {{ selectedOffering.course_code }} {{ selectedOffering.course_name }} / {{ selectedOffering.year }}
+  </div>
+
+  <div class="analytics-summary-grid mb-4">
+    <div class="analytics-summary-card">
+      <div class="analytics-summary-label">総件数</div>
+      <div class="analytics-summary-value">{{ analytics.summary.total_count }}</div>
+    </div>
+    <div class="analytics-summary-card">
+      <div class="analytics-summary-label">質問件数</div>
+      <div class="analytics-summary-value">{{ analytics.summary.question_count }}</div>
+    </div>
+    <div class="analytics-summary-card">
+      <div class="analytics-summary-label">呼び出し件数</div>
+      <div class="analytics-summary-value">{{ analytics.summary.call_count }}</div>
+    </div>
+    <div class="analytics-summary-card">
+      <div class="analytics-summary-label">未登録分類件数</div>
+      <div class="analytics-summary-value">{{ analytics.summary.unclassified_count }}</div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-6">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">対応分類別件数</h5>
+          <div class="analytics-chart-wrap"><canvas id="analytics-resolution-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">種別比率</h5>
+          <div class="analytics-chart-wrap"><canvas id="analytics-request-type-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">時間帯別件数</h5>
+          <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-hourly-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">回数別件数</h5>
+          <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-daily-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">対応分類 × 実験項目</h5>
+          <div class="analytics-chart-wrap analytics-chart-wrap-xl"><canvas id="analytics-resolution-experiment-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">対応者別件数</h5>
+          <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-handler-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">班番号別件数</h5>
+          <div class="analytics-chart-wrap analytics-chart-wrap-lg"><canvas id="analytics-group-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card analytics-panel">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">対応完了までの時間</h5>
+          <div class="analytics-response-grid">
+            <div class="analytics-response-item">
+              <div class="analytics-response-label">対応済み件数</div>
+              <div class="analytics-response-value">{{ analytics.response_time.resolved_count }}</div>
+            </div>
+            <div class="analytics-response-item">
+              <div class="analytics-response-label">平均分</div>
+              <div class="analytics-response-value">{{ analytics.response_time.average_minutes }}</div>
+            </div>
+            <div class="analytics-response-item">
+              <div class="analytics-response-label">中央値</div>
+              <div class="analytics-response-value">{{ analytics.response_time.median_minutes }}</div>
+            </div>
+            <div class="analytics-response-item">
+              <div class="analytics-response-label">最大分</div>
+              <div class="analytics-response-value">{{ analytics.response_time.max_minutes }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endverbatim %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  window.helpTicketAnalyticsConfig = {
+    offerings: {{ offerings_json|safe }},
+    defaultOfferingId: {{ default_offering_id|default:"null" }},
+    actualRole: {{ help_ticket_analytics_actual_role_json|safe }}
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'submission/js/offering_selector.js' %}"></script>
+<script src="{% static 'submission/js/help_ticket_analytics.js' %}"></script>
+{% endblock %}

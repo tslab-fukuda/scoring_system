@@ -1,0 +1,147 @@
+[v-cloak] {
+    display: none;
+}
+
+.history-filter-card,
+.history-table-card {
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.help-ticket-history-table th,
+.help-ticket-history-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.help-ticket-history-table td:nth-child(1),
+.help-ticket-history-table th:nth-child(1) {
+    white-space: normal;
+    min-width: 130px;
+}
+
+.history-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.history-status-badge.status-pending {
+    color: #8a5300;
+    background: #fff3cd;
+}
+
+.history-status-badge.status-in_progress {
+    color: #0a58ca;
+    background: #cfe2ff;
+}
+
+.history-status-badge.status-resolved {
+    color: #146c43;
+    background: #d1e7dd;
+}
+
+.history-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: calc(var(--ts-header-height, 64px) + 16px) 16px calc(var(--ts-footer-height, 48px) + 16px);
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.history-modal-card {
+    width: min(960px, 100%);
+    max-height: calc(100vh - var(--ts-header-height, 64px) - var(--ts-footer-height, 48px) - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--bs-body-bg, #fff);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.history-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.history-modal-head h3 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.history-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: inherit;
+}
+
+.history-modal-body {
+    padding: 20px;
+    overflow: auto;
+}
+
+.history-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px 20px;
+    margin-bottom: 20px;
+}
+
+.history-message-block + .history-message-block {
+    margin-top: 16px;
+}
+
+.history-message-body {
+    padding: 12px 14px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+body.dark-mode .history-filter-card,
+body.dark-mode .history-table-card,
+body.dark-mode .history-modal-card {
+    background: #1f1f1f;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .history-modal-head {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-mode .history-message-body {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .history-status-badge.status-pending {
+    color: #ffdb8a;
+    background: rgba(138, 83, 0, 0.4);
+}
+
+body.dark-mode .history-status-badge.status-in_progress {
+    color: #a9c7ff;
+    background: rgba(10, 88, 202, 0.35);
+}
+
+body.dark-mode .history-status-badge.status-resolved {
+    color: #a7e1c1;
+    background: rgba(20, 108, 67, 0.38);
+}

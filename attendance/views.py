@@ -2,12 +2,15 @@ from datetime import date, time, datetime, timedelta
 from zoneinfo import ZoneInfo
 import math
 import json
+from collections import Counter, defaultdict
+from statistics import median
 
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -20,7 +23,7 @@ from .permissions import (
     can_view_attendance,
     is_attendance_only,
 )
-from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment
+from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment, Schedule
 from submission.enrollment_utils import (
     build_student_context,
     get_student_context,
@@ -107,10 +110,106 @@ def _can_manage_help_ticket_for_offering(user, offering_id):
 def _serialize_offering(course_offering):
     return {
         'id': course_offering.id,
+        'course_id': course_offering.course_id,
         'course_code': course_offering.course.code,
         'course_name': course_offering.course.name,
         'year': course_offering.year,
+        'experiment_numbers': course_offering.course.experiment_numbers or [],
         'label': f"{course_offering.course.code} {course_offering.course.name} / {course_offering.year}",
+    }
+
+
+def _help_ticket_view_allowed(user):
+    return _user_actual_role(user) in {'student', 'teacher', 'admin', 'course-teacher'}
+
+
+def _help_ticket_analytics_allowed(user):
+    return _user_actual_role(user) in {'teacher', 'admin', 'course-teacher'}
+
+
+def _help_ticket_accessible_offerings(user):
+    actual_role = _user_actual_role(user)
+    enrollments = Enrollment.objects.filter(user=user).select_related('course_offering__course')
+    if actual_role == 'student':
+        enrollments = enrollments.filter(role='student')
+    elif actual_role == 'teacher':
+        enrollments = enrollments.filter(role='teacher')
+    elif actual_role == 'course-teacher':
+        enrollments = enrollments.filter(role='course-teacher')
+    elif actual_role == 'admin':
+        pass
+    else:
+        return []
+
+    offerings = {}
+    for enrollment in enrollments:
+        offering = enrollment.course_offering
+        if offering_id := offering.id:
+            offerings[offering_id] = offering
+    return sorted(
+        offerings.values(),
+        key=lambda offering: (offering.year, offering.id),
+        reverse=True,
+    )
+
+
+def _default_selected_offering_id(offerings, requested_offering_id=None):
+    if not offerings:
+        return None
+    offering_ids = {offering.id for offering in offerings}
+    try:
+        requested_id = int(requested_offering_id)
+    except (TypeError, ValueError):
+        requested_id = None
+    if requested_id in offering_ids:
+        return requested_id
+    latest = max(offerings, key=lambda offering: (offering.year, offering.id))
+    return latest.id
+
+
+def _sanitize_help_ticket_payload_for_view(ticket, actual_role):
+    payload = _build_help_ticket_payload(ticket)
+    if actual_role == 'student':
+        payload['internal_note'] = ''
+    return payload
+
+
+def _resolve_help_ticket_selected_offering(user, requested_offering_raw=None):
+    offerings = _help_ticket_accessible_offerings(user)
+    try:
+        requested_offering_id = int(requested_offering_raw) if requested_offering_raw else None
+    except (TypeError, ValueError):
+        requested_offering_id = None
+    if requested_offering_raw and requested_offering_id and all(offering.id != requested_offering_id for offering in offerings):
+        return offerings, None, False
+    return offerings, _default_selected_offering_id(offerings, requested_offering_id), True
+
+
+def _apply_help_ticket_common_filters(ticket_qs, request):
+    status_filter = (request.GET.get('status') or 'resolved').strip()
+    if status_filter and status_filter != 'all':
+        valid_statuses = {choice[0] for choice in ExperimentHelpTicket.STATUS_CHOICES}
+        if status_filter in valid_statuses:
+            ticket_qs = ticket_qs.filter(status=status_filter)
+
+    request_type_filter = (request.GET.get('request_type') or 'all').strip()
+    if request_type_filter and request_type_filter != 'all':
+        valid_request_types = {choice[0] for choice in ExperimentHelpTicket.REQUEST_TYPE_CHOICES}
+        if request_type_filter in valid_request_types:
+            ticket_qs = ticket_qs.filter(request_type=request_type_filter)
+
+    resolution_category_filter = (request.GET.get('resolution_category') or 'all').strip()
+    if resolution_category_filter == 'none':
+        ticket_qs = ticket_qs.filter(Q(resolution_category='') | Q(resolution_category__isnull=True))
+    elif resolution_category_filter and resolution_category_filter != 'all':
+        valid_categories = {choice[0] for choice in ExperimentHelpTicket.RESOLUTION_CATEGORY_CHOICES}
+        if resolution_category_filter in valid_categories:
+            ticket_qs = ticket_qs.filter(resolution_category=resolution_category_filter)
+
+    return ticket_qs, {
+        'status': status_filter or 'resolved',
+        'request_type': request_type_filter or 'all',
+        'resolution_category': resolution_category_filter or 'all',
     }
 
 
@@ -786,6 +885,344 @@ def help_ticket_context(request):
         'experiment_numbers': course_offering.course.experiment_numbers or [],
         'active_group_ticket': _build_help_ticket_payload(unresolved_ticket) if unresolved_ticket else None,
         'recent_tickets': [_build_help_ticket_payload(ticket) for ticket in recent_own_tickets],
+    })
+
+
+@login_required
+def help_ticket_history(request):
+    if not _help_ticket_view_allowed(request.user):
+        return HttpResponseForbidden()
+
+    offerings, selected_offering_id, _ = _resolve_help_ticket_selected_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    context = {
+        'offerings_json': json.dumps([_serialize_offering(offering) for offering in offerings], ensure_ascii=False),
+        'default_offering_id': selected_offering_id,
+        'help_ticket_history_actual_role_json': json.dumps(_user_actual_role(request.user), ensure_ascii=False),
+    }
+    return render(request, 'submission/help_ticket_history.html', context)
+
+
+@login_required
+def help_ticket_history_api(request):
+    actual_role = _user_actual_role(request.user)
+    if not _help_ticket_view_allowed(request.user):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    offerings, selected_offering_id, is_valid_offering = _resolve_help_ticket_selected_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    if not is_valid_offering:
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=403)
+
+    ticket_qs = ExperimentHelpTicket.objects.select_related(
+        'student__userprofile',
+        'course_offering__course',
+        'handled_by__userprofile',
+    )
+    if selected_offering_id:
+        ticket_qs = ticket_qs.filter(course_offering_id=selected_offering_id)
+    else:
+        ticket_qs = ticket_qs.none()
+
+    if actual_role == 'student':
+        ticket_qs = ticket_qs.filter(student=request.user)
+
+    ticket_qs, filter_state = _apply_help_ticket_common_filters(ticket_qs, request)
+
+    experiment_group_filter = (request.GET.get('experiment_group') or '').strip()
+    if experiment_group_filter:
+        if experiment_group_filter.isdigit():
+            normalized_group = experiment_group_filter.zfill(2)
+            ticket_qs = ticket_qs.filter(
+                Q(experiment_group=experiment_group_filter)
+                | Q(experiment_group=normalized_group)
+            )
+        else:
+            ticket_qs = ticket_qs.filter(experiment_group=experiment_group_filter)
+
+    experiment_number_filter = (request.GET.get('experiment_number') or '').strip()
+    if experiment_number_filter:
+        ticket_qs = ticket_qs.filter(experiment_number=experiment_number_filter)
+
+    created_date_filter = (request.GET.get('created_date') or '').strip()
+    if created_date_filter:
+        try:
+            parsed_date = date.fromisoformat(created_date_filter)
+        except ValueError:
+            return JsonResponse({'status': 'error', 'message': '日付が不正です'}, status=400)
+        ticket_qs = ticket_qs.filter(created_at__date=parsed_date)
+
+    tickets = [
+        _sanitize_help_ticket_payload_for_view(ticket, actual_role)
+        for ticket in ticket_qs.order_by('-created_at', '-id')
+    ]
+    return JsonResponse({
+        'status': 'ok',
+        'actual_role': actual_role,
+        'offerings': [_serialize_offering(offering) for offering in offerings],
+        'selected_offering_id': selected_offering_id,
+        'filters': {
+            **filter_state,
+            'experiment_group': experiment_group_filter,
+            'experiment_number': experiment_number_filter,
+            'created_date': created_date_filter,
+        },
+        'tickets': tickets,
+        'count': len(tickets),
+    })
+
+
+def _resolution_category_key(ticket):
+    return (ticket.resolution_category or '').strip() or 'none'
+
+
+def _resolution_category_label(category_key):
+    labels = dict(ExperimentHelpTicket.RESOLUTION_CATEGORY_CHOICES)
+    if category_key == 'none':
+        return '未登録'
+    return labels.get(category_key, category_key)
+
+
+def _weekday_label_from_date(target_date):
+    labels = ['月', '火', '水', '木', '金', '土', '日']
+    return labels[target_date.weekday()]
+
+
+def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from_filter='', date_to_filter=''):
+    tickets = list(ticket_qs)
+    course = getattr(selected_offering, 'course', None)
+    experiment_numbers = list((course.experiment_numbers or []) if course else [])
+
+    total_count = len(tickets)
+    request_type_counts = Counter(ticket.request_type for ticket in tickets)
+    resolution_counts = Counter(_resolution_category_key(ticket) for ticket in tickets)
+    hour_counts = Counter()
+    group_counts = Counter()
+    handled_by_counts = Counter()
+    resolution_experiment_counts = defaultdict(Counter)
+    response_minutes = []
+    session_counts = Counter()
+
+    for ticket in tickets:
+        created_local = timezone.localtime(ticket.created_at, JST)
+        hour_counts[created_local.hour] += 1
+        if ticket.experiment_group:
+            group_counts[ticket.experiment_group] += 1
+        category_key = _resolution_category_key(ticket)
+        resolution_experiment_counts[category_key][ticket.experiment_number or '未設定'] += 1
+
+        if ticket.handled_by:
+            handler_profile = getattr(ticket.handled_by, 'userprofile', None)
+            handler_name = ''
+            if handler_profile and handler_profile.full_name:
+                handler_name = handler_profile.full_name
+            elif ticket.handled_by.get_full_name():
+                handler_name = ticket.handled_by.get_full_name()
+            else:
+                handler_name = ticket.handled_by.username
+            handled_by_counts[handler_name] += 1
+
+        if ticket.status == 'resolved' and ticket.resolved_at:
+            resolved_local = timezone.localtime(ticket.resolved_at, JST)
+            response_minutes.append(max(0, (resolved_local - created_local).total_seconds() / 60))
+
+    schedule_qs = Schedule.objects.filter(course_offering=selected_offering).order_by('date')
+    if date_from_filter:
+        try:
+            schedule_qs = schedule_qs.filter(date__gte=date.fromisoformat(date_from_filter))
+        except ValueError:
+            pass
+    if date_to_filter:
+        try:
+            schedule_qs = schedule_qs.filter(date__lte=date.fromisoformat(date_to_filter))
+        except ValueError:
+            pass
+    schedule_dates = list(schedule_qs.values_list('date', flat=True))
+    weekday_dates = defaultdict(list)
+    weekday_order = []
+    for schedule_date in schedule_dates:
+        weekday_label = _weekday_label_from_date(schedule_date)
+        if weekday_label not in weekday_dates:
+            weekday_order.append(weekday_label)
+        weekday_dates[weekday_label].append(schedule_date)
+
+    session_lookup = {}
+    max_session_index = 0
+    for weekday_label in weekday_order:
+        for session_index, schedule_date in enumerate(sorted(weekday_dates[weekday_label]), start=1):
+            session_lookup[schedule_date] = (weekday_label, session_index)
+            max_session_index = max(max_session_index, session_index)
+
+    for ticket in tickets:
+        ticket_date = timezone.localtime(ticket.created_at, JST).date()
+        session_info = session_lookup.get(ticket_date)
+        if not session_info:
+            continue
+        weekday_label, session_index = session_info
+        session_counts[(weekday_label, session_index)] += 1
+
+    if not experiment_numbers:
+        dynamic_numbers = {ticket.experiment_number for ticket in tickets if ticket.experiment_number}
+        experiment_numbers = sorted(dynamic_numbers)
+    else:
+        extras = [number for number in {ticket.experiment_number for ticket in tickets if ticket.experiment_number} if number not in experiment_numbers]
+        experiment_numbers.extend(sorted(extras))
+
+    resolution_order = ['experiment', 'device_trouble', 'other', 'none']
+    resolution_chart = {
+        'labels': [_resolution_category_label(key) for key in resolution_order],
+        'counts': [resolution_counts.get(key, 0) for key in resolution_order],
+        'keys': resolution_order,
+    }
+    request_type_chart = {
+        'labels': ['質問', '呼び出し'],
+        'counts': [request_type_counts.get('question', 0), request_type_counts.get('call', 0)],
+        'keys': ['question', 'call'],
+    }
+    hour_chart = {
+        'labels': [f'{hour:02d}:00' for hour in range(24)],
+        'counts': [hour_counts.get(hour, 0) for hour in range(24)],
+    }
+    session_labels = [f'{index}回' for index in range(1, max_session_index + 1)]
+    session_chart = {
+        'labels': session_labels,
+        'datasets': [
+            {
+                'label': weekday_label,
+                'counts': [session_counts.get((weekday_label, index), 0) for index in range(1, max_session_index + 1)],
+            }
+            for weekday_label in weekday_order
+        ],
+    }
+    resolution_experiment_chart = {
+        'labels': experiment_numbers,
+        'datasets': [
+            {
+                'key': key,
+                'label': _resolution_category_label(key),
+                'counts': [resolution_experiment_counts[key].get(number, 0) for number in experiment_numbers],
+            }
+            for key in resolution_order
+        ],
+    }
+    handled_by_items = [
+        {'label': label, 'count': count}
+        for label, count in sorted(handled_by_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    group_items = [
+        {'label': label, 'count': count}
+        for label, count in sorted(group_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    response_time = {
+        'resolved_count': len(response_minutes),
+        'average_minutes': round(sum(response_minutes) / len(response_minutes), 1) if response_minutes else 0,
+        'median_minutes': round(median(response_minutes), 1) if response_minutes else 0,
+        'max_minutes': round(max(response_minutes), 1) if response_minutes else 0,
+    }
+
+    return {
+        'summary': {
+            'total_count': total_count,
+            'question_count': request_type_counts.get('question', 0),
+            'call_count': request_type_counts.get('call', 0),
+            'unclassified_count': resolution_counts.get('none', 0),
+        },
+        'charts': {
+            'resolution_category': resolution_chart,
+            'request_type_ratio': request_type_chart,
+            'hourly': hour_chart,
+            'session': session_chart,
+            'resolution_experiment': resolution_experiment_chart,
+        },
+        'tables': {
+            'handled_by': handled_by_items,
+            'experiment_group': group_items,
+        },
+        'response_time': response_time,
+    }
+
+
+@login_required
+def help_ticket_analytics(request):
+    if not _help_ticket_analytics_allowed(request.user):
+        return HttpResponseForbidden()
+
+    offerings, selected_offering_id, _ = _resolve_help_ticket_selected_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    context = {
+        'offerings_json': json.dumps([_serialize_offering(offering) for offering in offerings], ensure_ascii=False),
+        'default_offering_id': selected_offering_id,
+        'help_ticket_analytics_actual_role_json': json.dumps(_user_actual_role(request.user), ensure_ascii=False),
+    }
+    return render(request, 'submission/help_ticket_analytics.html', context)
+
+
+@login_required
+def help_ticket_analytics_api(request):
+    actual_role = _user_actual_role(request.user)
+    if not _help_ticket_analytics_allowed(request.user):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    offerings, selected_offering_id, is_valid_offering = _resolve_help_ticket_selected_offering(
+        request.user,
+        request.GET.get('offering_id'),
+    )
+    if not is_valid_offering:
+        return JsonResponse({'status': 'error', 'message': '科目/年度が不正です'}, status=403)
+
+    selected_offering = next((offering for offering in offerings if offering.id == selected_offering_id), None)
+    ticket_qs = ExperimentHelpTicket.objects.select_related(
+        'student__userprofile',
+        'course_offering__course',
+        'handled_by__userprofile',
+    )
+    if selected_offering_id:
+        ticket_qs = ticket_qs.filter(course_offering_id=selected_offering_id)
+    else:
+        ticket_qs = ticket_qs.none()
+
+    ticket_qs, filter_state = _apply_help_ticket_common_filters(ticket_qs, request)
+
+    date_from_filter = (request.GET.get('date_from') or '').strip()
+    date_to_filter = (request.GET.get('date_to') or '').strip()
+    if date_from_filter:
+        try:
+            parsed_from = date.fromisoformat(date_from_filter)
+        except ValueError:
+            return JsonResponse({'status': 'error', 'message': '開始日が不正です'}, status=400)
+        start_dt = timezone.make_aware(datetime.combine(parsed_from, time.min), JST)
+        ticket_qs = ticket_qs.filter(created_at__gte=start_dt)
+    if date_to_filter:
+        try:
+            parsed_to = date.fromisoformat(date_to_filter)
+        except ValueError:
+            return JsonResponse({'status': 'error', 'message': '終了日が不正です'}, status=400)
+        end_dt = timezone.make_aware(datetime.combine(parsed_to + timedelta(days=1), time.min), JST)
+        ticket_qs = ticket_qs.filter(created_at__lt=end_dt)
+
+    analytics = _build_help_ticket_analytics_payload(
+        ticket_qs.order_by('-created_at', '-id'),
+        selected_offering,
+        date_from_filter=date_from_filter,
+        date_to_filter=date_to_filter,
+    )
+    return JsonResponse({
+        'status': 'ok',
+        'actual_role': actual_role,
+        'offerings': [_serialize_offering(offering) for offering in offerings],
+        'selected_offering_id': selected_offering_id,
+        'filters': {
+            **filter_state,
+            'date_from': date_from_filter,
+            'date_to': date_to_filter,
+        },
+        'analytics': analytics,
     })
 
 
