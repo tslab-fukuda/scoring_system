@@ -245,7 +245,7 @@
                             plugins: { legend: { labels: { color: tickColor } } },
                             scales: {
                                 x: {
-                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 0, minRotation: 0 },
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 35, minRotation: 35, font: { size: 10 } },
                                     grid: { color: gridColor },
                                 },
                                 y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },

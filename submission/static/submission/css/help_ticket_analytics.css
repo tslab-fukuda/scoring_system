@@ -112,6 +112,7 @@
 }
 
 .analytics-chart-shell {
+    display: block;
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -124,6 +125,13 @@
     position: relative;
     height: 280px;
     width: 100%;
+    min-width: 0;
+}
+
+.analytics-chart-wrap canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .analytics-chart-wrap-lg {
