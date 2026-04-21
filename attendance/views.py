@@ -528,6 +528,29 @@ def _build_attendance_update_payload(user, record, action):
     }
 
 
+def _serialize_attendance_offering(offering):
+    return {
+        'id': offering.id,
+        'course_code': offering.course.code,
+        'course_name': offering.course.name,
+        'year': offering.year,
+    }
+
+
+def _build_attendance_nfc_student_payload(profile, enrollment):
+    student_context = build_student_context(
+        profile=profile,
+        enrollment=enrollment,
+    )
+    return {
+        'student_id': student_context['student_id'],
+        'full_name': student_context['full_name'],
+        'experiment_day': student_context['experiment_day'],
+        'experiment_group': student_context['experiment_group'],
+        'nfc_id': profile.nfc_id or '',
+    }
+
+
 def _can_manage_attendance_overrides(user):
     return _user_actual_role(user) == 'admin'
 
@@ -1617,15 +1640,7 @@ def attendance_list(request):
         allowed_ids = allowed_offering_ids(request.user)
         offerings_qs = offerings_qs.filter(id__in=allowed_ids)
     offerings = list(offerings_qs)
-    offerings_data = [
-        {
-            'id': off.id,
-            'course_code': off.course.code,
-            'course_name': off.course.name,
-            'year': off.year,
-        }
-        for off in offerings
-    ]
+    offerings_data = [_serialize_attendance_offering(off) for off in offerings]
     selected_offering_id = None
     if offerings_data:
         latest = max(offerings_data, key=lambda o: (o['year'], o['id']))
@@ -1642,7 +1657,7 @@ def attendance_list(request):
     student_ids = None
     if selected_offering_id:
         student_ids = list(
-            Enrollment.objects.filter(course_offering_id=selected_offering_id)
+            Enrollment.objects.filter(course_offering_id=selected_offering_id, role='student')
             .values_list('user_id', flat=True)
         )
         today_records = today_records.filter(
@@ -1669,20 +1684,12 @@ def attendance_list(request):
         students_qs = UserProfile.objects.select_related('user').filter(user_id__in=student_ids)
         students_list = []
         for profile in students_qs:
-            student_context = build_student_context(
-                profile=profile,
-                enrollment=enrollment_map.get(profile.user_id),
+            students_list.append(
+                _build_attendance_nfc_student_payload(
+                    profile,
+                    enrollment_map.get(profile.user_id),
+                )
             )
-            students_list.append({
-                'student_id': student_context['student_id'],
-                'full_name': student_context['full_name'],
-                'experiment_day': student_context['experiment_day'],
-                'experiment_group': student_context['experiment_group'],
-                'nfc_id': profile.nfc_id or '',
-                'email': profile.user.email,
-                'role': profile.role,
-                'user_id': profile.user_id,
-            })
     can_manage_overrides_flag = _can_manage_attendance_overrides(request.user)
     override_ui = {'global_override': {'ignore_late': False, 'ignore_absence': False, 'ignore_lab_time': False}, 'rows': [], 'target_date': timezone.localdate().strftime('%Y-%m-%d')}
     if can_manage_overrides_flag and selected_offering_id:
@@ -1697,7 +1704,6 @@ def attendance_list(request):
         'can_register_nfc': can_register_nfc_flag,
         'can_manage_attendance_overrides': can_manage_overrides_flag,
         'attendance_override': override_ui,
-        'attendance_override_json': json.dumps(override_ui, ensure_ascii=False),
     }
     return render(request, 'attendance/attendance_list.html', context)
 

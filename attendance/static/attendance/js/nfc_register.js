@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', function () {
             showPanel: false,
             students: window.STUDENTS || [],
             selectedId: '',
-            selectedUserId: '',
             selectedKey: '',
             nfcId: '',
             selectedUser: {}
@@ -14,8 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
             studentKey(stu) {
                 const name = stu && stu.full_name ? stu.full_name : '';
                 const sid = stu && stu.student_id ? stu.student_id : '';
-                const email = stu && stu.email ? stu.email : '';
-                return `${sid}|${name}|${email}`;
+                return `${sid}|${name}`;
             },
             open() {
                 this.showPanel = true;
@@ -29,7 +27,6 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             selectStudent(stu) {
                 this.selectedId = stu.student_id;
-                this.selectedUserId = String(stu.user_id || '');
                 this.selectedKey = this.studentKey(stu);
                 this.selectedUser = stu;
                 this.$nextTick(() => {
@@ -44,9 +41,8 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             registerNfc() {
                 const sid = this.selectedId;
-                const uid = this.selectedUserId;
                 const nfc = this.nfcId.trim();
-                if ((!sid && !uid) || !nfc) {
+                if (!sid || !nfc) {
                     alert('ユーザとNFCを入力してください');
                     return;
                 }
@@ -56,14 +52,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': CSRF_TOKEN
                     },
-                    body: JSON.stringify({ student_id: sid, user_id: uid, nfc_id: nfc })
+                    body: JSON.stringify({ student_id: sid, nfc_id: nfc })
                 })
                     .then(r => r.json())
                     .then(d => {
                         if (d.status === 'success') {
-                            const st = uid
-                                ? this.students.find(s => String(s.user_id || '') === uid)
-                                : this.students.find(s => s.student_id === sid);
+                            const st = this.students.find(s => s.student_id === sid);
                             if (st) st.nfc_id = nfc;
                             alert('登録しました');
                         } else {

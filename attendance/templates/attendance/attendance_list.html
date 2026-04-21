@@ -119,10 +119,8 @@
                             <tr>
                                 <th>名前</th>
                                 <th>学生番号</th>
-                                <th>メールアドレス</th>
                                 <th>曜日</th>
                                 <th>班</th>
-                                <th>ロール</th>
                                 <th>NFC_ID</th>
                             </tr>
                         </thead>
@@ -132,10 +130,8 @@
                                 @click="selectStudent(s)" style="cursor:pointer;">
                                 <td>{{ s.full_name }}</td>
                                 <td>{{ s.student_id }}</td>
-                                <td>{{ s.email }}</td>
                                 <td>{{ s.experiment_day }}</td>
                                 <td>{{ s.experiment_group }}</td>
-                                <td>{{ s.role }}</td>
                                 <td>{{ s.nfc_id || '-' }}</td>
                             </tr>
                         </tbody>
@@ -148,10 +144,8 @@
                         <div v-if="selectedUser && selectedUser.student_id">
                             <div>名前: {{ selectedUser.full_name }}</div>
                             <div>学生番号: {{ selectedUser.student_id }}</div>
-                            <div>メールアドレス: {{ selectedUser.email || '-' }}</div>
                             <div>曜日: {{ selectedUser.experiment_day }}</div>
                             <div>班: {{ selectedUser.experiment_group }}</div>
-                            <div>ロール: {{ selectedUser.role }}</div>
                             <div>NFC_ID: {{ selectedUser.nfc_id || '-' }}</div>
                         </div>
                         <div v-else class="text-muted">未選択</div>
@@ -358,7 +352,6 @@
     var CSRF_TOKEN = '{{ csrf_token }}';
     var SELECTED_OFFERING_ID = '{{ selected_offering_id|default_if_none:"" }}';
     var CAN_MANAGE_ATTENDANCE_OVERRIDES = {% if can_manage_attendance_overrides %}true{% else %}false{% endif %};
-    var ATTENDANCE_OVERRIDE_STATE = {{ attendance_override_json|safe }};
 </script>
 <script src="{% static 'attendance/js/nfc_register.js' %}"></script>
 <script type="module" src="{% static 'attendance/js/nfc_reader.js' %}"></script>
