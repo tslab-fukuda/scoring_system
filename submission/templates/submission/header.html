@@ -166,11 +166,11 @@
             </template>
             <template v-else-if="selectedNotification.kind === 'experiment_help'">
               <div><strong>科目/年度:</strong> [[ selectedNotification.offering.label ]]</div>
-              <div><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
+              <div v-if="canManageHelpItem(selectedNotification)"><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
               <div><strong>実験班番号:</strong> [[ selectedNotification.experiment_group ]]</div>
               <div><strong>実験番号:</strong> [[ selectedNotification.experiment_number ]]</div>
               <div><strong>依頼時刻:</strong> [[ selectedNotification.created_at ]]</div>
-              <div v-if="selectedNotification.resolution_category_label"><strong>対応分類:</strong> [[ selectedNotification.resolution_category_label ]]</div>
+              <div v-if="canManageHelpItem(selectedNotification) && selectedNotification.resolution_category_label"><strong>対応分類:</strong> [[ selectedNotification.resolution_category_label ]]</div>
               <div v-if="selectedNotification.resolved_at"><strong>対応完了時刻:</strong> [[ selectedNotification.resolved_at ]]</div>
               <div v-if="selectedNotification.handled_by_name"><strong>対応者:</strong> [[ selectedNotification.handled_by_name ]]</div>
               <div class="notification-detail-message">
