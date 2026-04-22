@@ -32,7 +32,6 @@ new Vue({
             absence_penalty: '',
             discussion_count_total: 0,
             discussion_bonus_total: 0,
-            experiment_count: '',
             grade_divisor: 10,
             final_grade: ''
         },
@@ -201,7 +200,6 @@ new Vue({
                 absence_penalty: stu.absence_penalty ?? 0,
                 discussion_count_total: stu.discussion_count_total ?? 0,
                 discussion_bonus_total: stu.discussion_bonus_total ?? 0,
-                experiment_count: stu.experiment_count ?? '',
                 grade_divisor: stu.grade_divisor ?? 10,
                 final_grade: stu.final_grade
             };
@@ -220,7 +218,6 @@ new Vue({
                 absence_penalty: '',
                 discussion_count_total: 0,
                 discussion_bonus_total: 0,
-                experiment_count: '',
                 grade_divisor: 10,
                 final_grade: ''
             };

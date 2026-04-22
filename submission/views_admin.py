@@ -3495,7 +3495,6 @@ def user_list_view(request):
                         'last_login': last_login,
                         'can_view_attendance': can_view_attendance,
                         'is_attendance_only': is_attendance_only,
-                        'profile_missing': False,
                     })
             else:
                 user_data.append({
@@ -3513,7 +3512,6 @@ def user_list_view(request):
                     'last_login': last_login,
                     'can_view_attendance': can_view_attendance,
                     'is_attendance_only': is_attendance_only,
-                    'profile_missing': False,
                 })
         except UserProfile.DoesNotExist:
             display_name = user.get_full_name() or user.username or user.email or f'User {user.id}'
@@ -3540,7 +3538,6 @@ def user_list_view(request):
                         'last_login': last_login,
                         'can_view_attendance': can_view_attendance,
                         'is_attendance_only': is_attendance_only,
-                        'profile_missing': True,
                     })
             else:
                 profile_missing_user_data.append({
@@ -3558,11 +3555,9 @@ def user_list_view(request):
                     'last_login': last_login,
                     'can_view_attendance': can_view_attendance,
                     'is_attendance_only': is_attendance_only,
-                    'profile_missing': True,
                 })
 
     context = {
-        'users': user_data,
         'users_json': json.dumps(user_data, ensure_ascii=False),
         'profile_missing_users_json': json.dumps(profile_missing_user_data, ensure_ascii=False),
         'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
@@ -4093,7 +4088,6 @@ def final_score_list_view(request):
     student_data = _build_final_score_rows(experiment_numbers, offering_id)
     context = {
         'students_json': json.dumps(student_data, ensure_ascii=False),
-        'students': student_data,
         'experiment_numbers': json.dumps(experiment_numbers, ensure_ascii=False),
         'offerings_json': json.dumps(offering_options, ensure_ascii=False),
         'default_offering_id': default_offering_id,
@@ -4219,8 +4213,6 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
                 else:
                     user_override_map[(override.user_id, override.target_date)] = override
     student_data = []
-    experiment_count = len(unique_experiment_numbers) if unique_experiment_numbers else 0
-
     # 実施項目集計用の事前ロード（選択科目/年度かつ対象実験のみ）
     progress_map = {}
     completion_map = {}
@@ -4264,7 +4256,6 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         student_context = build_student_context(profile=up, enrollment=enr)
         record = {
             'user_profile_id': up.id,
-            'user_id': up.user_id,
             'name': student_context['full_name'],
             'student_id': student_context['student_id'],
             'experiment_day': student_context['experiment_day'],
@@ -4367,7 +4358,6 @@ def _build_final_score_rows(experiment_numbers, offering_id, day=None, group=Non
         record['discussion_bonus_total'] = discussion_bonus_total
         record['final_score_total'] = total_final_score
         record['score_details_avg'] = score_details_avg
-        record['experiment_count'] = experiment_count
         record['grade_divisor'] = grade_divisor
         record['completed_task_count'] = completed_task_count
         record['experiment_logs'] = experiment_logs
