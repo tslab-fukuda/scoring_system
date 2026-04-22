@@ -6,6 +6,7 @@ window.app = new Vue({
     data: {
         restoringDashboardState: false,
         tab: 'submissions',
+        listDisplayLimit: { submissions: 20, accepted: 20 },
         selectedStudentId: null,
         students: students,
         submissionSummary: submissionSummary,
@@ -114,6 +115,21 @@ window.app = new Vue({
             if (!this.scheduleImportPreview) return false;
             const dates = this.scheduleImportPreview.registerable_dates || [];
             return dates.length > 0;
+        },
+        currentListTabKey() {
+            return this.tab === 'submissions' || this.tab === 'accepted' ? this.tab : null;
+        },
+        currentListDisplayLimit() {
+            const key = this.currentListTabKey;
+            if (!key) return Array.isArray(this.items) ? this.items.length : 0;
+            return this.listDisplayLimit[key] || 20;
+        },
+        visibleItems() {
+            if (!Array.isArray(this.items)) return [];
+            return this.items.slice(0, this.currentListDisplayLimit);
+        },
+        canShowMoreItems() {
+            return Array.isArray(this.items) && this.items.length > this.currentListDisplayLimit;
         }
     }),
     methods: Object.assign({}, offeringSelectorHelper.methods, {
@@ -268,6 +284,16 @@ window.app = new Vue({
                 this.fetchEquipmentDashboard();
             }
         },
+        resetCurrentListDisplayLimit() {
+            const key = this.currentListTabKey;
+            if (!key) return;
+            this.$set(this.listDisplayLimit, key, 20);
+        },
+        showMoreItems() {
+            const key = this.currentListTabKey;
+            if (!key) return;
+            this.$set(this.listDisplayLimit, key, (this.listDisplayLimit[key] || 20) + 20);
+        },
         fetchList() {
             const params = [];
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
@@ -279,6 +305,7 @@ window.app = new Vue({
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
+                    this.resetCurrentListDisplayLimit();
                     this.submissions = data.submissions;
                     this.items = this.submissions;
                 });
@@ -340,6 +367,7 @@ window.app = new Vue({
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
+                    this.resetCurrentListDisplayLimit();
                     this.items = data.submissions;
                 });
         },

@@ -29,6 +29,7 @@ new Vue({
     data: {
         restoringDashboardState: false,
         tab: 'grading',
+        listDisplayLimit: { grading: 20, graded: 20 },
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
         items: [],
         offerings: offeringContext.offerings || [],
@@ -73,6 +74,21 @@ new Vue({
             return this.tab === 'grading' ? 'grading-list'
                  : this.tab === 'graded' ? 'graded-list'
                  : null;
+        },
+        currentListTabKey() {
+            return this.tab === 'grading' || this.tab === 'graded' ? this.tab : null;
+        },
+        currentListDisplayLimit() {
+            const key = this.currentListTabKey;
+            if (!key) return Array.isArray(this.items) ? this.items.length : 0;
+            return this.listDisplayLimit[key] || 20;
+        },
+        visibleItems() {
+            if (!Array.isArray(this.items)) return [];
+            return this.items.slice(0, this.currentListDisplayLimit);
+        },
+        canShowMoreItems() {
+            return Array.isArray(this.items) && this.items.length > this.currentListDisplayLimit;
         },
         dayOptions() {
             const current = this.offerings.find(o => Number(o.id) === Number(this.selectedOfferingId));
@@ -131,6 +147,16 @@ new Vue({
                 this.fetchList();
             }
         },
+        resetCurrentListDisplayLimit() {
+            const key = this.currentListTabKey;
+            if (!key) return;
+            this.$set(this.listDisplayLimit, key, 20);
+        },
+        showMoreItems() {
+            const key = this.currentListTabKey;
+            if (!key) return;
+            this.$set(this.listDisplayLimit, key, (this.listDisplayLimit[key] || 20) + 20);
+        },
         fetchList() {
             this.ensureOfferingSelected();
             if (!this.selectedOfferingId) {
@@ -147,6 +173,7 @@ new Vue({
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
             if (params.length) url += '?' + params.join('&');
             fetch(url).then(r => r.json()).then(data => {
+                this.resetCurrentListDisplayLimit();
                 this.items = data;
             });
         },
