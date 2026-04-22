@@ -153,6 +153,14 @@ def _serialize_dashboard_student_tile(profile, enrollment, *, include_completion
     return payload
 
 
+def _dashboard_student_sort_key(item):
+    group = str(item.get('experiment_group') or '').strip()
+    student_id = str(item.get('student_id') or '').strip()
+    group_key = (0, int(group)) if group.isdigit() else (1, group)
+    student_key = (0, int(student_id)) if student_id.isdigit() else (1, student_id)
+    return group_key, student_key, str(item.get('full_name') or '')
+
+
 def _serialize_main_report_score_payload(submission, offering_id, actual_role):
     exp_day, exp_group, full_name, _ = _student_enrollment_info(submission.student, offering_id)
     payload = {
@@ -711,6 +719,7 @@ def teacher_students_api(request):
                 include_completion=include_completion,
             )
         )
+    students.sort(key=_dashboard_student_sort_key)
     return JsonResponse({'students': students})
 
 

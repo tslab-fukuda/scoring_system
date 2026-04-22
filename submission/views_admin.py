@@ -158,6 +158,14 @@ def _normalize_experiment_group_value(value):
     return normalized
 
 
+def _dashboard_student_sort_key(item):
+    group = str(item.get('experiment_group') or '').strip()
+    student_id = str(item.get('student_id') or '').strip()
+    group_key = (0, int(group)) if group.isdigit() else (1, group)
+    student_key = (0, int(student_id)) if student_id.isdigit() else (1, student_id)
+    return group_key, student_key, str(item.get('full_name') or '')
+
+
 def _ensure_course_system_items(course):
     for definition in SYSTEM_SCORING_DEFS:
         code = definition['code']
@@ -2615,6 +2623,7 @@ def get_students_api(request):
             'experiment_group': student_context['experiment_group'],
             'photo': up.photo.url if up.photo else ''
         })
+    students.sort(key=_dashboard_student_sort_key)
     return JsonResponse({'students_json': students})
 
 def get_summary_api(request):
