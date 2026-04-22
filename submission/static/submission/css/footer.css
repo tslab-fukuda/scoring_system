@@ -29,17 +29,17 @@ body {
 .footer-content {
     max-width: 1600px;
     margin: 0 auto;
-    text-align: center;
     display: grid;
-    grid-template-rows: 30px;
-    grid-template-columns: 160px 1fr 160px;
+    grid-template-columns: max-content minmax(0, 1fr);
     grid-template-areas:
         "logo login"
         "logo copylight";
-    /* justify-content: space-between; */
+    column-gap: 20px;
+    row-gap: 4px;
     justify-content: center;
     align-items: center;
-    flex-wrap: wrap;
+    padding: 0 16px;
+    text-align: center;
 }
 
 .footer-link {
@@ -94,16 +94,17 @@ body {
         gap: 0.5em;
         text-align: center;
         font-size: 0.93em;
+        padding: 0 12px;
     }
     .footer-log {
         justify-content: center;
-        float: none;
         padding: 0;
     }
     .footer-log a {
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        white-space: nowrap;
     }
     .f-log {
         height: 36px;
@@ -117,22 +118,33 @@ body {
 }
 
 .f-log{
-    margin-right: 6px;
     height: 50px;
+    flex: 0 0 auto;
 }
 
 .footer-log {
     grid-area: logo;
-    padding: 0 10px;
     display: flex;
     align-items: center;
-    float: left;
+    justify-content: flex-start;
+    min-width: 0;
+}
+
+.footer-log a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    text-decoration: none;
+    color: inherit;
 }
 
 .footer-login {
     grid-area: login;
     margin: 0.2em 0 0.4em 0;
     font-size: 0.99em;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .copylight{
@@ -140,4 +152,6 @@ body {
     font-size: 12px;
     text-align: center;
     line-height: 25px;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
