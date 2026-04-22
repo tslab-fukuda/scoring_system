@@ -169,12 +169,6 @@ def _default_selected_offering_id(offerings, requested_offering_id=None):
     return latest.id
 
 
-def _sanitize_help_ticket_payload_for_view(ticket, actual_role):
-    if actual_role == 'student':
-        return _build_help_ticket_student_payload(ticket)
-    return _build_help_ticket_manager_payload(ticket)
-
-
 def _resolve_help_ticket_selected_offering(user, requested_offering_raw=None):
     offerings = _help_ticket_accessible_offerings(user)
     try:
@@ -451,8 +445,7 @@ def _build_forget_request_payload(forget_request):
     }
 
 
-def _build_help_ticket_payload(ticket):
-    student_profile = getattr(ticket.student, 'userprofile', None)
+def _help_ticket_core_fields(ticket):
     handled_by_profile = getattr(ticket.handled_by, 'userprofile', None) if ticket.handled_by else None
     return {
         'id': ticket.id,
@@ -465,53 +458,92 @@ def _build_help_ticket_payload(ticket):
         'experiment_number': ticket.experiment_number,
         'message': ticket.message,
         'teacher_response': ticket.teacher_response,
-        'internal_note': ticket.internal_note,
-        'resolution_category': ticket.resolution_category,
-        'resolution_category_label': ticket.get_resolution_category_display() if ticket.resolution_category else '',
         'resolved_at': timezone.localtime(ticket.resolved_at).strftime('%Y-%m-%d %H:%M') if ticket.resolved_at else '',
         'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
         'updated_at': timezone.localtime(ticket.updated_at).strftime('%Y-%m-%d %H:%M'),
-        'student_name': student_profile.full_name if student_profile else ticket.student.get_full_name() or ticket.student.username,
-        'student_id': student_profile.student_id if student_profile else '',
-        'student_email': ticket.student.email or (student_profile.email if student_profile else ''),
         'handled_by_name': (
             handled_by_profile.full_name if handled_by_profile else (
                 ticket.handled_by.get_full_name() if ticket.handled_by else ''
             )
         ) or (ticket.handled_by.username if ticket.handled_by else ''),
         'offering': _serialize_offering(ticket.course_offering),
+    }
+
+
+def _help_ticket_manager_identity_fields(ticket):
+    student_profile = getattr(ticket.student, 'userprofile', None)
+    return {
+        'student_name': student_profile.full_name if student_profile else ticket.student.get_full_name() or ticket.student.username,
+        'student_id': student_profile.student_id if student_profile else '',
+        'student_email': ticket.student.email or (student_profile.email if student_profile else ''),
+    }
+
+
+def _serialize_help_ticket_student_notification(ticket):
+    return {
+        **_help_ticket_core_fields(ticket),
         'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
     }
 
 
-def _build_help_ticket_student_payload(ticket):
-    payload = _build_help_ticket_payload(ticket)
-    for key in (
-        'internal_note',
-        'resolution_category',
-        'resolution_category_label',
-        'student_name',
-        'student_id',
-        'student_email',
-    ):
-        payload.pop(key, None)
-    return payload
+def _serialize_help_ticket_manager_notification(ticket):
+    return {
+        **_help_ticket_core_fields(ticket),
+        **_help_ticket_manager_identity_fields(ticket),
+        'internal_note': ticket.internal_note,
+        'resolution_category': ticket.resolution_category,
+        'resolution_category_label': ticket.get_resolution_category_display() if ticket.resolution_category else '',
+        'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
+    }
 
 
-def _build_help_ticket_manager_payload(ticket):
-    return _build_help_ticket_payload(ticket)
-
-
-def _build_help_ticket_notification_payload(ticket, actual_role):
+def _serialize_help_ticket_notification(ticket, actual_role):
     if actual_role == 'student':
-        return _build_help_ticket_student_payload(ticket)
-    return _build_help_ticket_manager_payload(ticket)
+        return _serialize_help_ticket_student_notification(ticket)
+    return _serialize_help_ticket_manager_notification(ticket)
 
 
-def _build_help_ticket_action_payload(ticket, actual_role):
+def _serialize_help_ticket_student_context_item(ticket):
+    return {
+        'id': ticket.id,
+        'experiment_group': ticket.experiment_group,
+        'experiment_number': ticket.experiment_number,
+        'status': ticket.status,
+        'status_label': ticket.get_status_display(),
+        'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
+    }
+
+
+def _serialize_help_ticket_student_history(ticket):
+    return _serialize_help_ticket_student_notification(ticket)
+
+
+def _serialize_help_ticket_manager_history(ticket):
+    return {
+        **_serialize_help_ticket_manager_notification(ticket),
+    }
+
+
+def _serialize_help_ticket_history(ticket, actual_role):
     if actual_role == 'student':
-        return _build_help_ticket_student_payload(ticket)
-    return _build_help_ticket_manager_payload(ticket)
+        return _serialize_help_ticket_student_history(ticket)
+    return _serialize_help_ticket_manager_history(ticket)
+
+
+def _serialize_help_ticket_student_action(ticket):
+    return _serialize_help_ticket_student_notification(ticket)
+
+
+def _serialize_help_ticket_manager_action(ticket):
+    return {
+        **_serialize_help_ticket_manager_notification(ticket),
+    }
+
+
+def _serialize_help_ticket_action(ticket, actual_role):
+    if actual_role == 'student':
+        return _serialize_help_ticket_student_action(ticket)
+    return _serialize_help_ticket_manager_action(ticket)
 
 
 def _build_attendance_update_payload(user, record, action):
@@ -937,8 +969,8 @@ def help_ticket_context(request):
         'offering': _serialize_offering(course_offering),
         'experiment_group': experiment_group,
         'experiment_numbers': course_offering.course.experiment_numbers or [],
-        'active_group_ticket': _build_help_ticket_notification_payload(unresolved_ticket, 'student') if unresolved_ticket else None,
-        'recent_tickets': [_build_help_ticket_notification_payload(ticket, 'student') for ticket in recent_own_tickets],
+        'active_group_ticket': _serialize_help_ticket_student_context_item(unresolved_ticket) if unresolved_ticket else None,
+        'recent_tickets': [_serialize_help_ticket_student_context_item(ticket) for ticket in recent_own_tickets],
     })
 
 
@@ -1011,7 +1043,7 @@ def help_ticket_history_api(request):
         ticket_qs = ticket_qs.filter(created_at__date=parsed_date)
 
     tickets = [
-        _sanitize_help_ticket_payload_for_view(ticket, actual_role)
+        _serialize_help_ticket_history(ticket, actual_role)
         for ticket in ticket_qs.order_by('-created_at', '-id')
     ]
     return JsonResponse({
@@ -1381,7 +1413,7 @@ def create_help_ticket(request):
     return JsonResponse({
         'status': 'ok',
         'message': '依頼を送信しました',
-        'ticket': _build_help_ticket_action_payload(ticket, _user_actual_role(request.user)),
+        'ticket': _serialize_help_ticket_action(ticket, _user_actual_role(request.user)),
     })
 
 
@@ -1450,7 +1482,7 @@ def process_help_ticket(request, ticket_id):
     return JsonResponse({
         'status': 'ok',
         'message': '対応状況を更新しました',
-        'ticket': _build_help_ticket_action_payload(ticket, _user_actual_role(request.user)),
+        'ticket': _serialize_help_ticket_action(ticket, _user_actual_role(request.user)),
     })
 
 
@@ -1485,7 +1517,7 @@ def notification_list(request):
             student=request.user
         ).select_related('course_offering__course', 'handled_by__userprofile')
         help_notifications = [
-            _build_help_ticket_notification_payload(item, actual_role)
+            _serialize_help_ticket_notification(item, actual_role)
             for item in help_qs.order_by('-updated_at', '-created_at')[:20]
         ]
         response['unread_count'] = (
@@ -1516,14 +1548,14 @@ def notification_list(request):
             help_qs = help_qs.filter(status__in=['pending', 'in_progress'])
             unread_count += help_qs.count()
             notifications.extend(
-                _build_help_ticket_notification_payload(item, actual_role)
+                _serialize_help_ticket_notification(item, actual_role)
                 for item in help_qs.order_by('-created_at')[:50]
             )
         else:
             unresolved_help_count = help_qs.filter(status__in=['pending', 'in_progress']).count()
             unread_count += unresolved_help_count
             notifications.extend(
-                _build_help_ticket_notification_payload(item, actual_role)
+                _serialize_help_ticket_notification(item, actual_role)
                 for item in help_qs.order_by('-updated_at', '-created_at')[:80]
             )
 
