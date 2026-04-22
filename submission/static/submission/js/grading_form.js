@@ -37,6 +37,7 @@ new Vue({
         similarityProgress: 0,
         similarityProgressTimer: null,
         similarityChecked: false,
+        showSimilarityPanel: false,
         similarityResults: [],
         similarityMessage: "",
         selectedSimilaritySubmissionId: null,
@@ -73,6 +74,11 @@ new Vue({
     computed: {
         totalScore() {
             return this.scoreItems.reduce((acc, item) => acc + (item.value * (item.weight || 1)), 0);
+        },
+        similarityButtonLabel() {
+            if (this.similarityLoading) return 'コピペチェック中...';
+            if (!this.similarityChecked) return 'コピペチェック';
+            return this.showSimilarityPanel ? '抽出一覧を閉じる' : '抽出一覧を表示';
         }
     },
     watch: {
@@ -1016,6 +1022,18 @@ new Vue({
                 this.similarityProgressTimer = null;
             }
         },
+        toggleSimilarityPanel() {
+            if (!this.similarityChecked || this.similarityLoading) return;
+            this.showSimilarityPanel = !this.showSimilarityPanel;
+        },
+        handleSimilarityButton() {
+            if (this.similarityLoading) return;
+            if (!this.similarityChecked) {
+                this.runSimilarityCheck();
+                return;
+            }
+            this.toggleSimilarityPanel();
+        },
         runSimilarityCheck() {
             if (this.similarityLoading) return;
             this.similarityLoading = true;
@@ -1028,6 +1046,7 @@ new Vue({
                         return;
                     }
                     this.similarityChecked = true;
+                    this.showSimilarityPanel = true;
                     this.similarityResults = data.results || [];
                     this.similarityMessage = `${data.message || ''}（比較件数: ${data.checked_count || 0}）`;
                     this.selectedSimilaritySubmissionId = null;
