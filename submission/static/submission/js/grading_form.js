@@ -70,6 +70,7 @@ new Vue({
         activeTextEditor: null,
         activeTextDrag: null,
         nextTextAnnotationId: 1,
+        savingGrading: false,
     },
     computed: {
         totalScore() {
@@ -1458,6 +1459,9 @@ new Vue({
             this.restorePageDrawData(idx, snapshot);
         },
         saveGrading() {
+            if (this.savingGrading) return;
+            this.savingGrading = true;
+            this.showScore = false;
             this.finalizeActiveTextEditor();
             let images = [];
             this.pdfPages.forEach((_, idx) => {
@@ -1514,6 +1518,9 @@ new Vue({
                             window.location.href = redirectUrl;
                         }
                     }
+                })
+                .finally(() => {
+                    this.savingGrading = false;
                 });
         },
         renderPageAtScale(pdf, i, force) {

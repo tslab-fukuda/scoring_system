@@ -16,6 +16,8 @@ from submission.models import Stamp
 from django.http import JsonResponse, HttpResponse
 from django.http import FileResponse, Http404
 from django.conf import settings
+from django.core.files import File
+from django.core.files.storage import default_storage
 from django.utils import timezone
 from datetime import timedelta
 
@@ -23,6 +25,7 @@ import os
 import io
 import json
 import base64
+import tempfile
 import fitz  # PyMuPDF
 import re
 import unicodedata
@@ -49,6 +52,22 @@ from submission.final_rubric_utils import (
 
 RUBRIC_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 GRADING_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
+
+
+def _normalized_graded_stem(current_file_name, submission_id):
+    stem = os.path.splitext(os.path.basename(current_file_name or ''))[0]
+    patterns = [
+        rf"_{submission_id}_graded(?:_[A-Za-z0-9]+)?$",
+        r"_graded(?:_[A-Za-z0-9]+)?$",
+    ]
+    while True:
+        new_stem = stem
+        for pattern in patterns:
+            new_stem = re.sub(pattern, '', new_stem)
+        if new_stem == stem:
+            break
+        stem = new_stem
+    return stem or f"submission_{submission_id}"
 
 
 def _get_rubric_accessible_offerings(user):
@@ -292,6 +311,7 @@ def grading_form(request, submission_id):
     if request.method == 'POST':
         data = json.loads(request.body)
         images = data.get('drawImages')
+        old_file_name = submission.file.name
         pdf_path = submission.file.path
 
         # PyMuPDFでPDF編集
@@ -308,24 +328,44 @@ def grading_form(request, submission_id):
             page.insert_image(page.rect, pixmap=pix, overlay=True)
             img_doc.close()
 
-        # 保存名（例: sample_graded.pdf）
-        base, ext = os.path.splitext(os.path.basename(pdf_path))
-        new_name = f"{base}_graded.pdf"
-        new_path = os.path.join(settings.MEDIA_ROOT, 'submissions', new_name)
-        doc.save(new_path)
-        doc.close()
+        tmp_path = None
+        saved_name = None
+        try:
+            clean_stem = _normalized_graded_stem(old_file_name, submission.id)
+            desired_name = f"submissions/{clean_stem}_{submission.id}_graded.pdf"
 
-        # DB登録ファイル名/フラグ書換
-        submission.file.name = f"submissions/{new_name}"
-        submission.graded = True
-        submission.score_details = data.get('scoreItems')
-        submission.save()
-        # デバッグ用にURLをログ出力
-        print(f"[graded_pdf] saved: {submission.file.url}")
-        
-        # 元のPDFファイルを削除
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+                tmp_path = tmp.name
+            doc.save(tmp_path)
+            doc.close()
+
+            if default_storage.exists(desired_name):
+                default_storage.delete(desired_name)
+
+            with open(tmp_path, 'rb') as graded_fp:
+                saved_name = default_storage.save(desired_name, File(graded_fp))
+
+            submission.file.name = saved_name
+            submission.graded = True
+            submission.score_details = data.get('scoreItems')
+            submission.save()
+            # デバッグ用にURLをログ出力
+            print(f"[graded_pdf] saved: {submission.file.url}")
+
+            # 旧ファイルは保存成功後に削除する
+            if old_file_name and old_file_name != saved_name and default_storage.exists(old_file_name):
+                default_storage.delete(old_file_name)
+        except Exception:
+            if saved_name and default_storage.exists(saved_name):
+                default_storage.delete(saved_name)
+            raise
+        finally:
+            try:
+                doc.close()
+            except Exception:
+                pass
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
         return JsonResponse({'status': 'ok', 'new_file_url': submission.file.url})
 

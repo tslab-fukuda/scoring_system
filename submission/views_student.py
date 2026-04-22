@@ -1,14 +1,15 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from submission.models import UserProfile, Submission, Schedule, Enrollment
 from submission.enrollment_utils import get_student_context
 import json
 from submission.decorators import role_required
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 import datetime
 from django.utils import timezone
 from django.middleware.csrf import get_token
+from django.urls import reverse
 import os
 
 @role_required('student')
@@ -62,7 +63,7 @@ def student_dashboard(request):
             "report_type": sub.report_type,  # 予or本
             "experiment_number": sub.experiment_number,  # 実験番号
             "file_name": sub.file.name.split('/')[-1] if sub.file else "",
-            "file_url": sub.file.url if sub.file else "",
+            "file_url": reverse('student_submission_pdf', args=[sub.id]) if sub.file else "",
             "submitted_at": timezone.localtime(sub.submitted_at).strftime('%Y-%m-%d %H:%M'), #提出日
             "status": status,
             "graded_score": (
@@ -105,6 +106,23 @@ def get_japanese_weekday(dt):
     wd = dt.weekday()
     # 0=月, 1=火, 2=水, 3=木, 4=金, 5=土, 6=日
     return ['月', '火', '水', '木', '金', '土', '日'][wd]
+
+
+@login_required
+@role_required('student')
+def student_submission_pdf(request, submission_id):
+    submission = get_object_or_404(Submission, pk=submission_id, student=request.user)
+    if not submission.file:
+        raise Http404("file not found")
+    try:
+        resp = FileResponse(submission.file.open('rb'), content_type='application/pdf')
+        resp['Content-Disposition'] = f'inline; filename="{os.path.basename(submission.file.name)}"'
+        resp['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp['Pragma'] = 'no-cache'
+        resp['Expires'] = '0'
+        return resp
+    except FileNotFoundError:
+        raise Http404("file not found")
 
 @login_required
 @require_POST

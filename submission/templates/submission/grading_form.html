@@ -296,7 +296,11 @@
                     合計：{{ totalScore }}
                 </div>
                 {% endverbatim %}
-                <button class="btn btn-success w-100" @click="saveGrading">完了（保存）</button>
+                {% verbatim %}
+                <button class="btn btn-success w-100" @click="saveGrading" :disabled="savingGrading">
+                    {{ savingGrading ? '保存中...' : '完了（保存）' }}
+                </button>
+                {% endverbatim %}
                 <button class="btn btn-outline-secondary w-100 mt-2" @click="toggleScorePanel">閉じる</button>
             </div>
         </transition>
