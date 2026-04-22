@@ -4,6 +4,9 @@ const POLL_INTERVAL_MS = 500;
 const CHATTERING_MS = 30000;
 const SUPPORTED_VENDOR_ID = 1356;
 const SUPPORTED_PRODUCT_IDS = new Set([1729, 1731, 3528, 3529]);
+const NFC_DEBUG =
+    window.NFC_DEBUG === true
+    || window.localStorage.getItem('nfc-debug') === 'true';
 
 let nfcDevice = null;
 let polling = false;
@@ -35,6 +38,9 @@ function formatError(err) {
 }
 
 function appendDebugLog(message, err = null) {
+    if (!NFC_DEBUG && !err) {
+        return;
+    }
     const line = `[${formatDebugTime(new Date())}] ${message}${err ? ` :: ${formatError(err)}` : ''}`;
     debugLogLines.push(line);
     if (debugLogLines.length > 80) {
@@ -47,7 +53,7 @@ function appendDebugLog(message, err = null) {
     }
     if (err) {
         console.error(line, err);
-    } else {
+    } else if (NFC_DEBUG) {
         console.log(line);
     }
 }
@@ -300,9 +306,15 @@ async function connectDevice(options) {
         if (!userInitiated) return;
         await disconnectDevice();
     }
-    nfcDevice = new ArukasNFCLiteS({ warning: false });
-    nfcDevice.EcL = (...args) => appendDebugLog('ArukasNFCLiteS error log', args && args.length ? args.join(' ') : null);
-    nfcDevice.cL = (...args) => appendDebugLog(args.join(' '));
+    nfcDevice = new ArukasNFCLiteS({ warning: NFC_DEBUG, debug: NFC_DEBUG });
+    nfcDevice.EcL = (...args) => appendDebugLog(
+        'ArukasNFCLiteS error log',
+        args && args.length ? args.join(' ') : null
+    );
+    if (NFC_DEBUG) {
+        nfcDevice.cL = (...args) => appendDebugLog(args.join(' '));
+        nfcDevice.WcL = (...args) => appendDebugLog(`WARN ${args.join(' ')}`);
+    }
     try {
         appendDebugLog('connectDevice 開始');
         if (!userInitiated && !deviceOverride) {
@@ -423,6 +435,10 @@ async function startPolling() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const debugPanel = document.querySelector('.nfc-debug-panel');
+    if (debugPanel && !NFC_DEBUG) {
+        debugPanel.hidden = true;
+    }
     appendDebugLog('attendance NFC reader 初期化');
     setStatus('NFC未接続');
     updateConnectionState(false);

@@ -15,6 +15,7 @@ urlpatterns = [
     path('help_ticket_analytics/', views.help_ticket_analytics, name='help_ticket_analytics'),
     path('help_ticket_analytics/api/', views.help_ticket_analytics_api, name='help_ticket_analytics_api'),
     path('notifications/', views.notification_list, name='attendance_notification_list'),
+    path('notifications/detail/', views.notification_detail, name='attendance_notification_detail'),
     path('notifications/mark_read/', views.mark_notifications_read, name='attendance_notifications_mark_read'),
     path('overrides/update/', views.update_attendance_override, name='update_attendance_override'),
     path('list/', views.attendance_list, name='attendance_list'),

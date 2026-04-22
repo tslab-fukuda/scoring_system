@@ -14,6 +14,7 @@ new Vue({
         notificationUnreadCount: 0,
         selectedNotification: null,
         showNotificationDetail: false,
+        notificationDetailLoading: false,
         showForgetRequestModal: false,
         forgetRequestLoading: false,
         forgetRequestSubmitting: false,
@@ -58,7 +59,8 @@ new Vue({
             teacherResponse: '',
             internalNote: ''
         },
-        notificationPollTimer: null
+        notificationPollTimer: null,
+        notificationVisibilityHandler: null
     },
     computed: {
         overrideActive() {
@@ -145,7 +147,10 @@ new Vue({
             return url.searchParams.get('offering_id') || '';
         },
         fetchNotifications(includeList = false) {
-            return fetch('/attendance/notifications/', {
+            const url = includeList || this.showNotifications
+                ? '/attendance/notifications/?include_list=1'
+                : '/attendance/notifications/';
+            return fetch(url, {
                 credentials: 'same-origin'
             })
                 .then(res => res.json())
@@ -256,25 +261,45 @@ new Vue({
             return '';
         },
         openNotificationDetail(item) {
-            this.selectedNotification = item;
-            if (item && item.kind === 'experiment_help') {
-                this.helpTicketDetailForm = {
-                    resolutionCategory: item.resolution_category || '',
-                    teacherResponse: item.teacher_response || '',
-                    internalNote: item.internal_note || ''
-                };
-            } else {
-                this.helpTicketDetailForm = {
-                    resolutionCategory: '',
-                    teacherResponse: '',
-                    internalNote: ''
-                };
-            }
+            this.selectedNotification = null;
             this.showNotificationDetail = true;
+            this.notificationDetailLoading = true;
+            fetch(`/attendance/notifications/detail/?kind=${encodeURIComponent(item.kind)}&id=${encodeURIComponent(item.id)}`, {
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'ok') {
+                        throw new Error(data.message || '通知詳細の取得に失敗しました');
+                    }
+                    const detail = data.notification || null;
+                    this.selectedNotification = detail;
+                    if (detail && detail.kind === 'experiment_help') {
+                        this.helpTicketDetailForm = {
+                            resolutionCategory: detail.resolution_category || '',
+                            teacherResponse: detail.teacher_response || '',
+                            internalNote: detail.internal_note || ''
+                        };
+                    } else {
+                        this.helpTicketDetailForm = {
+                            resolutionCategory: '',
+                            teacherResponse: '',
+                            internalNote: ''
+                        };
+                    }
+                })
+                .catch(err => {
+                    alert(err.message || '通知詳細の取得に失敗しました');
+                    this.closeNotificationDetail();
+                })
+                .finally(() => {
+                    this.notificationDetailLoading = false;
+                });
         },
         closeNotificationDetail() {
             this.showNotificationDetail = false;
             this.selectedNotification = null;
+            this.notificationDetailLoading = false;
         },
         canManageForgetItem(item) {
             return item && item.kind === 'attendance_forget' && ['admin', 'course-teacher'].includes(this.actualRole);
@@ -564,12 +589,22 @@ new Vue({
         }
         this.refreshNotificationState();
         this.notificationPollTimer = window.setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
             this.refreshNotificationState();
         }, 60000);
+        this.notificationVisibilityHandler = () => {
+            if (document.visibilityState === 'visible') {
+                this.refreshNotificationState();
+            }
+        };
+        document.addEventListener('visibilitychange', this.notificationVisibilityHandler);
     },
     beforeDestroy() {
         if (this.notificationPollTimer) {
             window.clearInterval(this.notificationPollTimer);
+        }
+        if (this.notificationVisibilityHandler) {
+            document.removeEventListener('visibilitychange', this.notificationVisibilityHandler);
         }
     }
 });

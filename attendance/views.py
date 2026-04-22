@@ -445,6 +445,34 @@ def _build_forget_request_payload(forget_request):
     }
 
 
+def _serialize_forget_request_notification(forget_request, actual_role):
+    payload = {
+        'id': forget_request.id,
+        'kind': 'attendance_forget',
+        'request_type': forget_request.request_type,
+        'request_type_label': forget_request.get_request_type_display(),
+        'status': forget_request.status,
+        'status_label': forget_request.get_status_display(),
+        'requested_at': timezone.localtime(forget_request.requested_at).strftime('%Y-%m-%d %H:%M'),
+        'target_date': forget_request.target_date.strftime('%Y-%m-%d'),
+        'offering': _serialize_offering(forget_request.course_offering),
+    }
+    if actual_role != 'student':
+        student_profile = getattr(forget_request.student, 'userprofile', None)
+        payload.update({
+            'student_name': student_profile.full_name if student_profile else forget_request.student.get_full_name() or forget_request.student.username,
+            'student_id': student_profile.student_id if student_profile else '',
+            'student_email': forget_request.student.email or (student_profile.email if student_profile else ''),
+        })
+    return payload
+
+
+def _serialize_forget_request_detail(forget_request, actual_role):
+    payload = _serialize_forget_request_notification(forget_request, actual_role)
+    payload['processed_at'] = timezone.localtime(forget_request.processed_at).strftime('%Y-%m-%d %H:%M') if forget_request.processed_at else ''
+    return payload
+
+
 def _help_ticket_core_fields(ticket):
     handled_by_profile = getattr(ticket.handled_by, 'userprofile', None) if ticket.handled_by else None
     return {
@@ -481,12 +509,52 @@ def _help_ticket_manager_identity_fields(ticket):
 
 def _serialize_help_ticket_student_notification(ticket):
     return {
-        **_help_ticket_core_fields(ticket),
+        'id': ticket.id,
+        'kind': 'experiment_help',
+        'request_type': ticket.request_type,
+        'request_type_label': ticket.get_request_type_display(),
+        'status': ticket.status,
+        'status_label': ticket.get_status_display(),
+        'experiment_group': ticket.experiment_group,
+        'experiment_number': ticket.experiment_number,
+        'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
+        'updated_at': timezone.localtime(ticket.updated_at).strftime('%Y-%m-%d %H:%M'),
         'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
     }
 
 
 def _serialize_help_ticket_manager_notification(ticket):
+    return {
+        'id': ticket.id,
+        'kind': 'experiment_help',
+        'request_type': ticket.request_type,
+        'request_type_label': ticket.get_request_type_display(),
+        'status': ticket.status,
+        'status_label': ticket.get_status_display(),
+        'experiment_group': ticket.experiment_group,
+        'experiment_number': ticket.experiment_number,
+        'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
+        'updated_at': timezone.localtime(ticket.updated_at).strftime('%Y-%m-%d %H:%M'),
+        'offering': _serialize_offering(ticket.course_offering),
+        **_help_ticket_manager_identity_fields(ticket),
+        'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
+    }
+
+
+def _serialize_help_ticket_notification(ticket, actual_role):
+    if actual_role == 'student':
+        return _serialize_help_ticket_student_notification(ticket)
+    return _serialize_help_ticket_manager_notification(ticket)
+
+
+def _serialize_help_ticket_student_detail(ticket):
+    return {
+        **_help_ticket_core_fields(ticket),
+        'is_unread': ticket.student_read_at is None and ticket.status in {'in_progress', 'resolved'},
+    }
+
+
+def _serialize_help_ticket_manager_detail(ticket):
     return {
         **_help_ticket_core_fields(ticket),
         **_help_ticket_manager_identity_fields(ticket),
@@ -497,10 +565,10 @@ def _serialize_help_ticket_manager_notification(ticket):
     }
 
 
-def _serialize_help_ticket_notification(ticket, actual_role):
+def _serialize_help_ticket_detail(ticket, actual_role):
     if actual_role == 'student':
-        return _serialize_help_ticket_student_notification(ticket)
-    return _serialize_help_ticket_manager_notification(ticket)
+        return _serialize_help_ticket_student_detail(ticket)
+    return _serialize_help_ticket_manager_detail(ticket)
 
 
 def _serialize_help_ticket_student_context_item(ticket):
@@ -1489,6 +1557,8 @@ def process_help_ticket(request, ticket_id):
 @login_required
 def notification_list(request):
     actual_role = _user_actual_role(request.user)
+    include_list = request.GET.get('include_list') == '1'
+    list_limit = 5 if actual_role == 'student' else 20
     response = {
         'status': 'ok',
         'actual_role': actual_role,
@@ -1504,83 +1574,141 @@ def notification_list(request):
         forget_qs = AttendanceForgetRequest.objects.filter(
             student=request.user,
             status__in=['approved', 'rejected'],
-        ).select_related('course_offering__course')
-        forget_notifications = [
-            {
-                **_build_forget_request_payload(item),
-                'processed_at': timezone.localtime(item.processed_at).strftime('%Y-%m-%d %H:%M') if item.processed_at else '',
-                'is_unread': item.student_read_at is None,
-            }
-            for item in forget_qs.order_by('-processed_at', '-requested_at')[:20]
-        ]
+        )
         help_qs = ExperimentHelpTicket.objects.filter(
             student=request.user
-        ).select_related('course_offering__course', 'handled_by__userprofile')
-        help_notifications = [
-            _serialize_help_ticket_notification(item, actual_role)
-            for item in help_qs.order_by('-updated_at', '-created_at')[:20]
-        ]
+        )
         response['unread_count'] = (
             forget_qs.filter(student_read_at__isnull=True).count()
             + help_qs.filter(status__in=['in_progress', 'resolved'], student_read_at__isnull=True).count()
         )
+        if not include_list:
+            return JsonResponse(response)
+        forget_notifications = [
+            {
+                **_serialize_forget_request_notification(item, actual_role),
+                'processed_at': timezone.localtime(item.processed_at).strftime('%Y-%m-%d %H:%M') if item.processed_at else '',
+                'is_unread': item.student_read_at is None,
+            }
+            for item in forget_qs.select_related('course_offering__course').order_by('-processed_at', '-requested_at')[:list_limit]
+        ]
+        help_notifications = [
+            _serialize_help_ticket_notification(item, actual_role)
+            for item in help_qs.select_related('course_offering__course').order_by('-updated_at', '-created_at')[:list_limit]
+        ]
         notifications = forget_notifications + help_notifications
         notifications.sort(
             key=lambda item: item.get('processed_at') or item.get('updated_at') or item.get('requested_at') or item.get('created_at') or '',
             reverse=True,
         )
-        response['notifications'] = notifications[:40]
+        response['notifications'] = notifications[:list_limit]
         return JsonResponse(response)
 
-    notifications = []
     unread_count = 0
+    notifications = []
 
     if _can_manage_help_tickets(request.user):
-        help_qs = ExperimentHelpTicket.objects.select_related(
-            'student__userprofile',
-            'course_offering__course',
-            'handled_by__userprofile',
-        )
+        help_qs = ExperimentHelpTicket.objects.all()
         manageable_help_ids = _help_manageable_offering_ids(request.user)
         if manageable_help_ids is not None:
             help_qs = help_qs.filter(course_offering_id__in=manageable_help_ids)
         if actual_role == 'teacher':
             help_qs = help_qs.filter(status__in=['pending', 'in_progress'])
             unread_count += help_qs.count()
-            notifications.extend(
-                _serialize_help_ticket_notification(item, actual_role)
-                for item in help_qs.order_by('-created_at')[:50]
-            )
+            if include_list:
+                notifications.extend(
+                    _serialize_help_ticket_notification(item, actual_role)
+                    for item in help_qs.select_related(
+                        'student__userprofile',
+                        'course_offering__course',
+                    ).order_by('-created_at')[:list_limit]
+                )
         else:
             unresolved_help_count = help_qs.filter(status__in=['pending', 'in_progress']).count()
             unread_count += unresolved_help_count
-            notifications.extend(
-                _serialize_help_ticket_notification(item, actual_role)
-                for item in help_qs.order_by('-updated_at', '-created_at')[:80]
-            )
+            if include_list:
+                notifications.extend(
+                    _serialize_help_ticket_notification(item, actual_role)
+                    for item in help_qs.select_related(
+                        'student__userprofile',
+                        'course_offering__course',
+                    ).order_by('-updated_at', '-created_at')[:list_limit]
+                )
 
     if _can_manage_forget_requests(request.user):
-        notifications_qs = AttendanceForgetRequest.objects.filter(status='pending').select_related(
-            'student__userprofile',
-            'course_offering__course',
-        )
+        notifications_qs = AttendanceForgetRequest.objects.filter(status='pending')
         manageable_ids = _manageable_offering_ids(request.user)
         if manageable_ids is not None:
             notifications_qs = notifications_qs.filter(course_offering_id__in=manageable_ids)
         unread_count += notifications_qs.count()
-        notifications.extend(
-            _build_forget_request_payload(item)
-            for item in notifications_qs.order_by('-requested_at')[:50]
-        )
+        if include_list:
+            notifications.extend(
+                _serialize_forget_request_notification(item, actual_role)
+                for item in notifications_qs.select_related(
+                    'student__userprofile',
+                    'course_offering__course',
+                ).order_by('-requested_at')[:list_limit]
+            )
 
-    notifications.sort(
-        key=lambda item: item.get('updated_at') or item.get('processed_at') or item.get('requested_at') or item.get('created_at') or '',
-        reverse=True,
-    )
     response['unread_count'] = unread_count
-    response['notifications'] = notifications[:100]
+    if include_list:
+        notifications.sort(
+            key=lambda item: item.get('updated_at') or item.get('processed_at') or item.get('requested_at') or item.get('created_at') or '',
+            reverse=True,
+        )
+        response['notifications'] = notifications[:list_limit]
 
     return JsonResponse(response)
+
+
+@login_required
+def notification_detail(request):
+    actual_role = _user_actual_role(request.user)
+    kind = (request.GET.get('kind') or '').strip()
+    try:
+        item_id = int(request.GET.get('id') or '')
+    except (TypeError, ValueError):
+        item_id = None
+
+    if kind not in {'attendance_forget', 'experiment_help'} or not item_id:
+        return JsonResponse({'status': 'error', 'message': '通知の指定が不正です'}, status=400)
+
+    if kind == 'attendance_forget':
+        item = get_object_or_404(
+            AttendanceForgetRequest.objects.select_related('student__userprofile', 'course_offering__course'),
+            pk=item_id,
+        )
+        if actual_role == 'student':
+            if item.student_id != request.user.id:
+                return JsonResponse({'status': 'error', 'message': '通知が見つかりません'}, status=404)
+        elif not (_can_manage_forget_requests(request.user) and _can_manage_forget_request_for_offering(request.user, item.course_offering_id)):
+            return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+        return JsonResponse({
+            'status': 'ok',
+            'notification': {
+                **_serialize_forget_request_detail(item, actual_role),
+                'is_unread': item.student_read_at is None,
+            },
+        })
+
+    item = get_object_or_404(
+        ExperimentHelpTicket.objects.select_related(
+            'student__userprofile',
+            'course_offering__course',
+            'handled_by__userprofile',
+        ),
+        pk=item_id,
+    )
+    if actual_role == 'student':
+        if item.student_id != request.user.id:
+            return JsonResponse({'status': 'error', 'message': '通知が見つかりません'}, status=404)
+    elif not (_can_manage_help_tickets(request.user) and _can_manage_help_ticket_for_offering(request.user, item.course_offering_id)):
+        return JsonResponse({'status': 'error', 'message': '権限がありません'}, status=403)
+
+    return JsonResponse({
+        'status': 'ok',
+        'notification': _serialize_help_ticket_detail(item, actual_role),
+    })
 
 
 @login_required

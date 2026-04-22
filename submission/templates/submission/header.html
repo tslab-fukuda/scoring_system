@@ -155,13 +155,16 @@
           <h3>通知詳細</h3>
           <button type="button" class="header-modal-close" @click="closeNotificationDetail">×</button>
         </div>
-        <div v-if="selectedNotification" class="header-modal-body">
+        <div v-if="notificationDetailLoading" class="header-modal-body">
+          <div class="header-modal-empty">読み込み中です</div>
+        </div>
+        <div v-else-if="selectedNotification" class="header-modal-body">
           <div class="notification-detail-block">
             <div><strong>種別:</strong> [[ notificationKindText(selectedNotification) ]]</div>
             <div><strong>状態:</strong> [[ selectedNotification.status_label ]]</div>
             <div v-if="selectedNotification.kind === 'attendance_forget'"><strong>科目/年度:</strong> [[ selectedNotification.offering.label ]]</div>
             <template v-if="selectedNotification.kind === 'attendance_forget'">
-              <div><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
+              <div v-if="canManageForgetItem(selectedNotification)"><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
               <div><strong>申請時刻:</strong> [[ selectedNotification.requested_at ]]</div>
             </template>
             <template v-else-if="selectedNotification.kind === 'experiment_help'">
