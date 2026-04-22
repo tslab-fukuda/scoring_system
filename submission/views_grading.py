@@ -15,11 +15,9 @@ from submission.models import (
 from submission.models import Stamp
 from django.http import JsonResponse, HttpResponse
 from django.http import FileResponse, Http404
-from django.urls import reverse
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-from urllib.parse import urlencode
 
 import os
 import io
@@ -50,6 +48,7 @@ from submission.final_rubric_utils import (
 
 
 RUBRIC_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
+GRADING_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 
 
 def _get_rubric_accessible_offerings(user):
@@ -60,6 +59,25 @@ def _get_rubric_accessible_offerings(user):
     course_ids = (
         Enrollment.objects
         .filter(user=user, role__in=RUBRIC_ACCESS_ROLES)
+        .values_list('course_offering__course_id', flat=True)
+        .distinct()
+    )
+    return (
+        CourseOffering.objects
+        .filter(course_id__in=course_ids)
+        .select_related('course')
+        .distinct()
+    )
+
+
+def _get_grading_accessible_offerings(user):
+    if not hasattr(user, 'userprofile'):
+        return CourseOffering.objects.none()
+    if user.userprofile.role == 'admin':
+        return CourseOffering.objects.select_related('course').all()
+    course_ids = (
+        Enrollment.objects
+        .filter(user=user, role__in=GRADING_ACCESS_ROLES)
         .values_list('course_offering__course_id', flat=True)
         .distinct()
     )
@@ -120,16 +138,6 @@ def _normalize_experiment_number(offering, experiment_number):
     if requested and requested in experiment_numbers:
         return requested
     return experiment_numbers[0] if experiment_numbers else ''
-
-
-def _final_rubric_settings_url(offering_id=None, experiment_number=None):
-    params = {}
-    if offering_id:
-        params['offering_id'] = offering_id
-    if experiment_number:
-        params['experiment_number'] = experiment_number
-    base_url = reverse('final_rubric_settings')
-    return f"{base_url}?{urlencode(params)}" if params else base_url
 
 
 def _normalize_rubric_scope(scope):
@@ -358,6 +366,7 @@ def graded_pdf(request, submission_id):
         raise Http404("file not found")
 
 @login_required
+@role_required('teacher', 'admin', 'course-teacher', 'non-editing teacher')
 def scoring_items_api(request):
     offering_id = request.GET.get('offering_id')
     offering_id_int = None
@@ -369,7 +378,8 @@ def scoring_items_api(request):
     if not offering_id_int:
         return JsonResponse({'pre': [], 'main': []})
 
-    offering = CourseOffering.objects.select_related('course').filter(id=offering_id_int).first()
+    accessible_offerings = _get_grading_accessible_offerings(request.user)
+    offering = accessible_offerings.filter(id=offering_id_int).first()
     if not offering:
         return JsonResponse({'pre': [], 'main': []})
 
@@ -418,6 +428,7 @@ def scoring_items_api(request):
     return JsonResponse({'pre': pre, 'main': main})
 
 @login_required
+@role_required('teacher', 'admin', 'course-teacher', 'non-editing teacher')
 def stamps_api(request):
     stamps = list(Stamp.objects.all().values('id','text'))
     return JsonResponse({'stamps': stamps})
@@ -479,19 +490,13 @@ def final_rubric_definition_api(request):
                 }, status=404)
             payload = serialize_rubric_definition(loaded_from)
             active_rubric = get_active_final_rubric(offering, experiment_number, scope)
-            copied_from = loaded_from
         else:
             editor_state = build_rubric_editor_payload(offering, experiment_number, scope)
             payload = editor_state['payload']
             active_rubric = editor_state['active_rubric']
-            copied_from = editor_state['copied_from']
             loaded_from = editor_state['loaded_from']
         return JsonResponse({
             'status': 'ok',
-            'offering_id': offering.id,
-            'scope': scope,
-            'experiment_number': experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '',
-            'experiment_numbers': offering.course.experiment_numbers or [],
             'rubric_payload': payload,
             'active_version': active_rubric.version if active_rubric else None,
             'loaded_from': {
@@ -503,7 +508,6 @@ def final_rubric_definition_api(request):
                 'version': loaded_from.version,
             } if loaded_from else None,
             'copy_candidates': get_copy_source_candidates(offering, experiment_number, scope),
-            'can_edit': request.user.userprofile.role == 'admin' or scope != FinalRubric.SCOPE_DEFAULT,
         })
 
     if request.method != 'POST':
@@ -635,9 +639,6 @@ def final_rubric_import_api(request):
     return JsonResponse({
         'status': 'ok',
         'message': 'Excel を読み込みました。内容を確認してから保存してください。',
-        'offering_id': offering.id,
-        'experiment_number': experiment_number if scope != FinalRubric.SCOPE_DEFAULT else '',
-        'scope': scope,
         'rubric_payload': payload,
     })
 
@@ -834,17 +835,6 @@ def final_grading_form(request, submission_id):
         'rubric_error_json': json.dumps(rubric_error, ensure_ascii=False),
         'rubric_total': rubric_total if rubric_total is not None else '',
         'adjustment_score': adjustment_score_value,
-        'rubric_settings_url': _final_rubric_settings_url(
-            submission.course_offering_id,
-            submission.experiment_number,
-        ),
-        'rubric_settings_url_json': json.dumps(
-            _final_rubric_settings_url(
-                submission.course_offering_id,
-                submission.experiment_number,
-            ),
-            ensure_ascii=False,
-        ),
     })
 
 
