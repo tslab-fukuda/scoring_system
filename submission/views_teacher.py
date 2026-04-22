@@ -134,6 +134,79 @@ def _collect_requested_groups(request):
     return groups
 
 
+def _serialize_dashboard_student_tile(profile, enrollment, *, include_completion=False):
+    student_context = build_student_context(profile=profile, enrollment=enrollment)
+    payload = {
+        'id': profile.id,
+        'full_name': student_context['full_name'],
+        'student_id': student_context['student_id'],
+        'experiment_day': student_context['experiment_day'],
+        'experiment_group': student_context['experiment_group'],
+        'photo': profile.photo.url if profile.photo else '',
+    }
+    if include_completion:
+        completions = ExperimentCompletion.objects.filter(
+            student=profile.user,
+            course_offering_id=enrollment.course_offering_id if enrollment else None,
+        ).values_list('experiment_number', 'completed')
+        payload['experiment_completion'] = {ex: done for ex, done in completions}
+    return payload
+
+
+def _serialize_main_report_score_payload(submission, offering_id, actual_role):
+    exp_day, exp_group, full_name, _ = _student_enrollment_info(submission.student, offering_id)
+    payload = {
+        'id': submission.id,
+        'experiment_day': exp_day,
+        'experiment_group': exp_group,
+        'experiment_number': submission.experiment_number,
+        'full_name': full_name,
+        'file': submission.file.url if submission.file else '',
+        'file_name': submission.file.name.split('/')[-1] if submission.file else '',
+        'score': float(submission.final_score) if submission.final_score is not None else None,
+        'score_details': submission.score_details if submission.score_details else '',
+    }
+    if actual_role not in {'non-editing teacher', 'admin'}:
+        return payload
+
+    pre_subs = Submission.objects.filter(
+        student=submission.student,
+        experiment_number=submission.experiment_number,
+        report_type='prep',
+        score_details__isnull=False,
+    )
+    if submission.course_offering_id:
+        pre_subs = pre_subs.filter(course_offering_id=submission.course_offering_id)
+    pre_subs = pre_subs.order_by('submitted_at', 'id')
+    pre_score_details = _sum_score_details(pre_subs)
+    main_score_details = submission.score_details if submission.score_details else []
+    payload.update({
+        'pre_score_details': pre_score_details,
+        'main_score_details': main_score_details,
+        'pre_total': sum(detail.get('value', 0) * detail.get('weight', 1) for detail in pre_score_details),
+        'main_total': sum(detail.get('value', 0) * detail.get('weight', 1) for detail in main_score_details) if main_score_details else 0,
+        'final_total': float(submission.final_score) if submission.final_score is not None else None,
+        'final_comment': submission.final_comment or "",
+        'rubric_result': build_readonly_rubric_result_for_submission(submission),
+    })
+    return payload
+
+
+def _empty_teacher_student_reports_payload(actual_role):
+    payload = {
+        'reports': [],
+        'attendance_logs': [],
+        'absence_count': 0,
+    }
+    if actual_role in {'course-teacher', 'admin'}:
+        payload.update({
+            'discussion_bonus_rows': [],
+            'discussion_total_count': 0,
+            'discussion_can_edit': True,
+        })
+    return payload
+
+
 def _normalize_task_values(values):
     if values is None:
         return []
@@ -265,7 +338,6 @@ def get_ungraded_submissions(request):
             'experiment_number': items.experiment_number,
             'full_name': full_name,
             'file': items.file.url if items.file else '',
-            'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                 sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
@@ -307,7 +379,6 @@ def get_graded_submissions(request):
             'full_name': full_name,
             'student_id': student_id,
             'file': items.file.url if items.file else '',
-            'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                     sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
@@ -341,7 +412,7 @@ def get_ungraded_main_reports(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs:
-        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
+        exp_day, exp_group, full_name, _ = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
             'experiment_day': exp_day,
@@ -349,7 +420,6 @@ def get_ungraded_main_reports(request):
             'experiment_number': items.experiment_number,
             'full_name': full_name,
             'file': items.file.url if items.file else '',
-            'file_url': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                 sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
@@ -388,47 +458,10 @@ def get_graded_main_reports(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    actual_role = get_effective_role(request)
     result = []
     for items in qs:
-        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
-        pre_subs = Submission.objects.filter(
-            student=items.student,
-            experiment_number=items.experiment_number,
-            report_type='prep',
-            score_details__isnull=False
-        )
-        if items.course_offering_id:
-            pre_subs = pre_subs.filter(course_offering_id=items.course_offering_id)
-        pre_subs = pre_subs.order_by('submitted_at', 'id')
-        pre_score_details = _sum_score_details(pre_subs)
-        pre_total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in pre_score_details)
-        main_score_details = items.score_details if items.score_details else []
-        total = sum(detail.get('value', 0) * detail.get('weight', 1) for detail in main_score_details) if main_score_details else 0
-        final_value = None
-        if items.final_score is not None:
-            try:
-                final_value = float(items.final_score)
-            except Exception:
-                final_value = None
-        result.append({
-            'id': items.id,
-            'experiment_day': exp_day,
-            'experiment_group': exp_group,
-            'experiment_number': items.experiment_number,
-            'full_name': full_name,
-            'file': items.file.url if items.file else '',
-            'file_url': items.file.url if items.file else '',
-            'file_name': items.file.name.split('/')[-1] if items.file else '',
-            'score': final_value,
-            'score_details': main_score_details if main_score_details else '',
-            'pre_score_details': pre_score_details,
-            'main_score_details': main_score_details,
-            'pre_total': pre_total,
-            'main_total': total,
-            'final_total': float(items.final_score) if items.final_score is not None else None,
-            'final_comment': items.final_comment or "",
-            'rubric_result': build_readonly_rubric_result_for_submission(items),
-        })
+        result.append(_serialize_main_report_score_payload(items, offering_id, actual_role))
     return JsonResponse(result, safe=False)
 
 @role_required('teacher', 'non-editing teacher', 'admin')
@@ -644,6 +677,7 @@ def update_experiment_progress(request):
 @role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
 def teacher_students_api(request):
     students = []
+    actual_role = get_effective_role(request)
     day = request.GET.get('experiment_day')
     groups = _collect_requested_groups(request)
     student_id_filter = request.GET.get('student_id')
@@ -667,24 +701,16 @@ def teacher_students_api(request):
     qs = UserProfile.objects.filter(role='student', user_id__in=enrollment_map.keys())
     if student_id_filter:
         qs = qs.filter(student_id__icontains=student_id_filter)
+    include_completion = actual_role == 'teacher'
     for up in  qs:
-        # その学生の実験終了リストを作成
-        completions = ExperimentCompletion.objects.filter(
-            student=up.user,
-            course_offering_id=offering_id
-        ).values_list('experiment_number', 'completed')
-        completed = {ex: done for ex, done in completions}
         enr = enrollment_map.get(up.user_id)
-        student_context = build_student_context(profile=up, enrollment=enr)
-        students.append({
-            'id': up.id,
-            'full_name': student_context['full_name'],
-            'student_id': student_context['student_id'],
-            'experiment_day': student_context['experiment_day'],
-            'experiment_group': student_context['experiment_group'],
-            'photo': up.photo.url if up.photo else '',
-            'experiment_completion': completed,
-        })
+        students.append(
+            _serialize_dashboard_student_tile(
+                up,
+                enr,
+                include_completion=include_completion,
+            )
+        )
     return JsonResponse({'students': students})
 
 
@@ -692,37 +718,17 @@ def teacher_students_api(request):
 def teacher_student_reports(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
+    effective_role = get_effective_role(request)
     if not student_id or not offering_id:
-        return JsonResponse({
-            'reports': [],
-            'attendance_logs': [],
-            'absence_count': 0,
-            'discussion_bonus_rows': [],
-            'discussion_total_count': 0,
-            'discussion_can_edit': False,
-        })
+        return JsonResponse(_empty_teacher_student_reports_payload(effective_role))
     try:
         profile = UserProfile.objects.get(id=student_id, role='student')
     except UserProfile.DoesNotExist:
-        return JsonResponse({
-            'reports': [],
-            'attendance_logs': [],
-            'absence_count': 0,
-            'discussion_bonus_rows': [],
-            'discussion_total_count': 0,
-            'discussion_can_edit': False,
-        })
+        return JsonResponse(_empty_teacher_student_reports_payload(effective_role))
     # アクセスできる科目/年度かチェック
     allowed_ids = set(_get_accessible_offerings(request.user).values_list('id', flat=True))
     if int(offering_id) not in allowed_ids:
-        return JsonResponse({
-            'reports': [],
-            'attendance_logs': [],
-            'absence_count': 0,
-            'discussion_bonus_rows': [],
-            'discussion_total_count': 0,
-            'discussion_can_edit': False,
-        }, status=403)
+        return JsonResponse(_empty_teacher_student_reports_payload(effective_role), status=403)
     student_day, _, _, _ = _student_enrollment_info(profile.user, offering_id)
 
     now_local = timezone.localtime(timezone.now(), JST)
@@ -807,15 +813,18 @@ def teacher_student_reports(request):
         }
         for exp_no in ordered_numbers
     ]
-    effective_role = get_effective_role(request)
-    return JsonResponse({
+    payload = {
         'reports': data,
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
-        'discussion_bonus_rows': discussion_bonus_rows,
-        'discussion_total_count': sum(row['count'] for row in discussion_bonus_rows),
-        'discussion_can_edit': effective_role in {'course-teacher', 'admin'},
-    })
+    }
+    if effective_role in {'course-teacher', 'admin'}:
+        payload.update({
+            'discussion_bonus_rows': discussion_bonus_rows,
+            'discussion_total_count': sum(row['count'] for row in discussion_bonus_rows),
+            'discussion_can_edit': True,
+        })
+    return JsonResponse(payload)
 
 
 @require_POST

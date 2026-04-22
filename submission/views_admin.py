@@ -1944,13 +1944,11 @@ def admin_get_submissions_api(request):
             'experiment_number': sub.experiment_number,
             'full_name': student_context['full_name'],
             'file': sub.file.url if sub.file else "",  # 既存互換
-            'file_url': sub.file.url if sub.file else "",
             'file_name': sub.file.name.split('/')[-1] if sub.file else "",
             'score': (
                 sum(detail.get("value", 0) * detail.get("weight", 1) for detail in sub.score_details)
                 if sub.score_details else "0"
             ),
-            "score_details": sub.score_details if sub.score_details else "",
             'pre_score_details': details['pre'],
             'main_score_details': details['main'],
             'submission_count': submit_count,
@@ -1993,13 +1991,11 @@ def admin_get_accepted_submissions_api(request):
             'full_name': student_context['full_name'],
             'student_id': student_context['student_id'],
             'file': sub.file.url if sub.file else "",
-            'file_url': sub.file.url if sub.file else "",
             'file_name': sub.file.name.split('/')[-1] if sub.file else "",
             'score': (
                 sum(detail.get("value", 0) * detail.get("weight", 1) for detail in sub.score_details)
                 if sub.score_details else "0"
             ),
-            "score_details": sub.score_details if sub.score_details else "",
             'pre_score_details': details['pre'],
             'main_score_details': details['main'],
         })
@@ -2615,7 +2611,6 @@ def get_students_api(request):
             'id': up.id,
             'full_name': student_context['full_name'],
             'student_id': student_context['student_id'],
-            'user__email': up.user.email,
             'experiment_day': student_context['experiment_day'],
             'experiment_group': student_context['experiment_group'],
             'photo': up.photo.url if up.photo else ''
@@ -3247,7 +3242,6 @@ def api_student_reports(request):
     if not student_id:
         return JsonResponse({
             'reports': [],
-            'full_name': '',
             'attendance_logs': [],
             'absence_count': 0,
             'experiment_logs': [],
@@ -3260,7 +3254,6 @@ def api_student_reports(request):
     except UserProfile.DoesNotExist:
         return JsonResponse({
             'reports': [],
-            'full_name': '',
             'attendance_logs': [],
             'absence_count': 0,
             'experiment_logs': [],
@@ -3268,7 +3261,6 @@ def api_student_reports(request):
             'discussion_total_count': 0,
             'discussion_can_edit': True,
         })
-    full_name = profile.full_name
 
     attendance_logs = []
     absence_count = 0
@@ -3433,7 +3425,6 @@ def api_student_reports(request):
         })
     return JsonResponse({
         'reports': data,
-        'full_name': full_name,
         'attendance_logs': attendance_logs,
         'absence_count': absence_count,
         'experiment_logs': experiment_logs,
