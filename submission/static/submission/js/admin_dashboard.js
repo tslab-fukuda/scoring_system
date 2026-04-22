@@ -296,7 +296,6 @@ window.app = new Vue({
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
-                    console.log(data.students_json);
                     this.students = data.students_json;
                     this.studentsLoaded = true;
                 });
