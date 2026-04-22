@@ -1,8 +1,10 @@
 const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
+const ADMIN_DASHBOARD_STATE_KEY = 'adminDashboardState';
 
 window.app = new Vue({
     el: '#admin-dashboard',
     data: {
+        restoringDashboardState: false,
         tab: 'submissions',
         selectedStudentId: null,
         students: students,
@@ -115,6 +117,44 @@ window.app = new Vue({
         }
     }),
     methods: Object.assign({}, offeringSelectorHelper.methods, {
+        saveDashboardState() {
+            const payload = {
+                tab: this.tab,
+                filter: { ...this.filter },
+                studentGroupFilters: [...this.studentGroupFilters],
+                selectedOfferingId: this.selectedOfferingId,
+                selectedCourseId: this.selectedCourseId,
+                selectedYear: this.selectedYear,
+            };
+            sessionStorage.setItem(ADMIN_DASHBOARD_STATE_KEY, JSON.stringify(payload));
+        },
+        restoreDashboardState() {
+            const raw = sessionStorage.getItem(ADMIN_DASHBOARD_STATE_KEY);
+            if (!raw) return;
+            try {
+                const state = JSON.parse(raw);
+                this.restoringDashboardState = true;
+                if (state && typeof state === 'object') {
+                    if (typeof state.tab === 'string') this.tab = state.tab;
+                    if (state.filter && typeof state.filter === 'object') {
+                        this.filter = {
+                            experiment_day: state.filter.experiment_day || '',
+                            experiment_group: state.filter.experiment_group || '',
+                            experiment_number: state.filter.experiment_number || '',
+                            student_id: state.filter.student_id || '',
+                        };
+                    }
+                    this.studentGroupFilters = Array.isArray(state.studentGroupFilters) ? state.studentGroupFilters : [];
+                    if (state.selectedCourseId !== undefined) this.selectedCourseId = state.selectedCourseId;
+                    if (state.selectedYear !== undefined) this.selectedYear = state.selectedYear;
+                    if (state.selectedOfferingId) this.selectedOfferingId = Number(state.selectedOfferingId);
+                }
+            } catch (e) {
+                console.warn('failed to restore admin dashboard state', e);
+            } finally {
+                this.restoringDashboardState = false;
+            }
+        },
         resetSchedulePdfImport() {
             this.scheduleImportFile = null;
             this.scheduleImportLoading = false;
@@ -752,7 +792,21 @@ window.app = new Vue({
         },
     }),
     watch: {
+        filter: {
+            deep: true,
+            handler() {
+                this.saveDashboardState();
+            }
+        },
+        studentGroupFilters: {
+            deep: true,
+            handler() {
+                this.saveDashboardState();
+            }
+        },
         tab(val) {
+            this.saveDashboardState();
+            if (this.restoringDashboardState) return;
             if (val === 'submissions') {
                 this.fetchList();
             }
@@ -773,16 +827,28 @@ window.app = new Vue({
             }
         },
         selectedOfferingId() {
+            this.saveDashboardState();
+            if (this.restoringDashboardState) return;
             this.refreshCurrentTab();
             this.scheduleLoaded = false;
             this.resetSchedulePdfImport();
-        }
+        },
+        selectedCourseId() {
+            this.saveDashboardState();
+        },
+        selectedYear() {
+            this.saveDashboardState();
+        },
     },
     mounted() {
+        this.ensureOfferingSelected();
+        this.restoreDashboardState();
         this.ensureOfferingSelected();
         // ページ初期表示時 (初回tabがsubmissionsの場合のため)
         if (this.tab === 'submissions') {
             this.fetchList();
+        } else {
+            this.refreshCurrentTab();
         }
     },
 

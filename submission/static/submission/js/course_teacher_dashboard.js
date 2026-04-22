@@ -22,10 +22,12 @@ Vue.component('graded-list', {
 
 const offeringContext = window.teacherOfferings || { offerings: [], defaultOfferingId: null };
 const offeringSelectorHelper = window.offeringSelectorHelper || { computed: {}, methods: {} };
+const COURSE_TEACHER_DASHBOARD_STATE_KEY = 'courseTeacherDashboardState';
 
 new Vue({
     el: '#teacher-dashboard',
     data: {
+        restoringDashboardState: false,
         tab: 'grading',
         filter: { experiment_day: '', experiment_group: '', experiment_number: '', student_id: '' },
         studentGroupFilters: [],
@@ -87,6 +89,44 @@ new Vue({
         }
     }),
     methods: Object.assign({}, offeringSelectorHelper.methods, {
+        saveDashboardState() {
+            const payload = {
+                tab: this.tab,
+                filter: { ...this.filter },
+                studentGroupFilters: [...this.studentGroupFilters],
+                selectedOfferingId: this.selectedOfferingId,
+                selectedCourseId: this.selectedCourseId,
+                selectedYear: this.selectedYear,
+            };
+            sessionStorage.setItem(COURSE_TEACHER_DASHBOARD_STATE_KEY, JSON.stringify(payload));
+        },
+        restoreDashboardState() {
+            const raw = sessionStorage.getItem(COURSE_TEACHER_DASHBOARD_STATE_KEY);
+            if (!raw) return;
+            try {
+                const state = JSON.parse(raw);
+                this.restoringDashboardState = true;
+                if (state && typeof state === 'object') {
+                    if (typeof state.tab === 'string') this.tab = state.tab;
+                    if (state.filter && typeof state.filter === 'object') {
+                        this.filter = {
+                            experiment_day: state.filter.experiment_day || '',
+                            experiment_group: state.filter.experiment_group || '',
+                            experiment_number: state.filter.experiment_number || '',
+                            student_id: state.filter.student_id || '',
+                        };
+                    }
+                    this.studentGroupFilters = Array.isArray(state.studentGroupFilters) ? state.studentGroupFilters : [];
+                    if (state.selectedCourseId !== undefined) this.selectedCourseId = state.selectedCourseId;
+                    if (state.selectedYear !== undefined) this.selectedYear = state.selectedYear;
+                    if (state.selectedOfferingId) this.selectedOfferingId = Number(state.selectedOfferingId);
+                }
+            } catch (e) {
+                console.warn('failed to restore course teacher dashboard state', e);
+            } finally {
+                this.restoringDashboardState = false;
+            }
+        },
         refreshCurrentTab() {
             if (this.tab === 'experiment_record') {
                 this.fetchStudents();
@@ -303,13 +343,37 @@ new Vue({
     }),
     watch: {
         tab(newTab) {
+            this.saveDashboardState();
+            if (this.restoringDashboardState) return;
             this.refreshCurrentTab();
         },
+        filter: {
+            deep: true,
+            handler() {
+                this.saveDashboardState();
+            }
+        },
+        studentGroupFilters: {
+            deep: true,
+            handler() {
+                this.saveDashboardState();
+            }
+        },
         selectedOfferingId() {
+            this.saveDashboardState();
+            if (this.restoringDashboardState) return;
             this.refreshCurrentTab();
-        }
+        },
+        selectedCourseId() {
+            this.saveDashboardState();
+        },
+        selectedYear() {
+            this.saveDashboardState();
+        },
     },
     mounted() {
+        this.ensureOfferingSelected();
+        this.restoreDashboardState();
         this.ensureOfferingSelected();
         this.experimentNumbers = this.experimentOptions;
         this.refreshCurrentTab();
