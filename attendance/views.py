@@ -1559,6 +1559,9 @@ def notification_list(request):
     actual_role = _user_actual_role(request.user)
     include_list = request.GET.get('include_list') == '1'
     list_limit = 5 if actual_role == 'student' else 20
+    now_local = timezone.localtime(timezone.now(), JST)
+    today_start = timezone.make_aware(datetime.combine(now_local.date(), time.min), JST)
+    tomorrow_start = today_start + timedelta(days=1)
     response = {
         'status': 'ok',
         'actual_role': actual_role,
@@ -1574,9 +1577,13 @@ def notification_list(request):
         forget_qs = AttendanceForgetRequest.objects.filter(
             student=request.user,
             status__in=['approved', 'rejected'],
+            processed_at__gte=today_start,
+            processed_at__lt=tomorrow_start,
         )
         help_qs = ExperimentHelpTicket.objects.filter(
-            student=request.user
+            student=request.user,
+            updated_at__gte=today_start,
+            updated_at__lt=tomorrow_start,
         )
         response['unread_count'] = (
             forget_qs.filter(student_read_at__isnull=True).count()
@@ -1612,6 +1619,10 @@ def notification_list(request):
         manageable_help_ids = _help_manageable_offering_ids(request.user)
         if manageable_help_ids is not None:
             help_qs = help_qs.filter(course_offering_id__in=manageable_help_ids)
+        help_qs = help_qs.filter(
+            updated_at__gte=today_start,
+            updated_at__lt=tomorrow_start,
+        )
         if actual_role == 'teacher':
             help_qs = help_qs.filter(status__in=['pending', 'in_progress'])
             unread_count += help_qs.count()
@@ -1640,6 +1651,11 @@ def notification_list(request):
         manageable_ids = _manageable_offering_ids(request.user)
         if manageable_ids is not None:
             notifications_qs = notifications_qs.filter(course_offering_id__in=manageable_ids)
+        if actual_role not in {'admin', 'course-teacher'}:
+            notifications_qs = notifications_qs.filter(
+                requested_at__gte=today_start,
+                requested_at__lt=tomorrow_start,
+            )
         unread_count += notifications_qs.count()
         if include_list:
             notifications.extend(
