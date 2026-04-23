@@ -23,7 +23,16 @@ from .permissions import (
     can_view_attendance,
     is_attendance_only,
 )
-from submission.models import UserProfile, Submission, ScoringItem, CourseOffering, Enrollment, Schedule
+from submission.models import (
+    UserProfile,
+    Submission,
+    ScoringItem,
+    CourseOffering,
+    Enrollment,
+    Schedule,
+    ExperimentTaskConfig,
+    ExperimentProgress,
+)
 from submission.enrollment_utils import (
     build_student_context,
     get_student_context,
@@ -1157,6 +1166,17 @@ def _time_bucket_label(bucket_index):
     return f'{hour:02d}:{minute:02d}'
 
 
+def _normalize_task_values(values):
+    if not isinstance(values, list):
+        return []
+    normalized = []
+    for value in values:
+        text = str(value).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
 def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from_filter='', date_to_filter=''):
     tickets = list(ticket_qs)
     course = getattr(selected_offering, 'course', None)
@@ -1322,6 +1342,79 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
             for weekday_label in weekday_dataset_order
         ],
     }
+
+    completion_rate_chart = {
+        'labels': experiment_numbers,
+        'datasets': [],
+    }
+    if selected_offering:
+        enrollment_qs = Enrollment.objects.filter(
+            course_offering=selected_offering,
+            role='student',
+        ).values_list('user_id', 'experiment_day', 'experiment_group')
+        day_group_user_map = defaultdict(lambda: defaultdict(list))
+        student_ids = []
+        for user_id, experiment_day, experiment_group in enrollment_qs:
+            day_label = (experiment_day or '').strip()
+            group_label = (experiment_group or '').strip()
+            if not day_label or not group_label:
+                continue
+            day_group_user_map[day_label][group_label].append(user_id)
+            student_ids.append(user_id)
+
+        task_config_map = {}
+        for exp_no, task_list in ExperimentTaskConfig.objects.filter(
+            course_offering=selected_offering
+        ).values_list('experiment_number', 'task_list'):
+            task_config_map[exp_no] = len(_normalize_task_values(task_list))
+
+        progress_count_map = Counter(
+            (student_id, exp_no)
+            for student_id, exp_no in ExperimentProgress.objects.filter(
+                course_offering=selected_offering,
+                student_id__in=student_ids,
+            ).values_list('student_id', 'experiment_number')
+        )
+
+        weekday_completion_order = []
+        for weekday_label in (getattr(selected_offering, 'meeting_days', None) or []):
+            label = (weekday_label or '').strip()
+            if label and label not in weekday_completion_order:
+                weekday_completion_order.append(label)
+        for weekday_label in sorted(day_group_user_map.keys()):
+            if weekday_label not in weekday_completion_order:
+                weekday_completion_order.append(weekday_label)
+
+        completion_rate_chart = {
+            'labels': experiment_numbers,
+            'datasets': [],
+        }
+        for weekday_label in weekday_completion_order:
+            counts = []
+            groups_for_day = day_group_user_map.get(weekday_label, {})
+            for experiment_number in experiment_numbers:
+                configured_count = task_config_map.get(experiment_number, 0)
+                if configured_count <= 0 or not groups_for_day:
+                    counts.append(0)
+                    continue
+                normalized_rates = []
+                for user_ids in groups_for_day.values():
+                    if not user_ids:
+                        continue
+                    max_progress = max(
+                        (progress_count_map.get((user_id, experiment_number), 0) for user_id in user_ids),
+                        default=0,
+                    )
+                    normalized_rate = min(max_progress / configured_count, 1)
+                    if normalized_rate > 0:
+                        normalized_rates.append(normalized_rate)
+                average_rate = (sum(normalized_rates) / len(normalized_rates)) if normalized_rates else 0
+                counts.append(round(average_rate, 3))
+            completion_rate_chart['datasets'].append({
+                'label': weekday_label,
+                'counts': counts,
+            })
+
     response_time = {
         'resolved_count': len(response_minutes),
         'average_minutes': round(sum(response_minutes) / len(response_minutes), 1) if response_minutes else 0,
@@ -1342,6 +1435,7 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
             'hourly': hour_chart,
             'session': session_chart,
             'resolution_experiment': resolution_experiment_chart,
+            'completion_rate_by_experiment': completion_rate_chart,
         },
         'tables': {
             'handled_by': handled_by_items,

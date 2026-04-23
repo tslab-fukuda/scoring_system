@@ -13,6 +13,7 @@
                 hourly: { labels: [], counts: [] },
                 session: { labels: [], datasets: [] },
                 resolution_experiment: { labels: [], datasets: [] },
+                completion_rate_by_experiment: { labels: [], datasets: [] },
             },
             tables: {
                 handled_by: [],
@@ -58,6 +59,7 @@
                 hourly: null,
                 daily: null,
                 resolutionExperiment: null,
+                completionRateByExperiment: null,
                 handledBy: null,
                 experimentGroup: null,
             },
@@ -112,7 +114,7 @@
                 });
                 if (this.filters.dateFrom) params.set('date_from', this.filters.dateFrom);
                 if (this.filters.dateTo) params.set('date_to', this.filters.dateTo);
-                fetch(`/attendance/help_ticket_analytics/api/?${params.toString()}`, {
+                fetch(`/attendance/study_analytics/api/?${params.toString()}`, {
                     credentials: 'same-origin',
                 })
                     .then((response) => response.json())
@@ -146,6 +148,7 @@
                 this.charts.hourly = destroyChart(this.charts.hourly);
                 this.charts.daily = destroyChart(this.charts.daily);
                 this.charts.resolutionExperiment = destroyChart(this.charts.resolutionExperiment);
+                this.charts.completionRateByExperiment = destroyChart(this.charts.completionRateByExperiment);
                 this.charts.handledBy = destroyChart(this.charts.handledBy);
                 this.charts.experimentGroup = destroyChart(this.charts.experimentGroup);
 
@@ -277,6 +280,48 @@
                                     grid: { color: gridColor },
                                 },
                                 y: { stacked: true, beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+                            },
+                        },
+                    });
+                }
+
+                const completionRateCtx = document.getElementById('analytics-completion-rate-chart');
+                if (completionRateCtx) {
+                    this.charts.completionRateByExperiment = new Chart(completionRateCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: this.analytics.charts.completion_rate_by_experiment.labels,
+                            datasets: (this.analytics.charts.completion_rate_by_experiment.datasets || []).map((dataset, index) => ({
+                                label: dataset.label,
+                                data: dataset.counts,
+                                backgroundColor: colors[index % colors.length],
+                            })),
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { labels: { color: tickColor } },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => `${context.dataset.label}: ${Math.round((context.parsed.y || 0) * 100)}%`,
+                                    },
+                                },
+                            },
+                            scales: {
+                                x: {
+                                    ticks: { color: tickColor, autoSkip: false, maxRotation: 35, minRotation: 35, font: { size: 10 } },
+                                    grid: { color: gridColor },
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    max: 1,
+                                    ticks: {
+                                        color: tickColor,
+                                        callback: (value) => `${Math.round(Number(value) * 100)}%`,
+                                    },
+                                    grid: { color: gridColor },
+                                },
                             },
                         },
                     });

@@ -65,7 +65,7 @@
             <a href="{% url 'help_ticket_history' %}" class="menu-link"><span class="menu-ico">📜</span> 質問/呼び出し履歴</a>
           </li>
           <li v-if="['teacher', 'admin', 'course-teacher'].includes(actualRole)">
-            <a href="{% url 'help_ticket_analytics' %}" class="menu-link"><span class="menu-ico">📊</span> 質問/呼び出し分析</a>
+            <a href="{% url 'study_analytics' %}" class="menu-link"><span class="menu-ico">📊</span> 授業分析</a>
           </li>
           {% endif %}
           {% if not attendance_only %}

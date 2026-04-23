@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}質問/呼び出し分析{% endblock %}
+{% block title %}授業分析{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'submission/css/offering_selector.css' %}">
@@ -13,8 +13,8 @@
   <div class="analytics-top-content">
     <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
       <div>
-        <h2 class="mb-2">質問/呼び出し分析</h2>
-        <div class="text-muted small">質問・呼び出しの傾向を科目/年度ごとに分析します。</div>
+        <h2 class="mb-2">授業分析</h2>
+        <div class="text-muted small">授業実施および質問・呼び出しの傾向を科目/年度ごとに分析</div>
       </div>
     </div>
 
@@ -171,6 +171,15 @@
           <h5 class="analytics-panel-title">対応分類 × 実験項目</h5>
           <div class="analytics-chart-shell analytics-chart-shell-wide">
             <div class="analytics-chart-wrap analytics-chart-wrap-wide analytics-chart-wrap-wide-xl"><canvas id="analytics-resolution-experiment-chart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card analytics-panel analytics-panel-wide">
+        <div class="card-body">
+          <h5 class="analytics-panel-title">完了例題率 × 実験項目</h5>
+          <div class="analytics-chart-shell analytics-chart-shell-wide">
+            <div class="analytics-chart-wrap analytics-chart-wrap-wide analytics-chart-wrap-wide-xl"><canvas id="analytics-completion-rate-chart"></canvas></div>
           </div>
         </div>
       </div>
