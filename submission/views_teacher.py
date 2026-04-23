@@ -401,16 +401,18 @@ def get_ungraded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    actual_role = get_effective_role(request)
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
     if not offering_id:
         return JsonResponse([], safe=False)
     qs = Submission.objects.filter(
-        accepted=True,
         final_evaluated=False,
         report_type='main',
     ).select_related('student', 'student__userprofile')
+    if actual_role == 'non-editing teacher':
+        qs = qs.filter(accepted=True)
     qs = qs.filter(
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
@@ -442,13 +444,13 @@ def get_graded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    actual_role = get_effective_role(request)
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
     if not offering_id:
         return JsonResponse([], safe=False)
     qs = Submission.objects.filter(
-        accepted=True,
         final_evaluated=True,
         report_type='main',
     ).select_related(
@@ -459,6 +461,8 @@ def get_graded_main_reports(request):
         'final_rubric_score__items',
         'final_rubric_score__rubric__criteria__options',
     )
+    if actual_role == 'non-editing teacher':
+        qs = qs.filter(accepted=True)
     qs = qs.filter(
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
@@ -466,7 +470,6 @@ def get_graded_main_reports(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
-    actual_role = get_effective_role(request)
     result = []
     for items in qs:
         result.append(_serialize_main_report_score_payload(items, offering_id, actual_role))
