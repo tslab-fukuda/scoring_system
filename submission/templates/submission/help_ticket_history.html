@@ -98,13 +98,12 @@
             <th v-if="!isStudent">学生名</th>
             <th v-if="!isStudent">学籍番号</th>
             <th>状態</th>
-            <th>対応者</th>
             <th class="text-center">詳細</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!tickets.length">
-            <td :colspan="isStudent ? 7 : 9" class="text-center text-muted py-4">該当する履歴はありません</td>
+            <td :colspan="isStudent ? 6 : 8" class="text-center text-muted py-4">該当する履歴はありません</td>
           </tr>
           <tr v-for="ticket in tickets" :key="ticket.id">
             <td>{{ ticket.created_at }}</td>
@@ -116,7 +115,6 @@
             <td>
               <span class="history-status-badge" :class="'status-' + ticket.status">{{ ticket.status_label }}</span>
             </td>
-            <td>{{ ticket.handled_by_name || '-' }}</td>
             <td class="text-center">
               <button class="btn btn-outline-secondary btn-sm" @click="openDetail(ticket)">詳細</button>
             </td>
@@ -126,13 +124,16 @@
     </div>
   </div>
 
-  <div v-if="showDetailModal && selectedTicket" class="history-modal-overlay" @click="closeDetail">
+  <div v-if="showDetailModal" class="history-modal-overlay" @click="closeDetail">
     <div class="history-modal-card" @click.stop>
       <div class="history-modal-head">
         <h3>質問/呼び出し詳細</h3>
         <button type="button" class="history-modal-close" @click="closeDetail">×</button>
       </div>
       <div class="history-modal-body">
+        <div v-if="detailLoading" class="text-center text-muted py-4">詳細を読み込み中...</div>
+        <div v-else-if="detailError" class="alert alert-danger mb-0">{{ detailError }}</div>
+        <template v-else-if="selectedTicket">
         <div class="history-detail-grid">
           <div><strong>科目/年度:</strong> {{ selectedTicket.offering.label }}</div>
           <div><strong>依頼日時:</strong> {{ selectedTicket.created_at }}</div>
@@ -163,6 +164,7 @@
           <div class="fw-semibold mb-2">内部向け対応メモ</div>
           <div class="history-message-body">{{ selectedTicket.internal_note || '内部メモはありません' }}</div>
         </div>
+        </template>
       </div>
     </div>
   </div>

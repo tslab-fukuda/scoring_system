@@ -20,6 +20,8 @@
             errorMessage: '',
             showDetailModal: false,
             selectedTicket: null,
+            detailLoading: false,
+            detailError: '',
         },
         computed: Object.assign({}, window.offeringSelectorHelper.computed, {
             selectedOffering() {
@@ -91,12 +93,37 @@
                     });
             },
             openDetail(ticket) {
-                this.selectedTicket = ticket;
+                this.selectedTicket = null;
+                this.detailError = '';
+                this.detailLoading = true;
                 this.showDetailModal = true;
+                const params = new URLSearchParams({
+                    kind: 'experiment_help',
+                    id: ticket.id,
+                });
+                fetch(`/attendance/notifications/detail/?${params.toString()}`, {
+                    credentials: 'same-origin',
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        if (data.status !== 'ok') {
+                            throw new Error(data.message || '詳細の取得に失敗しました');
+                        }
+                        this.selectedTicket = data.notification || null;
+                    })
+                    .catch((error) => {
+                        this.selectedTicket = null;
+                        this.detailError = error.message || '詳細の取得に失敗しました';
+                    })
+                    .finally(() => {
+                        this.detailLoading = false;
+                    });
             },
             closeDetail() {
                 this.showDetailModal = false;
                 this.selectedTicket = null;
+                this.detailLoading = false;
+                this.detailError = '';
             },
         }),
         mounted() {
