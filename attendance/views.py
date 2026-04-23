@@ -652,6 +652,7 @@ def _build_attendance_nfc_student_payload(profile, enrollment):
         enrollment=enrollment,
     )
     return {
+        'user_id': profile.user_id,
         'student_id': student_context['student_id'],
         'full_name': student_context['full_name'],
         'experiment_day': student_context['experiment_day'],
