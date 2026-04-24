@@ -224,6 +224,7 @@
     </transition>
 </div>
 <script>
+    window.dashboardUserRole = "{{ effective_role|escapejs }}";
     window.teacherOfferings = window.teacherOfferings || {
         offerings: [],
         defaultOfferingId: null

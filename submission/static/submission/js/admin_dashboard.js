@@ -4,6 +4,7 @@ const ADMIN_DASHBOARD_STATE_KEY = 'adminDashboardState';
 window.app = new Vue({
     el: '#admin-dashboard',
     data: {
+        userRole: (window.dashboardUserRole || '').trim(),
         restoringDashboardState: false,
         tab: 'submissions',
         listDisplayLimit: { submissions: 20, accepted: 20 },

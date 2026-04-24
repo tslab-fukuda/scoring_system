@@ -1,5 +1,5 @@
 Vue.component('grading-list', {
-    props: ['items'],
+    props: ['items', 'userRole'],
     methods: {
         fileName(url) {
             if (!url) return '';
@@ -10,7 +10,7 @@ Vue.component('grading-list', {
 });
 
 Vue.component('graded-list', {
-    props: ['items'],
+    props: ['items', 'userRole'],
     methods: {
         fileName(url) {
             if (!url) return '';
@@ -27,6 +27,7 @@ const NON_EDITING_TEACHER_DASHBOARD_STATE_KEY = 'nonEditingTeacherDashboardState
 new Vue({
     el: '#teacher-dashboard',
     data: {
+        userRole: (window.dashboardUserRole || '').trim(),
         restoringDashboardState: false,
         tab: 'grading',
         listDisplayLimit: { grading: 20, graded: 20 },

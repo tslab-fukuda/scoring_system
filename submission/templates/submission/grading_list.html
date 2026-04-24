@@ -13,7 +13,7 @@
             <th style="max-width:90px;">班番号</th>
             <th style="max-width:110px;">実験番号</th>
             <th style="max-width:110px;">学生番号</th>
-            <th v-if="USER_ROLE === 'teacher'" style="max-width:150px;">提出日時</th>
+            <th v-if="userRole === 'teacher'" style="max-width:150px;">提出日時</th>
             <th style="max-width:180px;">ファイル名</th>
             <th style="max-width:90px;">採点結果</th>
             {% endverbatim %}
@@ -28,9 +28,9 @@
         <tr>
             {% endverbatim %}
             {% if is_admin == 'true' %}
-            <td :colspan="USER_ROLE === 'teacher' ? 9 : 8" class="text-center text-muted">データがありません</td>
+            <td :colspan="userRole === 'teacher' ? 9 : 8" class="text-center text-muted">データがありません</td>
             {% else %}
-            <td :colspan="USER_ROLE === 'teacher' ? 7 : 6" class="text-center text-muted">データがありません</td>
+            <td :colspan="userRole === 'teacher' ? 7 : 6" class="text-center text-muted">データがありません</td>
             {% endif %}
             {% verbatim %}
         </tr>
@@ -41,9 +41,9 @@
             <td>{{ row.experiment_group }}</td>
             <td>{{ row.experiment_number }}</td>
             <td>{{ row.student_id || '-' }}</td>
-            <td v-if="USER_ROLE === 'teacher'">{{ row.submitted_at || '-' }}</td>
+            <td v-if="userRole === 'teacher'">{{ row.submitted_at || '-' }}</td>
             <td class="filename-td">
-                <a :href="(USER_ROLE === 'non-editing teacher' ? '/submission/final_grading_form/' : '/submission/grading_form/') + row.id + '/'" @click.stop>
+                <a :href="(userRole === 'non-editing teacher' ? '/submission/final_grading_form/' : '/submission/grading_form/') + row.id + '/'" @click.stop>
                     {{
                         (
                             (row.file_name || (row.file || '').split('/').pop()) || ''
