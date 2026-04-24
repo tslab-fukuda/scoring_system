@@ -38,6 +38,33 @@ JST = ZoneInfo("Asia/Tokyo")
 ABSENCE_CUTOFF_TIME = time(21, 0)
 
 
+def _format_submission_file_modified_at(submission):
+    if not getattr(submission, 'file', None):
+        return ''
+    try:
+        modified_at = submission.file.storage.get_modified_time(submission.file.name)
+    except Exception:
+        return ''
+    try:
+        localized = timezone.localtime(modified_at, JST)
+    except Exception:
+        localized = timezone.localtime(modified_at)
+    return localized.strftime('%Y-%m-%d %H:%M')
+
+
+def _submission_file_modified_at(submission):
+    if not getattr(submission, 'file', None):
+        return None
+    try:
+        modified_at = submission.file.storage.get_modified_time(submission.file.name)
+    except Exception:
+        return None
+    try:
+        return timezone.localtime(modified_at, JST)
+    except Exception:
+        return timezone.localtime(modified_at)
+
+
 def _weekday_label(dt):
     return ['月', '火', '水', '木', '金', '土', '日'][dt.weekday()]
 
@@ -162,13 +189,14 @@ def _dashboard_student_sort_key(item):
 
 
 def _serialize_main_report_score_payload(submission, offering_id, actual_role):
-    exp_day, exp_group, full_name, _ = _student_enrollment_info(submission.student, offering_id)
+    exp_day, exp_group, full_name, student_id = _student_enrollment_info(submission.student, offering_id)
     payload = {
         'id': submission.id,
         'experiment_day': exp_day,
         'experiment_group': exp_group,
         'experiment_number': submission.experiment_number,
         'full_name': full_name,
+        'student_id': student_id,
         'file': submission.file.url if submission.file else '',
         'file_name': submission.file.name.split('/')[-1] if submission.file else '',
         'score': float(submission.final_score) if submission.final_score is not None else None,
@@ -338,13 +366,15 @@ def get_ungraded_submissions(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs.select_related('student', 'student__userprofile'):
-        exp_day, exp_group, full_name, _ = _student_enrollment_info(items.student, offering_id)
+        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
             'experiment_day': exp_day,
             'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
             'full_name': full_name,
+            'student_id': student_id,
+            'submitted_at': timezone.localtime(items.submitted_at, JST).strftime('%Y-%m-%d %H:%M') if items.submitted_at else '',
             'file': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
@@ -379,6 +409,7 @@ def get_graded_submissions(request):
     result = []
     for items in qs.select_related('student', 'student__userprofile'):
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
+        graded_at_dt = _submission_file_modified_at(items)
         result.append({
             'id': items.id,
             'experiment_day': exp_day,
@@ -386,14 +417,19 @@ def get_graded_submissions(request):
             'experiment_number': items.experiment_number,
             'full_name': full_name,
             'student_id': student_id,
+            'graded_at': graded_at_dt.strftime('%Y-%m-%d %H:%M') if graded_at_dt else '',
             'file': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (
                     sum(detail.get("value", 0) * detail.get("weight", 1) for detail in items.score_details)
                     if items.score_details else "0"
                 ),
-            "score_details":items.score_details if items.score_details else ""
+            "score_details":items.score_details if items.score_details else "",
+            "_graded_at_sort": graded_at_dt.isoformat() if graded_at_dt else '',
         })
+    result.sort(key=lambda item: item.get('_graded_at_sort') or '', reverse=True)
+    for item in result:
+        item.pop('_graded_at_sort', None)
     return JsonResponse(result, safe=False)
 
 @role_required('teacher', 'non-editing teacher', 'course-teacher', 'admin')
@@ -422,13 +458,14 @@ def get_ungraded_main_reports(request):
         qs = qs.filter(experiment_number=exp_no)
     result = []
     for items in qs:
-        exp_day, exp_group, full_name, _ = _student_enrollment_info(items.student, offering_id)
+        exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
         result.append({
             'id': items.id,
             'experiment_day': exp_day,
             'experiment_group': exp_group,
             'experiment_number': items.experiment_number,
             'full_name': full_name,
+            'student_id': student_id,
             'file': items.file.url if items.file else '',
             'file_name': items.file.name.split('/')[-1] if items.file else '',
             'score': (

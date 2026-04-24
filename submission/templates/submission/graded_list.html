@@ -11,14 +11,15 @@
                 <th style="max-width:120px;">曜日</th>
                 <th style="max-width:90px;">班番号</th>
                 <th style="max-width:110px;">実験番号</th>
-                <th style="max-width:140px;">学生名</th>
+                <th style="max-width:110px;">学生番号</th>
+                <th v-if="USER_ROLE === 'teacher'" style="max-width:150px;">添削日時</th>
                 <th style="max-width:180px;">ファイル名</th>
                 <th style="max-width:90px;">採点結果</th>
             </tr>
         </thead>
         <tbody v-if="!items || items.length === 0">
             <tr>
-                <td colspan="6" class="text-center text-muted">データがありません</td>
+                <td :colspan="USER_ROLE === 'teacher' ? 7 : 6" class="text-center text-muted">データがありません</td>
             </tr>
         </tbody>
         <tbody v-else>
@@ -26,7 +27,8 @@
                 <td>{{ item.experiment_day }}</td>
                 <td>{{ item.experiment_group }}</td>
                 <td>{{ item.experiment_number }}</td>
-                <td>{{ item.full_name }}</td>
+                <td>{{ item.student_id || '-' }}</td>
+                <td v-if="USER_ROLE === 'teacher'">{{ item.graded_at || '-' }}</td>
                 <td class="filename-td">
                     <a :href="(USER_ROLE === 'non-editing teacher' ? '/submission/final_grading_form/' : '/submission/grading_form/') + item.id + '/'" @click.stop>
                         {{
