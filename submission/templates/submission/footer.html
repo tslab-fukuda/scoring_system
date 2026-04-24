@@ -6,19 +6,21 @@
                 <img src="{% static 'submission/main-logo_small.png' %}" alt="ロゴ" class="f-log">高橋・福田研究室
             </a>
         </div>
-        {% if request.user.is_authenticated %}
-        <div class="footer-login">
-            あなたは <span class="footer-user">{{ request.user.username }} {{ request.user.get_full_name }}</span>
-            としてログインしています
-            (<form method="post" action="{% url 'logout' %}" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" class="footer-logout"
-                    style="background:none;border:none;padding:0;">ログアウト</button>
-            </form>)
+        <div class="footer-center">
+            {% if request.user.is_authenticated %}
+            <div class="footer-login">
+                あなたは <span class="footer-user">{{ request.user.username }} {{ request.user.get_full_name }}</span>
+                としてログインしています
+                (<form method="post" action="{% url 'logout' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="footer-logout"
+                        style="background:none;border:none;padding:0;">ログアウト</button>
+                </form>)
+            </div>
+            {% endif %}
+            <!-- <a href="{% url 'index_redirect' %}" class="footer-home">Home</a> -->
+            <div class="copylight" data-v-23c3547f=""> Copyright ©︎2025 T.F. Lab.,CST, NU. All Rights Reserved. </div>
         </div>
-        {% endif %}
-        <!-- <a href="{% url 'index_redirect' %}" class="footer-home">Home</a> -->
-        <div class="copylight" data-v-23c3547f=""> Copyright ©︎2025 T.F. Lab.,CST, NU. All Rights Reserved. </div>
     </div>
 
 </footer>

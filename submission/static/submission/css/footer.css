@@ -24,22 +24,32 @@ body {
     box-shadow: 0 -2px 8px rgba(40,40,50,0.10);
     margin-top: auto;
 }
-/* ↑ position: fixed, left: 0, bottom: 0, width: 100vw を追加 */
 
 .footer-content {
-    max-width: 1600px;
+    --footer-left-offset: 1.3rem;
     margin: 0 auto;
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    grid-template-areas:
-        "logo login"
-        "logo copylight";
-    column-gap: 20px;
-    row-gap: 4px;
-    justify-content: center;
+    width: 100%;
+    max-width: none;
+    min-height: 72px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 0 16px;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 1.5rem;
     text-align: center;
+}
+
+.footer-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    max-width: min(980px, calc(100vw - 260px));
+    margin: 0 auto;
 }
 
 .footer-link {
@@ -85,45 +95,16 @@ body {
     text-decoration: underline;
 }
 
-/* レスポンシブ（スマホ） */
-@media (max-width: 600px) {
-    .footer-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5em;
-        text-align: center;
-        font-size: 0.93em;
-        padding: 0 12px;
-    }
-    .footer-log {
-        justify-content: center;
-        padding: 0;
-    }
-    .footer-log a {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        white-space: nowrap;
-    }
-    .f-log {
-        height: 36px;
-    }
-    .footer-login,
-    .copylight {
-        margin-bottom: 0.3em;
-        width: 100%;
-    }
-    .footer-home { font-size: 0.93em; }
-}
-
 .f-log{
     height: 50px;
     flex: 0 0 auto;
 }
 
 .footer-log {
-    grid-area: logo;
+    position: absolute;
+    left: var(--footer-left-offset);
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -140,18 +121,55 @@ body {
 }
 
 .footer-login {
-    grid-area: login;
     margin: 0.2em 0 0.4em 0;
     font-size: 0.99em;
-    min-width: 0;
+    width: 100%;
+    text-align: center;
     overflow-wrap: anywhere;
 }
 
 .copylight{
-    grid-area: copylight;
     font-size: 12px;
     text-align: center;
     line-height: 25px;
-    min-width: 0;
+    width: 100%;
     overflow-wrap: anywhere;
+}
+
+/* レスポンシブ（スマホ） */
+@media (max-width: 900px) {
+    .footer-content {
+        min-height: auto;
+        gap: 0.5em;
+        padding: 0 12px;
+    }
+    .footer-center {
+        order: 1;
+        max-width: 100%;
+        gap: 0.3em;
+    }
+    .footer-log {
+        position: static;
+        top: auto;
+        left: auto;
+        transform: none;
+        justify-content: center;
+        padding: 0;
+        order: 2;
+    }
+    .footer-log a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .f-log {
+        height: 36px;
+    }
+    .footer-login,
+    .copylight {
+        margin-bottom: 0.3em;
+        width: 100%;
+    }
+    .footer-home { font-size: 0.93em; }
 }
