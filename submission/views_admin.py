@@ -1951,6 +1951,7 @@ def admin_get_submissions_api(request):
             'experiment_group': student_context['experiment_group'],
             'experiment_number': sub.experiment_number,
             'full_name': student_context['full_name'],
+            'student_id': student_context['student_id'],
             'file': sub.file.url if sub.file else "",  # 既存互換
             'file_name': sub.file.name.split('/')[-1] if sub.file else "",
             'score': (
