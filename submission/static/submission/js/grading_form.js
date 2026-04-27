@@ -71,6 +71,7 @@ new Vue({
         activeTextDrag: null,
         nextTextAnnotationId: 1,
         savingGrading: false,
+        renderQualityResizeTimer: null,
     },
     computed: {
         totalScore() {
@@ -843,11 +844,52 @@ new Vue({
             }
         },
         getMainScale() {
-            const baseScale = 1.4;
-            return baseScale * (this.zoomPercent / 100);
+            return this.getRenderQualityConfig().baseScale * (this.zoomPercent / 100);
         },
         getCompareScale() {
             return this.getMainScale();
+        },
+        getRenderQualityConfig() {
+            const width = window.innerWidth || document.documentElement.clientWidth || 1024;
+            if (width >= 1600) {
+                return { baseScale: 1.7, dprCap: 4 };
+            }
+            if (width >= 1200) {
+                return { baseScale: 1.6, dprCap: 4 };
+            }
+            if (width >= 900) {
+                return { baseScale: 1.5, dprCap: 3 };
+            }
+            if (width >= 640) {
+                return { baseScale: 1.4, dprCap: 2.5 };
+            }
+            return { baseScale: 1.25, dprCap: 2 };
+        },
+        getRenderDpr() {
+            const { dprCap } = this.getRenderQualityConfig();
+            return Math.min(window.devicePixelRatio || 1, dprCap);
+        },
+        rerenderVisiblePdfContent() {
+            if (this.pdfDoc) {
+                this.pdfPages.forEach((_, idx) => {
+                    if (this.loadedPages[idx]) {
+                        this.renderPageAtScale(this.pdfDoc, idx, true);
+                    }
+                });
+            }
+            if (this.showCompare && this.comparePdfUrl) {
+                this.compareRendered = false;
+                this.$nextTick(() => this.renderComparePdf());
+            }
+        },
+        handleRenderQualityResize() {
+            if (this.renderQualityResizeTimer) {
+                clearTimeout(this.renderQualityResizeTimer);
+            }
+            this.renderQualityResizeTimer = setTimeout(() => {
+                this.renderQualityResizeTimer = null;
+                this.rerenderVisiblePdfContent();
+            }, 150);
         },
         getScrollRatio(el) {
             if (!el) return 0;
@@ -1106,7 +1148,7 @@ new Vue({
             });
             loadingTask.promise.then(async pdf => {
                 const scale = this.getCompareScale();
-                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const dpr = this.getRenderDpr();
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
                     const viewport = page.getViewport({ scale });
@@ -1528,7 +1570,7 @@ new Vue({
             const scale = this.getMainScale();
             pdf.getPage(i + 1).then(page => {
                 const viewport = page.getViewport({ scale });
-                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const dpr = this.getRenderDpr();
                 const cssWidth = viewport.width;
                 const cssHeight = viewport.height;
                 const pdfCanvas = this.$refs['pdfCanvas' + i]?.[0];
@@ -1657,6 +1699,7 @@ new Vue({
                 });
             });
         });
+        window.addEventListener('resize', this.handleRenderQualityResize);
 
         // スタンプ取得
         fetch("/submission/stamps_api/")
@@ -1684,5 +1727,10 @@ new Vue({
     beforeDestroy() {
         this.finalizeActiveTextEditor();
         this.clearSimilarityProgressTimer();
+        if (this.renderQualityResizeTimer) {
+            clearTimeout(this.renderQualityResizeTimer);
+            this.renderQualityResizeTimer = null;
+        }
+        window.removeEventListener('resize', this.handleRenderQualityResize);
     }
 });
