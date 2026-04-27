@@ -35,21 +35,55 @@
   }
   
   .profile-info p {
+    display: grid;
+    grid-template-columns: 7.2em minmax(0, 1fr);
+    column-gap: 0.5em;
+    align-items: start;
     font-size: 1.08em;
     margin-bottom: 0.5em;
     color: #35305c;
     font-weight: 500;
     padding: 3px 0 3px 8px;
     border-left: 3px solid #8278e6;
-    min-width: 230px;
+    width: min(100%, 430px);
     text-align: left;
+    box-sizing: border-box;
+  }
+
+  .profile-affiliation-row {
+    align-items: start;
+  }
+
+  .profile-value {
+    min-width: 0;
+    word-break: break-word;
+  }
+
+  .profile-affiliation-list {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.35em;
+    min-width: 0;
+  }
+
+  .profile-affiliation-item {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.35;
+  }
+
+  .profile-affiliation-course {
+    font-weight: 600;
+  }
+
+  .profile-affiliation-meta {
+    font-size: 0.95em;
+    opacity: 0.9;
   }
   
   .profile-info strong {
     display: inline-block;
-    min-width: 5.6em;
     text-align: right;
-    margin-right: 0.5em;
     letter-spacing: 0.1em;
   }
   .profile-password-change {

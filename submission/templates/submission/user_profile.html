@@ -15,12 +15,22 @@
     <h2>ユーザープロフィール</h2>
     {% verbatim %}
     <div class="profile-info">
-        <p><strong>氏名:</strong> {{ userProfile.full_name }}</p>
-        <p><strong>学籍番号:</strong> {{ userProfile.student_id }}</p>
-        <p><strong>メール:</strong> {{ userProfile.email }}</p>
-        <p><strong>曜日:</strong> {{ userProfile.experiment_day }}</p>
-        <p><strong>班:</strong> {{ userProfile.experiment_group }}</p>
-        <p><strong>ロール:</strong> {{ userProfile.role }}</p>
+        <p><strong>氏名:</strong><span class="profile-value">{{ userProfile.full_name || '-' }}</span></p>
+        <p><strong>学籍番号:</strong><span class="profile-value">{{ userProfile.student_id || '-' }}</span></p>
+        <p><strong>メール:</strong><span class="profile-value">{{ userProfile.email || '-' }}</span></p>
+        <p class="profile-affiliation-row">
+            <strong>所属:</strong>
+            <span class="profile-affiliation-list">
+                <span v-if="!affiliations.length">-</span>
+                <span v-for="aff in affiliations" :key="`${aff.course_code}-${aff.year}-${aff.role}`" class="profile-affiliation-item">
+                    <span class="profile-affiliation-course">{{ aff.course_code }} / {{ aff.year }}</span>
+                    <span class="profile-affiliation-meta">
+                        {{ aff.experiment_day || '-' }} / {{ aff.experiment_group ? aff.experiment_group + '班' : '-' }}
+                    </span>
+                </span>
+            </span>
+        </p>
+        <p><strong>ロール:</strong><span class="profile-value">{{ userProfile.role || '-' }}</span></p>
     </div>
     <div v-if="userProfile.role === 'student'" class="profile-submissions">
         <h4>提出レポート一覧</h4>

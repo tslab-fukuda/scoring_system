@@ -2,6 +2,7 @@ new Vue({
     el: "#user-profile-app",
     data: {
       userProfile: {},
+      affiliations: [],
       submissions: [],
       scoreSummary: [],
     },
@@ -11,6 +12,7 @@ new Vue({
           .then(r => r.json())
           .then(data => {
             this.userProfile = data.profile;
+            this.affiliations = data.affiliations || [];
             if (data.profile.role === "student") {
               this.submissions = data.submissions || [];
               this.scoreSummary = data.score_summary || [];

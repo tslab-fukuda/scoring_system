@@ -110,19 +110,43 @@ def api_user_profile(request):
             .values_list('course_offering_id', flat=True)
             .first()
         )
-    student_context = get_student_context(request.user, offering_id) if profile.role == "student" else {
-        "experiment_day": profile.experiment_day,
-        "experiment_group": profile.experiment_group,
-    }
+    if profile.role == "student":
+        student_context = get_student_context(request.user, offering_id)
+    else:
+        enrollment = (
+            Enrollment.objects.filter(user=request.user, role=profile.role)
+            .order_by('-course_offering__year', '-course_offering__id', '-id')
+            .first()
+        )
+        student_context = {
+            "experiment_day": (profile.experiment_day or (enrollment.experiment_day if enrollment else '') or '').strip(),
+            "experiment_group": (profile.experiment_group or (enrollment.experiment_group if enrollment else '') or '').strip(),
+        }
     user_data = {
         "full_name": profile.full_name,
         "student_id": profile.student_id,
-        "email": profile.email,
+        "email": profile.email or request.user.email or '',
         "experiment_day": student_context["experiment_day"],
         "experiment_group": student_context["experiment_group"],
         "role": profile.role,
     }
+    affiliations = []
+    enrollment_qs = (
+        Enrollment.objects.filter(user=request.user)
+        .select_related('course_offering__course')
+        .order_by('-course_offering__year', 'course_offering__course__code', 'role', 'id')
+    )
+    for enr in enrollment_qs:
+        affiliations.append({
+            "course_code": enr.course_offering.course.code,
+            "course_name": enr.course_offering.course.name,
+            "year": enr.course_offering.year,
+            "role": enr.role,
+            "experiment_day": (enr.experiment_day or '').strip(),
+            "experiment_group": (enr.experiment_group or '').strip(),
+        })
     result = {"profile": user_data}
+    result["affiliations"] = affiliations
     if profile.role == "student":
         submissions = list(Submission.objects.filter(student=request.user).order_by("-submitted_at"))
         result["submissions"] = [
@@ -135,7 +159,7 @@ def api_user_profile(request):
             for s in submissions
         ]
 
-        score_map = {num: 0 for num, _ in Submission.EXPERIMENT_NUMBER_CHOICES}
+        score_map = {}
         for s in submissions:
             if not s.score_details:
                 continue
@@ -143,11 +167,11 @@ def api_user_profile(request):
                 detail.get("value", 0) * detail.get("weight", 1)
                 for detail in s.score_details
             )
-            score_map[s.experiment_number] += total
+            score_map[s.experiment_number] = score_map.get(s.experiment_number, 0) + total
 
         result["score_summary"] = [
-            {"experiment_number": num, "total_score": score_map[num]}
-            for num, _ in Submission.EXPERIMENT_NUMBER_CHOICES
+            {"experiment_number": num, "total_score": total_score}
+            for num, total_score in sorted(score_map.items())
         ]
     return JsonResponse(result)
 
