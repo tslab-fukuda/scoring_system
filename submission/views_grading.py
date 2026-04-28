@@ -809,6 +809,8 @@ def final_grading_form(request, submission_id):
                 adjustment_score_value,
             )
             if not missing:
+                if request.user.userprofile.role == 'admin':
+                    return redirect('/submission/admin_dashboard/')
                 return redirect('/submission/non_editing_teacher_dashboard/')
             rubric_error = '未選択のクライテリアがあります: ' + ' / '.join(missing)
 

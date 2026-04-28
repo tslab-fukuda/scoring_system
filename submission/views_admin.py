@@ -1883,6 +1883,14 @@ def admin_dashboard(request):
 def course_management(request):
     return render(request, 'submission/course_management.html', {})
 
+
+def _request_bool_param(request, name, default=None):
+    value = request.GET.get(name)
+    if value is None:
+        return default
+    return str(value).lower() in ('1', 'true', 'yes', 'on')
+
+
 @role_required('admin')
 def admin_get_submissions_api(request):
     # 本レポートのみ抽出
@@ -1890,42 +1898,45 @@ def admin_get_submissions_api(request):
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
     offering_id = request.GET.get('offering_id')
+    graded_filter = _request_bool_param(request, 'graded', False)
     base_qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
     if offering_id:
         base_qs = base_qs.filter(course_offering_id=offering_id)
 
-    # (student_id, experiment_number)で未受付レポートをカウント
-    count_map = Counter((sub.student_id, sub.experiment_number) for sub in base_qs)
+    if graded_filter is False:
+        # (student_id, experiment_number)で未受付レポートをカウント
+        count_map = Counter((sub.student_id, sub.experiment_number) for sub in base_qs)
 
-    # 3回提出されているものを自動で受付
-    for (student_id, experiment_number), cnt in count_map.items():
-        comp_qs = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number)
-        if offering_id:
-            comp_qs = comp_qs.filter(course_offering_id=offering_id)
-        comp_status = comp_qs.values_list('completed', flat=True)
-        completed = comp_status[0] if comp_status else False
+        # 3回提出されているものを自動で受付
+        for (student_id, experiment_number), cnt in count_map.items():
+            comp_qs = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number)
+            if offering_id:
+                comp_qs = comp_qs.filter(course_offering_id=offering_id)
+            comp_status = comp_qs.values_list('completed', flat=True)
+            completed = comp_status[0] if comp_status else False
 
-        progress_qs = ExperimentProgress.objects.filter(
-            student_id=student_id,
-            experiment_number=experiment_number,
-        )
-        if offering_id:
-            progress_qs = progress_qs.filter(course_offering_id=offering_id)
-        else:
-            progress_qs = progress_qs.filter(course_offering__isnull=True)
-        has_any_progress = progress_qs.exists()
+            progress_qs = ExperimentProgress.objects.filter(
+                student_id=student_id,
+                experiment_number=experiment_number,
+            )
+            if offering_id:
+                progress_qs = progress_qs.filter(course_offering_id=offering_id)
+            else:
+                progress_qs = progress_qs.filter(course_offering__isnull=True)
+            has_any_progress = progress_qs.exists()
 
-        if cnt >= 3 and (completed or has_any_progress):
-            Submission.objects.filter(
-                report_type='main', graded=False, accepted=False,
-                student_id=student_id, experiment_number=experiment_number,
-                course_offering_id=offering_id if offering_id else None
-            ).update(graded=True,accepted=True)
+            if cnt >= 3 and (completed or has_any_progress):
+                Submission.objects.filter(
+                    report_type='main', graded=False, accepted=False,
+                    student_id=student_id, experiment_number=experiment_number,
+                    course_offering_id=offering_id if offering_id else None
+                ).update(graded=True,accepted=True)
     
-    qs = base_qs.filter(graded=False, accepted=False)
+    qs = base_qs.filter(graded=graded_filter, accepted=False)
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    qs = qs.order_by('-submitted_at')
     
     # 各実験ごとのstudent+experiment_numberで「本レポートの提出回数」を算出
     all_main = Submission.objects.filter(report_type='main')
@@ -1972,14 +1983,18 @@ def admin_get_accepted_submissions_api(request):
     exp_no = request.GET.get('experiment_number')
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
+    final_evaluated_filter = _request_bool_param(request, 'final_evaluated', None)
     qs = Submission.objects.filter(report_type='main', accepted=True).select_related('student', 'student__userprofile')
     if offering_id:
         qs = qs.filter(course_offering_id=offering_id)
+    if final_evaluated_filter is not None:
+        qs = qs.filter(final_evaluated=final_evaluated_filter)
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
     if student_id:
         qs = qs.filter(student__userprofile__student_id__icontains=student_id)
+    qs = qs.order_by('-submitted_at')
 
     detail_cache = {}
     submissions = []

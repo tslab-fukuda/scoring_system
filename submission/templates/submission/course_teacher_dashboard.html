@@ -19,11 +19,11 @@
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'grading' }" href="#"
-                @click.prevent="tab = 'grading'">未評価レポート</a>
+                @click.prevent="tab = 'grading'">未添削レポート</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'graded' }" href="#"
-                @click.prevent="tab = 'graded'">評価済レポート</a>
+                @click.prevent="tab = 'graded'">添削済みレポート</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'experiment_record' }" href="#"

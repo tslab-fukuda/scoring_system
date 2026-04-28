@@ -29,7 +29,7 @@
             <td>{{ row.full_name }}</td>
             <td>{{ row.student_id }}</td>
             <td class="filename-td">
-                <a :href="'/submission/grading_form/' + row.id + '/'" @click.stop>
+                <a :href="acceptedReportUrl(row)" @click.stop>
                     {{
                         (
                             (row.file_name || (row.file || '').split('/').pop()) || ''

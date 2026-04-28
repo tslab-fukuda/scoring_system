@@ -7,7 +7,7 @@ window.app = new Vue({
         userRole: (window.dashboardUserRole || '').trim(),
         restoringDashboardState: false,
         tab: 'submissions',
-        listDisplayLimit: { submissions: 20, accepted: 20 },
+        listDisplayLimit: { submissions: 20, corrected: 20, accepted_ungraded: 20, accepted_graded: 20 },
         selectedStudentId: null,
         students: students,
         submissionSummary: submissionSummary,
@@ -118,7 +118,7 @@ window.app = new Vue({
             return dates.length > 0;
         },
         currentListTabKey() {
-            return this.tab === 'submissions' || this.tab === 'accepted' ? this.tab : null;
+            return ['submissions', 'corrected', 'accepted_ungraded', 'accepted_graded'].includes(this.tab) ? this.tab : null;
         },
         currentListDisplayLimit() {
             const key = this.currentListTabKey;
@@ -152,7 +152,9 @@ window.app = new Vue({
                 const state = JSON.parse(raw);
                 this.restoringDashboardState = true;
                 if (state && typeof state === 'object') {
-                    if (typeof state.tab === 'string') this.tab = state.tab;
+                    if (typeof state.tab === 'string') {
+                        this.tab = state.tab === 'accepted' ? 'accepted_ungraded' : state.tab;
+                    }
                     if (state.filter && typeof state.filter === 'object') {
                         this.filter = {
                             experiment_day: state.filter.experiment_day || '',
@@ -271,9 +273,9 @@ window.app = new Vue({
                 });
         },
         refreshCurrentTab() {
-            if (this.tab === 'submissions') {
+            if (this.tab === 'submissions' || this.tab === 'corrected') {
                 this.fetchList();
-            } else if (this.tab === 'accepted') {
+            } else if (this.tab === 'accepted_ungraded' || this.tab === 'accepted_graded') {
                 this.fetchAccepted();
             } else if (this.tab === 'summary') {
                 this.fetchSummary();
@@ -301,6 +303,7 @@ window.app = new Vue({
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
             if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
+            params.push('graded=' + (this.tab === 'corrected' ? '1' : '0'));
             let url = '/submission/admin_submissions_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -363,6 +366,7 @@ window.app = new Vue({
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
             if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
             if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
+            params.push('final_evaluated=' + (this.tab === 'accepted_graded' ? '1' : '0'));
             let url = '/submission/admin_accepted_submissions_api/';
             if (params.length) url += '?' + params.join('&');
             fetch(url)
@@ -627,8 +631,12 @@ window.app = new Vue({
             })
                 .then(r => r.json())
                 .then(res => {
-                    if (res.status === "ok") this.fetchList();
+                    if (res.status === "ok") this.refreshCurrentTab();
                 });
+        },
+        acceptedReportUrl(row) {
+            const id = row && row.id ? row.id : '';
+            return '/submission/final_grading_form/' + id + '/';
         },
         openModal(student) {
             console.log("モーダル表示", student);
@@ -835,10 +843,10 @@ window.app = new Vue({
         tab(val) {
             this.saveDashboardState();
             if (this.restoringDashboardState) return;
-            if (val === 'submissions') {
+            if (val === 'submissions' || val === 'corrected') {
                 this.fetchList();
             }
-            if (val === 'accepted') {
+            if (val === 'accepted_ungraded' || val === 'accepted_graded') {
                 this.fetchAccepted();
             }
             if (val === 'summary') {

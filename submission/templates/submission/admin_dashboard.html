@@ -15,11 +15,19 @@
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'submissions' }" href="#"
-                @click.prevent="tab = 'submissions'">提出物確認</a>
+                @click.prevent="tab = 'submissions'">未添削</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab === 'accepted' }" href="#"
-                @click.prevent="tab = 'accepted'; fetchAccepted();">回収済レポート</a>
+            <a class="nav-link" :class="{ active: tab === 'corrected' }" href="#"
+                @click.prevent="tab = 'corrected'">添削済み</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'accepted_ungraded' }" href="#"
+                @click.prevent="tab = 'accepted_ungraded'">未評価</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" :class="{ active: tab === 'accepted_graded' }" href="#"
+                @click.prevent="tab = 'accepted_graded'">評価済み</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" :class="{ active: tab === 'summary' }" href="#"
@@ -39,7 +47,7 @@
         </li>
     </ul>
 
-    <div class="row mb-2" v-if="tab === 'submissions'">
+    <div class="row mb-2" v-if="tab === 'submissions' || tab === 'corrected'">
         {% verbatim %}
         <div class="col-auto">
             <select class="form-select" v-model="filter.experiment_day">
@@ -65,7 +73,7 @@
         </div>
     </div>
 
-    <div class="row mb-2" v-if="tab === 'accepted'">
+    <div class="row mb-2" v-if="tab === 'accepted_ungraded' || tab === 'accepted_graded'">
         {% verbatim %}
         <div class="col-auto">
             <select class="form-select" v-model="filter.experiment_day">
@@ -136,7 +144,13 @@
         <div v-if="tab === 'submissions'" key="submissions">
             {% include 'submission/grading_list.html' %}
         </div>
-        <div v-else-if="tab === 'accepted'" key="accepted">
+        <div v-else-if="tab === 'corrected'" key="corrected">
+            {% include 'submission/grading_list.html' %}
+        </div>
+        <div v-else-if="tab === 'accepted_ungraded'" key="accepted-ungraded">
+            {% include 'submission/accepted_list_admin.html' %}
+        </div>
+        <div v-else-if="tab === 'accepted_graded'" key="accepted-graded">
             {% include 'submission/accepted_list_admin.html' %}
         </div>
         <div v-else-if="tab === 'summary'" key="summary">

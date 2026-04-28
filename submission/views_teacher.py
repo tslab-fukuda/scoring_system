@@ -190,6 +190,10 @@ def _dashboard_student_sort_key(item):
 
 def _serialize_main_report_score_payload(submission, offering_id, actual_role):
     exp_day, exp_group, full_name, student_id = _student_enrollment_info(submission.student, offering_id)
+    grading_score = (
+        sum(detail.get('value', 0) * detail.get('weight', 1) for detail in submission.score_details)
+        if submission.score_details else None
+    )
     payload = {
         'id': submission.id,
         'experiment_day': exp_day,
@@ -199,7 +203,7 @@ def _serialize_main_report_score_payload(submission, offering_id, actual_role):
         'student_id': student_id,
         'file': submission.file.url if submission.file else '',
         'file_name': submission.file.name.split('/')[-1] if submission.file else '',
-        'score': float(submission.final_score) if submission.final_score is not None else None,
+        'score': float(submission.final_score) if submission.final_score is not None else grading_score,
         'score_details': submission.score_details if submission.score_details else '',
     }
     if actual_role not in {'non-editing teacher', 'admin'}:
@@ -443,12 +447,18 @@ def get_ungraded_main_reports(request):
         return error_response
     if not offering_id:
         return JsonResponse([], safe=False)
-    qs = Submission.objects.filter(
-        final_evaluated=False,
-        report_type='main',
-    ).select_related('student', 'student__userprofile')
     if actual_role == 'non-editing teacher':
-        qs = qs.filter(accepted=True)
+        qs = Submission.objects.filter(
+            accepted=True,
+            final_evaluated=False,
+            report_type='main',
+        ).select_related('student', 'student__userprofile')
+    else:
+        qs = Submission.objects.filter(
+            accepted=False,
+            graded=False,
+            report_type='main',
+        ).select_related('student', 'student__userprofile')
     qs = qs.filter(
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
@@ -487,19 +497,32 @@ def get_graded_main_reports(request):
         return error_response
     if not offering_id:
         return JsonResponse([], safe=False)
-    qs = Submission.objects.filter(
-        final_evaluated=True,
-        report_type='main',
-    ).select_related(
-        'student',
-        'student__userprofile',
-        'final_rubric_score__rubric',
-    ).prefetch_related(
-        'final_rubric_score__items',
-        'final_rubric_score__rubric__criteria__options',
-    )
     if actual_role == 'non-editing teacher':
-        qs = qs.filter(accepted=True)
+        qs = Submission.objects.filter(
+            accepted=True,
+            final_evaluated=True,
+            report_type='main',
+        ).select_related(
+            'student',
+            'student__userprofile',
+            'final_rubric_score__rubric',
+        ).prefetch_related(
+            'final_rubric_score__items',
+            'final_rubric_score__rubric__criteria__options',
+        )
+    else:
+        qs = Submission.objects.filter(
+            accepted=False,
+            graded=True,
+            report_type='main',
+        ).select_related(
+            'student',
+            'student__userprofile',
+            'final_rubric_score__rubric',
+        ).prefetch_related(
+            'final_rubric_score__items',
+            'final_rubric_score__rubric__criteria__options',
+        )
     qs = qs.filter(
         Q(course_offering_id=offering_id) |
         Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
