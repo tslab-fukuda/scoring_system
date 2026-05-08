@@ -97,11 +97,37 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'scoring_system.middleware.RequestTimingMiddleware',
     'attendance.middleware.AttendanceOnlyMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+REQUEST_LOG_ENABLED = os.environ.get('DJANGO_REQUEST_LOG_ENABLED', '1') == '1'
+REQUEST_LOG_ALL = os.environ.get('DJANGO_REQUEST_LOG_ALL', '0') == '1'
+REQUEST_LOG_SLOW_THRESHOLD_SECONDS = float(os.environ.get('DJANGO_REQUEST_LOG_SLOW_THRESHOLD_SECONDS', '2.0'))
+REQUEST_LOG_EXCLUDED_PATH_PREFIXES = (
+    '/static/',
+    MEDIA_URL,
+)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'scoring.request': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_REQUEST_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+    },
+}
 
 ROOT_URLCONF = 'scoring_system.urls'
 
