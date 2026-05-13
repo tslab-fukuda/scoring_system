@@ -38,6 +38,7 @@ from submission.enrollment_utils import (
 )
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
+from django.db import transaction
 from collections import Counter, defaultdict
 from django.contrib.auth.models import Group, Permission, User
 from django.utils import timezone
@@ -1905,33 +1906,49 @@ def admin_get_submissions_api(request):
         base_qs = base_qs.filter(course_offering_id=offering_id)
 
     if graded_filter is False:
-        # (student_id, experiment_number)で未受付レポートをカウント
-        count_map = Counter((sub.student_id, sub.experiment_number) for sub in base_qs)
+        # 同一学生・科目年度・実験番号ごとの未受付レポートをカウント
+        count_map = Counter((sub.student_id, sub.course_offering_id, sub.experiment_number) for sub in base_qs)
 
-        # 3回提出されているものを自動で受付
-        for (student_id, experiment_number), cnt in count_map.items():
-            comp_qs = ExperimentCompletion.objects.filter(student=student_id, experiment_number=experiment_number)
-            if offering_id:
-                comp_qs = comp_qs.filter(course_offering_id=offering_id)
+        # 3回提出され、進捗条件を満たすものを最新1件だけ自動受付
+        for (student_id, course_offering_id, experiment_number), cnt in count_map.items():
+            comp_qs = ExperimentCompletion.objects.filter(
+                student_id=student_id,
+                experiment_number=experiment_number,
+                course_offering_id=course_offering_id,
+            )
             comp_status = comp_qs.values_list('completed', flat=True)
             completed = comp_status[0] if comp_status else False
 
             progress_qs = ExperimentProgress.objects.filter(
                 student_id=student_id,
                 experiment_number=experiment_number,
+                course_offering_id=course_offering_id,
             )
-            if offering_id:
-                progress_qs = progress_qs.filter(course_offering_id=offering_id)
-            else:
-                progress_qs = progress_qs.filter(course_offering__isnull=True)
             has_any_progress = progress_qs.exists()
 
             if cnt >= 3 and (completed or has_any_progress):
-                Submission.objects.filter(
-                    report_type='main', graded=False, accepted=False,
-                    student_id=student_id, experiment_number=experiment_number,
-                    course_offering_id=offering_id if offering_id else None
-                ).update(graded=True,accepted=True)
+                already_accepted = Submission.objects.filter(
+                    report_type='main',
+                    accepted=True,
+                    student_id=student_id,
+                    experiment_number=experiment_number,
+                    course_offering_id=course_offering_id,
+                ).exists()
+                if already_accepted:
+                    continue
+
+                target = Submission.objects.filter(
+                    report_type='main',
+                    graded=False,
+                    accepted=False,
+                    student_id=student_id,
+                    experiment_number=experiment_number,
+                    course_offering_id=course_offering_id,
+                ).order_by('-submitted_at', '-id').first()
+                if target:
+                    target.graded = True
+                    target.accepted = True
+                    target.save(update_fields=['graded', 'accepted'])
     
     qs = base_qs.filter(graded=graded_filter, accepted=False)
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
@@ -3279,9 +3296,33 @@ def accept_submission(request):
         )
         if not has_access:
             return JsonResponse({"status": "error", "message": "対象の提出物を受付する権限がありません"}, status=403)
-    sub.accepted = True
-    sub.graded = True
-    sub.save()
+
+    with transaction.atomic():
+        sibling_qs = Submission.objects.select_for_update().filter(
+            report_type='main',
+            student_id=sub.student_id,
+            course_offering_id=sub.course_offering_id,
+            experiment_number=sub.experiment_number,
+        ).order_by('id')
+        locked_submissions = list(sibling_qs)
+        locked_sub = next((item for item in locked_submissions if item.id == sub.id), None)
+        if locked_sub is None:
+            return JsonResponse({"status": "error", "message": "提出物が見つかりません"}, status=404)
+
+        duplicate_accepted = [
+            item for item in locked_submissions
+            if item.accepted and item.id != locked_sub.id
+        ]
+        if duplicate_accepted:
+            return JsonResponse({
+                "status": "error",
+                "message": "同一ユーザ・同一実験番号の本レポートは既に受付済みです",
+            }, status=400)
+
+        if not locked_sub.accepted or not locked_sub.graded:
+            locked_sub.accepted = True
+            locked_sub.graded = True
+            locked_sub.save(update_fields=['accepted', 'graded'])
     return JsonResponse({"status": "ok"})
 
 @role_required('admin')
