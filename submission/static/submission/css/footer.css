@@ -97,7 +97,9 @@ body {
 
 .f-log{
     height: 50px;
+    width: 50px;
     flex: 0 0 auto;
+    object-fit: contain;
 }
 
 .footer-log {
@@ -165,6 +167,7 @@ body {
     }
     .f-log {
         height: 36px;
+        width: 36px;
     }
     .footer-login,
     .copylight {
