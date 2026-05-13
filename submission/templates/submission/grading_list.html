@@ -16,23 +16,13 @@
             <th v-if="userRole === 'teacher'" style="max-width:150px;">提出日時</th>
             <th style="max-width:180px;">ファイル名</th>
             <th style="max-width:90px;">採点結果</th>
-            {% endverbatim %}
-            {% if is_admin == 'true' %}
-            <th>提出回数</th>
-            <th style="max-width:70px;">受付</th>
-            {% endif %}
-            {% verbatim %}
+            <th v-if="canAcceptSubmissions">提出回数</th>
+            <th v-if="canAcceptSubmissions" style="max-width:70px;">受付</th>
         </tr>
     </thead>
     <tbody v-if="!items || items.length === 0">
         <tr>
-            {% endverbatim %}
-            {% if is_admin == 'true' %}
-            <td :colspan="userRole === 'teacher' ? 9 : 8" class="text-center text-muted">データがありません</td>
-            {% else %}
-            <td :colspan="userRole === 'teacher' ? 7 : 6" class="text-center text-muted">データがありません</td>
-            {% endif %}
-            {% verbatim %}
+            <td :colspan="(userRole === 'teacher' ? 7 : 6) + (canAcceptSubmissions ? 2 : 0)" class="text-center text-muted">データがありません</td>
         </tr>
     </tbody>
     <tbody v-else>
@@ -53,30 +43,19 @@
                     }}
                 </a>
             </td>
-            {% endverbatim %}
-            {% if is_admin == 'true' %}
-            {% verbatim %}
             <td>
-                <button v-if="row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="showScoreDetail(row)">
+                <button v-if="canAcceptSubmissions && row.score !== null && row.score !== undefined" class="btn btn-link p-0" @click.stop="showScoreDetail(row)">
                     {{ row.score }} 点
                 </button>
-                <span v-else>-</span>
+                <span v-else-if="canAcceptSubmissions">-</span>
+                <span v-else>{{ row.score == null ? '' : row.score }}</span>
             </td>
-            {% endverbatim %}
-            {% else %}
-            {% verbatim %}
-            <td>{{ row.score == null ? '' : row.score }}</td>
-            {% endverbatim %}
-            {% endif %}
-            {% if is_admin == 'true' %}
-            {% verbatim %}
-            <td>{{ row.submission_count }}</td>
-            {% endverbatim %}
-            <td>
+            <td v-if="canAcceptSubmissions">{{ row.submission_count || '-' }}</td>
+            <td v-if="canAcceptSubmissions">
                 <button class="btn btn-sm btn-success" @click.stop="acceptSubmission(row)">受付</button>
             </td>
-            {% endif %}
         </tr>
     </tbody>
 </table>
 </div>
+{% endverbatim %}

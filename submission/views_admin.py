@@ -28,6 +28,7 @@ import unicodedata
 import math
 import fitz
 from submission.decorators import role_required
+from submission.roles import get_effective_role
 from submission.enrollment_utils import (
     build_student_context,
     filter_queryset_by_student_enrollment,
@@ -3249,12 +3250,35 @@ def delete_stamp_api(request, stamp_id):
     return JsonResponse({'status': 'error', 'message': 'POSTでリクエストしてください'}, status=400)
 
 @require_POST
-@role_required('admin')
+@role_required('admin', 'course-teacher')
 def accept_submission(request):
     data = json.loads(request.body)
     submission_id = data.get("submission_id")
     from .models import Submission
-    sub = Submission.objects.get(id=submission_id)
+    try:
+        sub = Submission.objects.select_related('student').get(id=submission_id, report_type='main')
+    except Submission.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "提出物が見つかりません"}, status=404)
+    actual_role = getattr(getattr(request.user, 'userprofile', None), 'role', '')
+    effective_role = get_effective_role(request)
+    if actual_role != 'admin' and effective_role == 'course-teacher':
+        allowed_offering_ids = set(
+            Enrollment.objects.filter(
+                user=request.user,
+                role__in=['teacher', 'course-teacher', 'non-editing teacher'],
+            ).values_list('course_offering_id', flat=True)
+        )
+        has_access = (
+            sub.course_offering_id in allowed_offering_ids
+            if sub.course_offering_id
+            else Enrollment.objects.filter(
+                user=sub.student,
+                role='student',
+                course_offering_id__in=allowed_offering_ids,
+            ).exists()
+        )
+        if not has_access:
+            return JsonResponse({"status": "error", "message": "対象の提出物を受付する権限がありません"}, status=403)
     sub.accepted = True
     sub.graded = True
     sub.save()

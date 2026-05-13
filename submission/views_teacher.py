@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import time, timedelta, date as dt_date
 from zoneinfo import ZoneInfo
+from collections import Counter
 
 from submission.decorators import role_required
 from submission.roles import get_effective_role
@@ -466,6 +467,13 @@ def get_ungraded_main_reports(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    all_main = Submission.objects.filter(report_type='main')
+    if offering_id:
+        all_main = all_main.filter(
+            Q(course_offering_id=offering_id) |
+            Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
+        ).distinct()
+    submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
     result = []
     for items in qs:
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
@@ -482,7 +490,8 @@ def get_ungraded_main_reports(request):
                 sum(detail.get('value', 0) * detail.get('weight', 1) for detail in items.score_details)
                 if items.score_details else '0'
             ),
-            'score_details': items.score_details if items.score_details else ''
+            'score_details': items.score_details if items.score_details else '',
+            'submission_count': submit_count_map[(items.student_id, items.experiment_number)],
         })
     return JsonResponse(result, safe=False)
 

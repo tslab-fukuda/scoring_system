@@ -82,6 +82,9 @@ new Vue({
         currentListTabKey() {
             return this.tab === 'grading' || this.tab === 'graded' ? this.tab : null;
         },
+        canAcceptSubmissions() {
+            return this.userRole === 'course-teacher' && this.tab === 'grading';
+        },
         currentListDisplayLimit() {
             const key = this.currentListTabKey;
             if (!key) return Array.isArray(this.items) ? this.items.length : 0;
@@ -199,6 +202,26 @@ new Vue({
             };
             this.hasScoreSummary = !!(this.scoreSummary.pre_total || this.scoreSummary.main_total || this.scoreSummary.final_total || this.scoreSummary.final_comment);
             this.showScoreModal = true;
+        },
+        acceptSubmission(item) {
+            if (!item || !item.id) return;
+            fetch('/submission/accept_submission/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': window.csrfToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ submission_id: item.id })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === "ok") {
+                        this.fetchList();
+                    } else {
+                        alert(res.message || '受付に失敗しました');
+                    }
+                })
+                .catch(() => alert('受付に失敗しました'));
         },
         fetchStudents() {
             this.ensureOfferingSelected();

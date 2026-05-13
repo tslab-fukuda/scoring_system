@@ -79,6 +79,9 @@ new Vue({
         currentListTabKey() {
             return this.tab === 'grading' || this.tab === 'graded' ? this.tab : null;
         },
+        canAcceptSubmissions() {
+            return false;
+        },
         currentListDisplayLimit() {
             const key = this.currentListTabKey;
             if (!key) return Array.isArray(this.items) ? this.items.length : 0;

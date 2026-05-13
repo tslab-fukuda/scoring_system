@@ -120,6 +120,9 @@ window.app = new Vue({
         currentListTabKey() {
             return ['submissions', 'corrected', 'accepted_ungraded', 'accepted_graded'].includes(this.tab) ? this.tab : null;
         },
+        canAcceptSubmissions() {
+            return this.userRole === 'admin' && (this.tab === 'submissions' || this.tab === 'corrected');
+        },
         currentListDisplayLimit() {
             const key = this.currentListTabKey;
             if (!key) return Array.isArray(this.items) ? this.items.length : 0;
