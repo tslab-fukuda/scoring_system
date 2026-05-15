@@ -408,7 +408,14 @@ def _apply_check_out_effects(user, course_offering, action_at, previous_out):
     _increment_score(submissions, "lab_time", delta_points, course_offering)
 
 
-def _apply_attendance_action(user, course_offering, action, action_at, overwrite_checkout=False):
+def _apply_attendance_action(
+    user,
+    course_offering,
+    action,
+    action_at,
+    overwrite_checkout=False,
+    ignore_previous_checkout_effects=False,
+):
     record, _ = AttendanceRecord.objects.get_or_create(
         user=user,
         date=_submission_date_for(action_at),
@@ -426,7 +433,7 @@ def _apply_attendance_action(user, course_offering, action, action_at, overwrite
     if action == 'check_out':
         if record.check_out is not None and not overwrite_checkout:
             return record, False
-        previous_out = record.check_out
+        previous_out = None if ignore_previous_checkout_effects else record.check_out
         record.check_out = action_at
         _apply_check_out_effects(user, course_offering, action_at, previous_out)
         record.save(update_fields=['check_out'])
@@ -452,6 +459,12 @@ def _build_forget_request_payload(forget_request):
         'student_id': student_profile.student_id if student_profile else '',
         'student_email': forget_request.student.email or (student_profile.email if student_profile else ''),
     }
+
+
+def _forget_request_action_at(forget_request):
+    requested_local = timezone.localtime(forget_request.requested_at, JST)
+    target_local = datetime.combine(forget_request.target_date, requested_local.timetz().replace(tzinfo=None))
+    return timezone.make_aware(target_local, JST)
 
 
 def _serialize_forget_request_notification(forget_request, actual_role):
@@ -1863,19 +1876,38 @@ def process_forget_request(request, request_id):
 
             if not _can_manage_forget_request_for_offering(request.user, forget_request.course_offering_id):
                 return JsonResponse({'status': 'error', 'message': '対象の科目/年度を処理できません'}, status=403)
-            if forget_request.target_date != timezone.localdate():
-                return JsonResponse({'status': 'error', 'message': '当日分のみ処理できます'}, status=400)
             if forget_request.status != 'pending':
                 return JsonResponse({'status': 'error', 'message': 'この申請はすでに処理済みです'}, status=400)
 
             attendance_update = None
             if decision == 'approve':
+                action_at = _forget_request_action_at(forget_request)
+                is_past_checkout = (
+                    forget_request.request_type == 'check_out'
+                    and forget_request.target_date < timezone.localdate()
+                )
+                existing_record = None
+                ignore_previous_checkout_effects = False
+                if is_past_checkout:
+                    existing_record = AttendanceRecord.objects.filter(
+                        user=forget_request.student,
+                        course_offering=forget_request.course_offering,
+                        date=forget_request.target_date,
+                    ).first()
+                    if existing_record and existing_record.check_out:
+                        checkout_local = timezone.localtime(existing_record.check_out, JST)
+                        ignore_previous_checkout_effects = (
+                            checkout_local.date() == forget_request.target_date
+                            and checkout_local.time().hour == 23
+                            and checkout_local.time().minute == 59
+                        )
                 record, _ = _apply_attendance_action(
                     forget_request.student,
                     forget_request.course_offering,
                     forget_request.request_type,
-                    forget_request.requested_at,
-                    overwrite_checkout=False,
+                    action_at,
+                    overwrite_checkout=is_past_checkout,
+                    ignore_previous_checkout_effects=ignore_previous_checkout_effects,
                 )
                 attendance_update = _build_attendance_update_payload(
                     forget_request.student,
