@@ -13,6 +13,7 @@ new Vue({
     standardFontUrl: "",
     experimentOptions: (window.EXPERIMENT_OPTIONS || []),
     submitting: false,
+    redirectingAfterSubmit: false,
   },
   mounted() {
     // grading_form.js と同様にフォント/CMAPを指定して文字化けを防ぐ
@@ -29,7 +30,7 @@ new Vue({
   },
   methods: {
     preventUnloadWhileSubmitting(e) {
-      if (!this.submitting) return;
+      if (!this.submitting || this.redirectingAfterSubmit) return;
       e.preventDefault();
       e.returnValue = '';
     },
@@ -126,7 +127,9 @@ new Vue({
       }).then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
-            window.location.href = data.redirect_url;
+            this.redirectingAfterSubmit = true;
+            window.removeEventListener('beforeunload', this.preventUnloadWhileSubmitting);
+            window.location.replace(data.redirect_url);
           } else {
             alert(data.message || '提出に失敗しました');
           }
@@ -135,7 +138,9 @@ new Vue({
           alert('提出に失敗しました');
         })
         .finally(() => {
-          this.submitting = false;
+          if (!this.redirectingAfterSubmit) {
+            this.submitting = false;
+          }
         });
     }
   }

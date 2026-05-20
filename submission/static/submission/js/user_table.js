@@ -23,6 +23,7 @@ new Vue({
         showModal: false,
         showEditModal: false,
         showTemplateGuideModal: false,
+        creatingUser: false,
         filters: { role: '', group: '' },
         sortField: '',
         sortAsc: true,
@@ -320,6 +321,7 @@ new Vue({
             });
         },
         createUser() {
+            if (this.creatingUser) return;
             this.resolveBulkOffering();
             if (!this.bulkOfferingId) {
                 alert("科目と年度を選択してください");
@@ -332,6 +334,7 @@ new Vue({
                 alert("パスワードが一致しません");
                 return;
             }
+            this.creatingUser = true;
             fetch('/users/create/', {
                 method: 'POST',
                 headers: {
@@ -351,15 +354,18 @@ new Vue({
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert("ユーザーを作成しました");
+                    this.showModal = false;
                     this.saveSelection();
                     location.reload(); // 一覧更新
                 } else {
                     alert("作成失敗: " + data.message);
+                    this.creatingUser = false;
                 }
             })
             .catch(err => {
                 console.error("通信エラー", err);
+                alert("通信エラーが発生しました");
+                this.creatingUser = false;
             });
         },
         triggerFileInput() {

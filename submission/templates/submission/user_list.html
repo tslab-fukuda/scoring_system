@@ -141,8 +141,10 @@
                     </select>
                 </div>
                 <div class="ts-modal-actions mt-3">
-                    <button type="submit" class="ts-create-btn">登録</button>
-                    <button type="button" class="ts-cancel-btn" @click="showModal = false">キャンセル</button>
+                    <button type="submit" class="ts-create-btn" :disabled="$data.creatingUser || false">
+                        {{ ($data.creatingUser || false) ? '登録中...' : '登録' }}
+                    </button>
+                    <button type="button" class="ts-cancel-btn" :disabled="$data.creatingUser || false" @click="showModal = false">キャンセル</button>
                 </div>
             </form>
         </div>
