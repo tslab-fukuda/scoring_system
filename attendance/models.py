@@ -143,6 +143,7 @@ class ExperimentHelpTicket(models.Model):
         related_name='experiment_help_tickets'
     )
     experiment_group = models.CharField(max_length=16)
+    experiment_day = models.CharField(max_length=2, blank=True, default='')
     experiment_number = models.CharField(max_length=32)
     request_type = models.CharField(max_length=16, choices=REQUEST_TYPE_CHOICES)
     message = models.TextField()
@@ -172,5 +173,6 @@ class ExperimentHelpTicket(models.Model):
     def __str__(self):
         return (
             f"{self.student.username} - {self.course_offering_id} - "
-            f"{self.experiment_group} - {self.experiment_number} - {self.status}"
+            f"{self.experiment_day} - {self.experiment_group} - "
+            f"{self.experiment_number} - {self.status}"
         )

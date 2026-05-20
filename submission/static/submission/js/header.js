@@ -44,6 +44,7 @@ new Vue({
         helpTicketError: '',
         helpTicketContext: {
             offering: null,
+            experiment_day: '',
             experiment_group: '',
             experiment_numbers: [],
             active_group_ticket: null,
@@ -226,7 +227,8 @@ new Vue({
                 return item.offering ? item.offering.label : '';
             }
             if (item.kind === 'experiment_help') {
-                return `${item.experiment_group}班 / ${item.experiment_number}`;
+                const day = item.experiment_day ? `${item.experiment_day}曜 / ` : '';
+                return `${day}${item.experiment_group}班 / ${item.experiment_number}`;
             }
             return '';
         },
@@ -453,6 +455,7 @@ new Vue({
                     }
                     this.helpTicketContext = {
                         offering: data.offering || null,
+                        experiment_day: data.experiment_day || '',
                         experiment_group: data.experiment_group || '',
                         experiment_numbers: data.experiment_numbers || [],
                         active_group_ticket: data.active_group_ticket || null,
@@ -464,6 +467,7 @@ new Vue({
                     this.helpTicketError = err.message || '依頼情報の取得に失敗しました';
                     this.helpTicketContext = {
                         offering: null,
+                        experiment_day: '',
                         experiment_group: '',
                         experiment_numbers: [],
                         active_group_ticket: null,

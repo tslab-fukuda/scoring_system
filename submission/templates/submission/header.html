@@ -170,6 +170,7 @@
             <template v-else-if="selectedNotification.kind === 'experiment_help'">
               <div><strong>科目/年度:</strong> [[ selectedNotification.offering.label ]]</div>
               <div v-if="canManageHelpItem(selectedNotification)"><strong>学生:</strong> [[ selectedNotification.student_name ]]（[[ selectedNotification.student_id || '-' ]]）</div>
+              <div><strong>実験曜日:</strong> [[ selectedNotification.experiment_day || '-' ]]</div>
               <div><strong>実験班番号:</strong> [[ selectedNotification.experiment_group ]]</div>
               <div><strong>実験番号:</strong> [[ selectedNotification.experiment_number ]]</div>
               <div><strong>依頼時刻:</strong> [[ selectedNotification.created_at ]]</div>
@@ -293,10 +294,12 @@
             <template v-if="helpTicketContext.offering">
               <div class="forget-request-summary">
                 <div><strong>科目/年度:</strong> [[ helpTicketContext.offering.label ]]</div>
+                <div><strong>実験曜日:</strong> [[ helpTicketContext.experiment_day || '-' ]]</div>
                 <div><strong>実験班番号:</strong> [[ helpTicketContext.experiment_group || '-' ]]</div>
               </div>
               <div v-if="helpTicketContext.active_group_ticket" class="alert alert-warning py-2">
                 この実験班では未対応の依頼があります。
+                [[ helpTicketContext.active_group_ticket.experiment_day || '-' ]]曜 /
                 [[ helpTicketContext.active_group_ticket.experiment_group ]]班 / [[ helpTicketContext.active_group_ticket.experiment_number ]] /
                 [[ helpTicketContext.active_group_ticket.status_label ]]
               </div>
@@ -326,7 +329,7 @@
               <div v-if="helpTicketContext.recent_tickets.length" class="forget-request-existing mt-3">
                 <div class="forget-request-existing-title">最近の依頼</div>
                 <div v-for="item in helpTicketContext.recent_tickets" :key="'recent-help-' + item.id" class="forget-request-existing-item">
-                  [[ item.experiment_group ]]班 / [[ item.experiment_number ]] / [[ item.status_label ]] / [[ item.created_at ]]
+                  [[ item.experiment_day || '-' ]]曜 / [[ item.experiment_group ]]班 / [[ item.experiment_number ]] / [[ item.status_label ]] / [[ item.created_at ]]
                 </div>
               </div>
             </template>

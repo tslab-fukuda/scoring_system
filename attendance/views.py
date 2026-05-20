@@ -504,6 +504,7 @@ def _help_ticket_core_fields(ticket):
         'request_type_label': ticket.get_request_type_display(),
         'status': ticket.status,
         'status_label': ticket.get_status_display(),
+        'experiment_day': ticket.experiment_day,
         'experiment_group': ticket.experiment_group,
         'experiment_number': ticket.experiment_number,
         'message': ticket.message,
@@ -537,6 +538,7 @@ def _serialize_help_ticket_student_notification(ticket):
         'request_type_label': ticket.get_request_type_display(),
         'status': ticket.status,
         'status_label': ticket.get_status_display(),
+        'experiment_day': ticket.experiment_day,
         'experiment_group': ticket.experiment_group,
         'experiment_number': ticket.experiment_number,
         'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
@@ -553,6 +555,7 @@ def _serialize_help_ticket_manager_notification(ticket):
         'request_type_label': ticket.get_request_type_display(),
         'status': ticket.status,
         'status_label': ticket.get_status_display(),
+        'experiment_day': ticket.experiment_day,
         'experiment_group': ticket.experiment_group,
         'experiment_number': ticket.experiment_number,
         'created_at': timezone.localtime(ticket.created_at).strftime('%Y-%m-%d %H:%M'),
@@ -596,6 +599,7 @@ def _serialize_help_ticket_detail(ticket, actual_role):
 def _serialize_help_ticket_student_context_item(ticket):
     return {
         'id': ticket.id,
+        'experiment_day': ticket.experiment_day,
         'experiment_group': ticket.experiment_group,
         'experiment_number': ticket.experiment_number,
         'status': ticket.status,
@@ -1039,10 +1043,12 @@ def help_ticket_context(request):
         return JsonResponse({'status': 'error', 'message': '対象の科目/年度がありません'}, status=400)
 
     course_offering = enrollment.course_offering
+    experiment_day = (enrollment.experiment_day or '').strip()
     experiment_group = (enrollment.experiment_group or '').strip()
     unresolved_ticket = (
         ExperimentHelpTicket.objects.filter(
             course_offering=course_offering,
+            experiment_day=experiment_day,
             experiment_group=experiment_group,
             status__in=['pending', 'in_progress'],
         )
@@ -1058,6 +1064,7 @@ def help_ticket_context(request):
     return JsonResponse({
         'status': 'ok',
         'offering': _serialize_offering(course_offering),
+        'experiment_day': experiment_day,
         'experiment_group': experiment_group,
         'experiment_numbers': course_offering.course.experiment_numbers or [],
         'active_group_ticket': _serialize_help_ticket_student_context_item(unresolved_ticket) if unresolved_ticket else None,
@@ -1205,14 +1212,6 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
     resolution_experiment_counts = defaultdict(Counter)
     response_minutes = []
     session_counts = Counter()
-    enrollment_map = {
-        enrollment.user_id: (enrollment.experiment_day or '').strip()
-        for enrollment in Enrollment.objects.filter(
-            course_offering=selected_offering,
-            role='student',
-            user_id__in=[ticket.student_id for ticket in tickets],
-        )
-    }
 
     for ticket in tickets:
         created_local = timezone.localtime(ticket.created_at, JST)
@@ -1223,7 +1222,7 @@ def _build_help_ticket_analytics_payload(ticket_qs, selected_offering, date_from
             bucket_index = (created_minutes - min_minutes) // CLASS_ANALYTICS_BUCKET_MINUTES
             time_bucket_counts[bucket_index] += 1
         if ticket.experiment_group:
-            weekday_label = enrollment_map.get(ticket.student_id) or _weekday_label_from_date(created_local.date())
+            weekday_label = (ticket.experiment_day or '').strip() or _weekday_label_from_date(created_local.date())
             group_weekday_counts[weekday_label][ticket.experiment_group] += 1
         category_key = _resolution_category_key(ticket)
         resolution_experiment_counts[category_key][ticket.experiment_number or '未設定'] += 1
@@ -1565,12 +1564,16 @@ def create_help_ticket(request):
         return JsonResponse({'status': 'error', 'message': '実験番号が不正です'}, status=400)
 
     experiment_group = (enrollment.experiment_group or '').strip()
+    experiment_day = (enrollment.experiment_day or '').strip()
     if not experiment_group:
         return JsonResponse({'status': 'error', 'message': '実験班情報が見つかりません'}, status=400)
+    if not experiment_day:
+        return JsonResponse({'status': 'error', 'message': '実験曜日情報が見つかりません'}, status=400)
 
     with transaction.atomic():
         unresolved_qs = ExperimentHelpTicket.objects.filter(
             course_offering=course_offering,
+            experiment_day=experiment_day,
             experiment_group=experiment_group,
             status__in=['pending', 'in_progress'],
         )
@@ -1580,6 +1583,7 @@ def create_help_ticket(request):
         ticket = ExperimentHelpTicket.objects.create(
             student=request.user,
             course_offering=course_offering,
+            experiment_day=experiment_day,
             experiment_group=experiment_group,
             experiment_number=experiment_number,
             request_type=request_type,
@@ -1690,8 +1694,9 @@ def notification_list(request):
         )
         help_qs = ExperimentHelpTicket.objects.filter(
             student=request.user,
-            updated_at__gte=today_start,
-            updated_at__lt=tomorrow_start,
+        ).filter(
+            Q(status__in=['pending', 'in_progress'])
+            | Q(status='resolved', updated_at__gte=today_start, updated_at__lt=tomorrow_start)
         )
         response['unread_count'] = (
             forget_qs.filter(student_read_at__isnull=True).count()
@@ -1728,31 +1733,19 @@ def notification_list(request):
         if manageable_help_ids is not None:
             help_qs = help_qs.filter(course_offering_id__in=manageable_help_ids)
         help_qs = help_qs.filter(
-            updated_at__gte=today_start,
-            updated_at__lt=tomorrow_start,
+            Q(status__in=['pending', 'in_progress'])
+            | Q(status='resolved', updated_at__gte=today_start, updated_at__lt=tomorrow_start)
         )
-        if actual_role == 'teacher':
-            help_qs = help_qs.filter(status__in=['pending', 'in_progress'])
-            unread_count += help_qs.count()
-            if include_list:
-                notifications.extend(
-                    _serialize_help_ticket_notification(item, actual_role)
-                    for item in help_qs.select_related(
-                        'student__userprofile',
-                        'course_offering__course',
-                    ).order_by('-created_at')[:list_limit]
-                )
-        else:
-            unresolved_help_count = help_qs.filter(status__in=['pending', 'in_progress']).count()
-            unread_count += unresolved_help_count
-            if include_list:
-                notifications.extend(
-                    _serialize_help_ticket_notification(item, actual_role)
-                    for item in help_qs.select_related(
-                        'student__userprofile',
-                        'course_offering__course',
-                    ).order_by('-updated_at', '-created_at')[:list_limit]
-                )
+        unresolved_help_count = help_qs.filter(status__in=['pending', 'in_progress']).count()
+        unread_count += unresolved_help_count
+        if include_list:
+            notifications.extend(
+                _serialize_help_ticket_notification(item, actual_role)
+                for item in help_qs.select_related(
+                    'student__userprofile',
+                    'course_offering__course',
+                ).order_by('-updated_at', '-created_at')[:list_limit]
+            )
 
     if _can_manage_forget_requests(request.user):
         notifications_qs = AttendanceForgetRequest.objects.filter(status='pending')
