@@ -3,6 +3,60 @@
     box-shadow: 0 2px 8px #eee4;
 }
 
+.submit-busy {
+    pointer-events: none;
+    opacity: 0.72;
+}
+
+.submit-processing-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.submit-processing-panel {
+    width: min(360px, 100%);
+    padding: 28px 24px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background: #202020;
+    color: #fff;
+    text-align: center;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.38);
+}
+
+.submit-processing-spinner {
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 16px;
+    border: 4px solid rgba(255, 255, 255, 0.28);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: submit-spin 0.8s linear infinite;
+}
+
+.submit-processing-title {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.submit-processing-text {
+    color: #e5e5e5;
+    font-size: 0.95rem;
+}
+
+@keyframes submit-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .pdf-preview-area {
     background: #f7f7f8;
     border: 1.5px solid #d3d3d8;

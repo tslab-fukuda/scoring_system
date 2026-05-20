@@ -22,8 +22,17 @@ new Vue({
       "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
     this.cmapUrl = CMAP_URL;
     this.standardFontUrl = STANDARD_FONT_URL;
+    window.addEventListener('beforeunload', this.preventUnloadWhileSubmitting);
+  },
+  beforeDestroy() {
+    window.removeEventListener('beforeunload', this.preventUnloadWhileSubmitting);
   },
   methods: {
+    preventUnloadWhileSubmitting(e) {
+      if (!this.submitting) return;
+      e.preventDefault();
+      e.returnValue = '';
+    },
     onFileChange(e) {
       const file = e.target.files[0];
       if (file && file.type === "application/pdf") {

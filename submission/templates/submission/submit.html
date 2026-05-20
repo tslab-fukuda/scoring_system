@@ -7,15 +7,22 @@
 
 {% block content %}
 <div id="vue-submit-app" class="container py-4">
+  <div v-if="submitting" class="submit-processing-overlay" role="alert" aria-live="assertive">
+    <div class="submit-processing-panel">
+      <div class="submit-processing-spinner" aria-hidden="true"></div>
+      <div class="submit-processing-title">提出処理中...</div>
+      <div class="submit-processing-text">画面を閉じずにお待ちください。</div>
+    </div>
+  </div>
   <div class="row justify-content-center">
     <div class="col-md-7">
-      <div class="submit-form-box border rounded-3 p-4 mb-4 bg-white">
+      <div class="submit-form-box border rounded-3 p-4 mb-4 bg-white" :class="{ 'submit-busy': submitting }">
         <h4 class="mb-3">課題提出フォーム</h4>
         <form @submit.prevent class="mb-3">
           {% csrf_token %}
           <div class="mb-3">
             <label for="id_report_type">レポート種別</label>
-            <select v-model="reportType" id="report_type" name="report_type" class="form-control" required>
+            <select v-model="reportType" id="report_type" name="report_type" class="form-control" required :disabled="submitting">
               <option value="">選択してください</option>
               <option value="main">本レポート</option>
               <option value="prep">予習レポート</option>
@@ -24,7 +31,7 @@
           <div class="mb-3">
             <label for="id_experiment_number">実験番号</label>
             {% verbatim %}
-            <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required>
+            <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required :disabled="submitting">
               <option value="">選択してください</option>
               <option v-for="exp in experimentOptions" :value="exp">{{ exp }}</option>
             </select>
@@ -33,14 +40,14 @@
           <div class="mb-3">
             <label for="file" class="form-label">PDFファイル選択</label>
             <input id="file" name="file" type="file" accept="application/pdf" class="form-control"
-                   @change="onFileChange">
+                   @change="onFileChange" :disabled="submitting">
           </div>
           <input type="hidden" name="date" value="{{ date }}">
           <input type="hidden" name="offering_id" value="{{ offering_id }}">
         </form>
       </div>
 
-      <div v-if="pdfUrl" class="pdf-preview-area border rounded-3 p-3 bg-light">
+      <div v-if="pdfUrl" class="pdf-preview-area border rounded-3 p-3 bg-light" :class="{ 'submit-busy': submitting }">
         <div class="mb-2 fw-semibold">PDFプレビュー</div>
         <div id="pdf-preview-container" class="pdf-preview-scroll mb-2"></div>
         <button type="button" class="btn btn-success w-100 mt-2"
