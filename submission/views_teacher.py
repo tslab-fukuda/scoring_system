@@ -8,7 +8,6 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import time, timedelta, date as dt_date
 from zoneinfo import ZoneInfo
-from collections import Counter
 
 from submission.decorators import role_required
 from submission.roles import get_effective_role
@@ -308,6 +307,38 @@ def _sum_score_details(submissions):
     return [totals[k] for k in order]
 
 
+def _build_submission_sequence_map(submissions):
+    sequence_map = {}
+    current_key = None
+    current_index = 0
+    ordered_submissions = submissions.order_by(
+        'student_id',
+        'course_offering_id',
+        'experiment_number',
+        'submitted_at',
+        'id',
+    )
+    for submission in ordered_submissions.only(
+        'id',
+        'student_id',
+        'course_offering_id',
+        'experiment_number',
+        'submitted_at',
+    ):
+        key = (
+            submission.student_id,
+            submission.course_offering_id,
+            submission.experiment_number,
+        )
+        if key != current_key:
+            current_key = key
+            current_index = 1
+        else:
+            current_index += 1
+        sequence_map[submission.id] = current_index
+    return sequence_map
+
+
 def _local_now():
     return timezone.localtime(timezone.now(), JST)
 
@@ -473,7 +504,7 @@ def get_ungraded_main_reports(request):
             Q(course_offering_id=offering_id) |
             Q(course_offering__isnull=True, student__enrollment__course_offering_id=offering_id, student__enrollment__role='student')
         ).distinct()
-    submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
+    submission_sequence_map = _build_submission_sequence_map(all_main)
     result = []
     for items in qs:
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
@@ -491,7 +522,7 @@ def get_ungraded_main_reports(request):
                 if items.score_details else '0'
             ),
             'score_details': items.score_details if items.score_details else '',
-            'submission_count': submit_count_map[(items.student_id, items.experiment_number)],
+            'submission_count': submission_sequence_map.get(items.id, ''),
         })
     return JsonResponse(result, safe=False)
 

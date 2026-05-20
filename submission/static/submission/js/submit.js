@@ -12,6 +12,7 @@ new Vue({
     cmapUrl: "",
     standardFontUrl: "",
     experimentOptions: (window.EXPERIMENT_OPTIONS || []),
+    submitting: false,
   },
   mounted() {
     // grading_form.js と同様にフォント/CMAPを指定して文字化けを防ぐ
@@ -95,6 +96,7 @@ new Vue({
       this.scrollAtEnd = isAtEnd;
     },
     onConfirm() {
+      if (this.submitting) return;
       // DB登録
       if (!this.formData) {
         alert("PDFファイルを選択してください。");
@@ -102,9 +104,7 @@ new Vue({
       }
       this.formData.set('report_type', this.reportType);
       this.formData.set('experiment_number', this.experimentNumber);
-      for (let pair of this.formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
-      }
+      this.submitting = true;
       const submitUrl = window.location.pathname + window.location.search;
       fetch(submitUrl, {
         method: "POST",
@@ -121,6 +121,12 @@ new Vue({
           } else {
             alert(data.message || '提出に失敗しました');
           }
+        })
+        .catch(() => {
+          alert('提出に失敗しました');
+        })
+        .finally(() => {
+          this.submitting = false;
         });
     }
   }

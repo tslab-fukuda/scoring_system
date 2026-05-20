@@ -44,9 +44,9 @@
         <div class="mb-2 fw-semibold">PDFプレビュー</div>
         <div id="pdf-preview-container" class="pdf-preview-scroll mb-2"></div>
         <button type="button" class="btn btn-success w-100 mt-2"
-                :disabled="!scrollAtEnd"
+                :disabled="!scrollAtEnd || submitting"
                 @click="onConfirm">
-          提出確定
+          {% verbatim %}{{ submitting ? '提出中...' : '提出確定' }}{% endverbatim %}
         </button>
         <div v-if="!scrollAtEnd" class="text-secondary small text-center mt-1">
           PDFを最後まで表示すると提出確定できます

@@ -215,6 +215,38 @@ def _sum_score_details(submissions):
     return [totals[k] for k in order]
 
 
+def _build_submission_sequence_map(submissions):
+    sequence_map = {}
+    current_key = None
+    current_index = 0
+    ordered_submissions = submissions.order_by(
+        'student_id',
+        'course_offering_id',
+        'experiment_number',
+        'submitted_at',
+        'id',
+    )
+    for submission in ordered_submissions.only(
+        'id',
+        'student_id',
+        'course_offering_id',
+        'experiment_number',
+        'submitted_at',
+    ):
+        key = (
+            submission.student_id,
+            submission.course_offering_id,
+            submission.experiment_number,
+        )
+        if key != current_key:
+            current_key = key
+            current_index = 1
+        else:
+            current_index += 1
+        sequence_map[submission.id] = current_index
+    return sequence_map
+
+
 def _aggregate_score_details(student_id, experiment_number, offering_id=None):
     qs = Submission.objects.filter(
         student_id=student_id,
@@ -1956,11 +1988,11 @@ def admin_get_submissions_api(request):
         qs = qs.filter(experiment_number=exp_no)
     qs = qs.order_by('-submitted_at')
     
-    # 各実験ごとのstudent+experiment_numberで「本レポートの提出回数」を算出
+    # 各実験ごとの student/course_offering/experiment_number 内での提出順を算出
     all_main = Submission.objects.filter(report_type='main')
     if offering_id:
         all_main = all_main.filter(course_offering_id=offering_id)
-    submit_count_map = Counter((sub.student_id, sub.experiment_number) for sub in all_main)
+    submission_sequence_map = _build_submission_sequence_map(all_main)
     
     detail_cache = {}
     submissions = []
@@ -1973,7 +2005,7 @@ def admin_get_submissions_api(request):
                 sub.student_id, sub.experiment_number, detail_offering_id
             )
         details = detail_cache[cache_key]
-        submit_count = submit_count_map[(sub.student_id, sub.experiment_number)]  # 本レポート提出回数
+        submit_count = submission_sequence_map.get(sub.id, '')  # 本レポート提出順
         submissions.append({
             'id': sub.id,
             'experiment_day': student_context['experiment_day'],
