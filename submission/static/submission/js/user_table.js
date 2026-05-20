@@ -1,3 +1,19 @@
+const parseJsonScript = (id, fallback) => {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    try {
+        return JSON.parse(el.textContent);
+    } catch (e) {
+        console.error(`failed to parse ${id}`, e);
+        return fallback;
+    }
+};
+
+const USERS_DATA = parseJsonScript('users-data', []);
+const PROFILE_MISSING_USERS_DATA = parseJsonScript('profile-missing-users-data', []);
+const OFFERINGS = parseJsonScript('offerings-data', []);
+const CSRF_TOKEN = parseJsonScript('csrf-token', '');
+
 new Vue({
     el: '#user-table',
     data: {

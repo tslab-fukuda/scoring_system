@@ -141,10 +141,11 @@
                     </select>
                 </div>
                 <div class="ts-modal-actions mt-3">
-                    <button type="submit" class="ts-create-btn" :disabled="$data.creatingUser || false">
-                        {{ ($data.creatingUser || false) ? '登録中...' : '登録' }}
+                    <button type="submit" class="ts-create-btn" v-bind:disabled="creatingUser">
+                        <span v-if="creatingUser">登録中...</span>
+                        <span v-else>登録</span>
                     </button>
-                    <button type="button" class="ts-cancel-btn" :disabled="$data.creatingUser || false" @click="showModal = false">キャンセル</button>
+                    <button type="button" class="ts-cancel-btn" v-bind:disabled="creatingUser" v-on:click="showModal = false">キャンセル</button>
                 </div>
             </form>
         </div>
@@ -314,12 +315,10 @@
     </div>
     {% endverbatim %}
 </div>
-<script>
-    var USERS_DATA = {{ users_json|safe }};
-    var PROFILE_MISSING_USERS_DATA = {{ profile_missing_users_json|safe }};
-    var CSRF_TOKEN = '{{ csrf_token }}';
-    var OFFERINGS = {{ offerings_json|safe }};
-</script>
+{{ csrf_token_json|json_script:"csrf-token" }}
+{{ users_json|json_script:"users-data" }}
+{{ profile_missing_users_json|json_script:"profile-missing-users-data" }}
+{{ offerings_json|json_script:"offerings-data" }}
 <!-- Vueと自作JSの読み込み -->
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/user_table.js' %}"></script>

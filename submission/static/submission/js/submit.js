@@ -1,3 +1,13 @@
+const experimentOptionsEl = document.getElementById('experiment-options-data');
+let experimentOptions = [];
+if (experimentOptionsEl) {
+  try {
+    experimentOptions = JSON.parse(experimentOptionsEl.textContent);
+  } catch (e) {
+    console.error('failed to parse experiment options', e);
+  }
+}
+
 new Vue({
   el: '#vue-submit-app',
   data: {
@@ -11,7 +21,7 @@ new Vue({
     experimentNumber: "",  // ← 追加
     cmapUrl: "",
     standardFontUrl: "",
-    experimentOptions: (window.EXPERIMENT_OPTIONS || []),
+    experimentOptions: experimentOptions,
     submitting: false,
     redirectingAfterSubmit: false,
   },

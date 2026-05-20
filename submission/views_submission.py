@@ -6,7 +6,6 @@ from .models import Submission, Enrollment
 from django.http import JsonResponse 
 from django.utils import timezone
 from django.db import transaction
-import json
 
 from submission.enrollment_utils import get_student_context
 
@@ -88,7 +87,7 @@ def submit_assignment(request):
             'date': date,
             'experiment_group': experiment_group,
             'offering_id': offering_id or "",
-            'experiment_options_json': json.dumps(experiment_options, ensure_ascii=False),
+            'experiment_options': experiment_options,
         })
 
 @login_required

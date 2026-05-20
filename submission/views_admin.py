@@ -39,6 +39,7 @@ from submission.enrollment_utils import (
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.db import transaction
+from django.middleware.csrf import get_token
 from collections import Counter, defaultdict
 from django.contrib.auth.models import Group, Permission, User
 from django.utils import timezone
@@ -3680,9 +3681,10 @@ def user_list_view(request):
                 })
 
     context = {
-        'users_json': json.dumps(user_data, ensure_ascii=False),
-        'profile_missing_users_json': json.dumps(profile_missing_user_data, ensure_ascii=False),
-        'offerings_json': json.dumps(offerings_data, ensure_ascii=False),
+        'csrf_token_json': get_token(request),
+        'users_json': user_data,
+        'profile_missing_users_json': profile_missing_user_data,
+        'offerings_json': offerings_data,
     }
 
     return render(request, 'submission/user_list.html', context)

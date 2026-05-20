@@ -16,13 +16,13 @@
   </div>
   <div class="row justify-content-center">
     <div class="col-md-7">
-      <div class="submit-form-box border rounded-3 p-4 mb-4 bg-white" :class="{ 'submit-busy': submitting }">
+      <div class="submit-form-box border rounded-3 p-4 mb-4 bg-white" v-bind:class="{ 'submit-busy': submitting }">
         <h4 class="mb-3">課題提出フォーム</h4>
         <form @submit.prevent class="mb-3">
           {% csrf_token %}
           <div class="mb-3">
             <label for="id_report_type">レポート種別</label>
-            <select v-model="reportType" id="report_type" name="report_type" class="form-control" required :disabled="submitting">
+            <select v-model="reportType" id="report_type" name="report_type" class="form-control" required v-bind:disabled="submitting">
               <option value="">選択してください</option>
               <option value="main">本レポート</option>
               <option value="prep">予習レポート</option>
@@ -31,7 +31,7 @@
           <div class="mb-3">
             <label for="id_experiment_number">実験番号</label>
             {% verbatim %}
-            <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required :disabled="submitting">
+            <select v-model="experimentNumber" id="experiment_number" name="experiment_number" class="form-control" required v-bind:disabled="submitting">
               <option value="">選択してください</option>
               <option v-for="exp in experimentOptions" :value="exp">{{ exp }}</option>
             </select>
@@ -40,20 +40,21 @@
           <div class="mb-3">
             <label for="file" class="form-label">PDFファイル選択</label>
             <input id="file" name="file" type="file" accept="application/pdf" class="form-control"
-                   @change="onFileChange" :disabled="submitting">
+                   v-on:change="onFileChange" v-bind:disabled="submitting">
           </div>
           <input type="hidden" name="date" value="{{ date }}">
           <input type="hidden" name="offering_id" value="{{ offering_id }}">
         </form>
       </div>
 
-      <div v-if="pdfUrl" class="pdf-preview-area border rounded-3 p-3 bg-light" :class="{ 'submit-busy': submitting }">
+      <div v-if="pdfUrl" class="pdf-preview-area border rounded-3 p-3 bg-light" v-bind:class="{ 'submit-busy': submitting }">
         <div class="mb-2 fw-semibold">PDFプレビュー</div>
         <div id="pdf-preview-container" class="pdf-preview-scroll mb-2"></div>
         <button type="button" class="btn btn-success w-100 mt-2"
-                :disabled="!scrollAtEnd || submitting"
-                @click="onConfirm">
-          {% verbatim %}{{ submitting ? '提出中...' : '提出確定' }}{% endverbatim %}
+                v-bind:disabled="!scrollAtEnd || submitting"
+                v-on:click="onConfirm">
+          <span v-if="submitting">提出中...</span>
+          <span v-else>提出確定</span>
         </button>
         <div v-if="!scrollAtEnd" class="text-secondary small text-center mt-1">
           PDFを最後まで表示すると提出確定できます
@@ -64,10 +65,7 @@
 </div>
 
 <!-- PDF.js CDN -->
-<script>
-  window.csrfToken = '{{ csrf_token }}';
-  window.EXPERIMENT_OPTIONS = {{ experiment_options_json|safe }};
-</script>
+{{ experiment_options|json_script:"experiment-options-data" }}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/submit.js' %}"></script>
