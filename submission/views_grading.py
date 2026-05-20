@@ -24,7 +24,6 @@ from datetime import timedelta
 import os
 import io
 import json
-import base64
 import tempfile
 import fitz  # PyMuPDF
 import re
@@ -223,9 +222,8 @@ def _draw_pdf_text(page, stroke, meta):
 
 def _apply_vector_annotations(doc, annotation_pages):
     if not isinstance(annotation_pages, list):
-        return False
+        raise ValueError('drawData must be a list')
 
-    applied = False
     for page_no, page_payload in enumerate(annotation_pages):
         if page_no >= doc.page_count or not isinstance(page_payload, dict):
             continue
@@ -241,31 +239,10 @@ def _apply_vector_annotations(doc, annotation_pages):
             tool = stroke.get('tool')
             if tool == 'stamp':
                 _draw_pdf_stamp(page, stroke, meta)
-                applied = True
             elif tool == 'text':
                 _draw_pdf_text(page, stroke, meta)
-                applied = True
             elif tool in ('pen', 'highlight'):
                 _draw_pdf_polyline(page, stroke, meta)
-                applied = True
-    return applied
-
-
-def _apply_raster_annotations(doc, images):
-    if not isinstance(images, list):
-        return
-    for page_no, img_data in enumerate(images):
-        if page_no >= doc.page_count or not img_data:
-            continue
-        page = doc[page_no]
-        header, encoded = img_data.split(",", 1)
-        hand_img_bytes = base64.b64decode(encoded)
-        img_doc = fitz.open("png", hand_img_bytes)
-        try:
-            pix = img_doc[0].get_pixmap(alpha=True)
-            page.insert_image(page.rect, pixmap=pix, overlay=True)
-        finally:
-            img_doc.close()
 
 
 def _get_rubric_accessible_offerings(user):
@@ -508,17 +485,13 @@ def grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
     if request.method == 'POST':
         data = json.loads(request.body)
-        images = data.get('drawImages')
         draw_data = data.get('drawData')
         old_file_name = submission.file.name
         pdf_path = submission.file.path
 
         # PyMuPDFでPDF編集
         doc = fitz.open(pdf_path)
-        annotations_applied = _apply_vector_annotations(doc, draw_data)
-        if not annotations_applied:
-            # 旧形式のリクエストや想定外の payload に備え、従来のPNG貼り付けをフォールバックとして残す。
-            _apply_raster_annotations(doc, images)
+        _apply_vector_annotations(doc, draw_data)
 
         tmp_path = None
         saved_name = None

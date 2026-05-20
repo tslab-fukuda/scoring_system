@@ -577,28 +577,6 @@ new Vue({
             });
             ctx.restore();
         },
-        exportCanvasDataUrl(idx) {
-            const canvas = this.$refs['drawCanvas' + idx]?.[0];
-            if (!canvas) return null;
-            const hasDraw = this.drawData[idx] && this.drawData[idx].length > 0;
-            if (!hasDraw) return null;
-            const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = canvas.width;
-            exportCanvas.height = canvas.height;
-            const exportCtx = exportCanvas.getContext('2d');
-            exportCtx.drawImage(canvas, 0, 0);
-            const meta = this.pageMeta[idx];
-            if (meta) {
-                const dpr = meta.dpr || 1;
-                exportCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                (this.drawData[idx] || []).forEach((stroke) => {
-                    if (stroke.tool === 'text' && (stroke.text || '').trim()) {
-                        this.drawTextAnnotation(exportCtx, idx, stroke);
-                    }
-                });
-            }
-            return exportCanvas.toDataURL();
-        },
         buildAnnotationPayload() {
             return this.pdfPages.map((_, idx) => ({
                 strokes: this.clonePageDrawData(idx),
@@ -1511,10 +1489,6 @@ new Vue({
             this.savingGrading = true;
             this.showScore = false;
             this.finalizeActiveTextEditor();
-            let images = [];
-            this.pdfPages.forEach((_, idx) => {
-                images.push(this.exportCanvasDataUrl(idx));
-            });
             const mergedScoreItems = this.scoreItems.concat(this.hiddenScoreItems);
             fetch(window.location.pathname, {
                 method: "POST",
@@ -1523,7 +1497,6 @@ new Vue({
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    drawImages: images,
                     drawData: this.buildAnnotationPayload(),
                     scoreItems: mergedScoreItems
                 })
