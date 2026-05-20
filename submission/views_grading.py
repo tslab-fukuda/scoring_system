@@ -52,6 +52,7 @@ from submission.final_rubric_utils import (
 
 RUBRIC_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 GRADING_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
+GRADING_PDF_FONT = 'japan'
 
 
 def _normalized_graded_stem(current_file_name, submission_id):
@@ -68,6 +69,203 @@ def _normalized_graded_stem(current_file_name, submission_id):
             break
         stem = new_stem
     return stem or f"submission_{submission_id}"
+
+
+def _clamp(value, minimum, maximum):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return minimum
+    return max(minimum, min(maximum, numeric))
+
+
+def _parse_pdf_color(value, fallback=(1, 0, 0), fallback_opacity=1):
+    if not value:
+        return fallback, fallback_opacity
+
+    color = str(value).strip()
+    if color.startswith('#') and len(color) == 7:
+        try:
+            return (
+                tuple(int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)),
+                fallback_opacity,
+            )
+        except ValueError:
+            return fallback, fallback_opacity
+
+    rgba_match = re.match(
+        r'rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)',
+        color,
+        re.IGNORECASE,
+    )
+    if rgba_match:
+        try:
+            red = _clamp(float(rgba_match.group(1)) / 255, 0, 1)
+            green = _clamp(float(rgba_match.group(2)) / 255, 0, 1)
+            blue = _clamp(float(rgba_match.group(3)) / 255, 0, 1)
+            opacity = _clamp(rgba_match.group(4), 0, 1) if rgba_match.group(4) is not None else fallback_opacity
+            return (red, green, blue), opacity
+        except ValueError:
+            return fallback, fallback_opacity
+
+    if color.lower() == 'red':
+        return (1, 0, 0), fallback_opacity
+
+    return fallback, fallback_opacity
+
+
+def _page_point(page, point):
+    rect = page.rect
+    x_ratio = _clamp((point or {}).get('xRatio'), 0, 1)
+    y_ratio = _clamp((point or {}).get('yRatio'), 0, 1)
+    return fitz.Point(rect.x0 + (rect.width * x_ratio), rect.y0 + (rect.height * y_ratio))
+
+
+def _css_to_pdf_width(page, css_value, meta, fallback=1):
+    css_width = _clamp((meta or {}).get('cssWidth'), 1, 100000)
+    css_numeric = _clamp(css_value, 0.1, 1000) if css_value is not None else fallback
+    return max(0.1, css_numeric * (page.rect.width / css_width))
+
+
+def _ratio_to_pdf_width(page, ratio, minimum=1):
+    return max(minimum, _clamp(ratio, 0, 10) * page.rect.width)
+
+
+def _draw_pdf_polyline(page, stroke, meta):
+    points = [_page_point(page, point) for point in stroke.get('points') or []]
+    if not points:
+        return
+
+    tool = stroke.get('tool')
+    fallback_opacity = 0.38 if tool == 'highlight' else 1
+    color, opacity = _parse_pdf_color(stroke.get('color'), fallback_opacity=fallback_opacity)
+    width = _css_to_pdf_width(page, stroke.get('width'), meta, fallback=10 if tool == 'highlight' else 2)
+    line_cap = 0 if tool == 'highlight' else 1
+
+    if len(points) == 1:
+        page.draw_circle(
+            points[0],
+            radius=max(width / 2, 0.4),
+            color=color,
+            fill=color,
+            width=0,
+            overlay=True,
+            stroke_opacity=opacity,
+            fill_opacity=opacity,
+        )
+        return
+
+    page.draw_polyline(
+        points,
+        color=color,
+        width=width,
+        lineCap=line_cap,
+        lineJoin=1,
+        overlay=True,
+        stroke_opacity=opacity,
+    )
+
+
+def _draw_pdf_stamp(page, stroke, meta):
+    text = str(stroke.get('text') or '')
+    if not text:
+        return
+
+    point = _page_point(page, stroke)
+    font_size = _css_to_pdf_width(page, 16, meta, fallback=16)
+    padding = _css_to_pdf_width(page, 4, meta, fallback=4)
+    text_width = fitz.get_text_length(text, fontname=GRADING_PDF_FONT, fontsize=font_size)
+    rect = fitz.Rect(
+        point.x - padding,
+        point.y - font_size - padding,
+        point.x + text_width + padding,
+        point.y + padding,
+    )
+    page.draw_rect(
+        rect,
+        color=(1, 0, 0),
+        width=max(_css_to_pdf_width(page, 1, meta, fallback=1), 0.2),
+        overlay=True,
+    )
+    page.insert_text(
+        point,
+        text,
+        fontsize=font_size,
+        fontname=GRADING_PDF_FONT,
+        color=(1, 0, 0),
+        overlay=True,
+    )
+
+
+def _draw_pdf_text(page, stroke, meta):
+    text = str(stroke.get('text') or '').replace('\r\n', '\n')
+    if not text.strip():
+        return
+
+    rect = page.rect
+    padding_x = _css_to_pdf_width(page, 4, meta, fallback=4)
+    padding_y = _css_to_pdf_width(page, 2, meta, fallback=2)
+    x = rect.x0 + (rect.width * _clamp(stroke.get('xRatio'), 0, 1)) + padding_x
+    y = rect.y0 + (rect.height * _clamp(stroke.get('yRatio'), 0, 1)) + padding_y
+    width = _ratio_to_pdf_width(page, stroke.get('widthRatio') or 0.28, minimum=40)
+    font_size = _ratio_to_pdf_width(page, stroke.get('fontSizeRatio') or 0.02, minimum=6)
+    text_rect = fitz.Rect(x, y, min(rect.x1, x + width - (padding_x * 2)), rect.y1)
+    page.insert_textbox(
+        text_rect,
+        text,
+        fontsize=font_size,
+        fontname=GRADING_PDF_FONT,
+        lineheight=1.35,
+        color=(1, 0, 0),
+        overlay=True,
+    )
+
+
+def _apply_vector_annotations(doc, annotation_pages):
+    if not isinstance(annotation_pages, list):
+        return False
+
+    applied = False
+    for page_no, page_payload in enumerate(annotation_pages):
+        if page_no >= doc.page_count or not isinstance(page_payload, dict):
+            continue
+        strokes = page_payload.get('strokes') or []
+        if not strokes:
+            continue
+
+        page = doc[page_no]
+        meta = page_payload.get('meta') or {}
+        for stroke in strokes:
+            if not isinstance(stroke, dict):
+                continue
+            tool = stroke.get('tool')
+            if tool == 'stamp':
+                _draw_pdf_stamp(page, stroke, meta)
+                applied = True
+            elif tool == 'text':
+                _draw_pdf_text(page, stroke, meta)
+                applied = True
+            elif tool in ('pen', 'highlight'):
+                _draw_pdf_polyline(page, stroke, meta)
+                applied = True
+    return applied
+
+
+def _apply_raster_annotations(doc, images):
+    if not isinstance(images, list):
+        return
+    for page_no, img_data in enumerate(images):
+        if page_no >= doc.page_count or not img_data:
+            continue
+        page = doc[page_no]
+        header, encoded = img_data.split(",", 1)
+        hand_img_bytes = base64.b64decode(encoded)
+        img_doc = fitz.open("png", hand_img_bytes)
+        try:
+            pix = img_doc[0].get_pixmap(alpha=True)
+            page.insert_image(page.rect, pixmap=pix, overlay=True)
+        finally:
+            img_doc.close()
 
 
 def _get_rubric_accessible_offerings(user):
@@ -311,22 +509,16 @@ def grading_form(request, submission_id):
     if request.method == 'POST':
         data = json.loads(request.body)
         images = data.get('drawImages')
+        draw_data = data.get('drawData')
         old_file_name = submission.file.name
         pdf_path = submission.file.path
 
         # PyMuPDFでPDF編集
         doc = fitz.open(pdf_path)
-        for page_no, img_data in enumerate(images):
-            if not img_data:
-                continue
-            page = doc[page_no]
-            header, encoded = img_data.split(",", 1)
-            hand_img_bytes = base64.b64decode(encoded)
-            # PNGのアルファを保持したまま挿入する
-            img_doc = fitz.open("png", hand_img_bytes)
-            pix = img_doc[0].get_pixmap(alpha=True)
-            page.insert_image(page.rect, pixmap=pix, overlay=True)
-            img_doc.close()
+        annotations_applied = _apply_vector_annotations(doc, draw_data)
+        if not annotations_applied:
+            # 旧形式のリクエストや想定外の payload に備え、従来のPNG貼り付けをフォールバックとして残す。
+            _apply_raster_annotations(doc, images)
 
         tmp_path = None
         saved_name = None

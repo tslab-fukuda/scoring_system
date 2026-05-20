@@ -599,6 +599,12 @@ new Vue({
             }
             return exportCanvas.toDataURL();
         },
+        buildAnnotationPayload() {
+            return this.pdfPages.map((_, idx) => ({
+                strokes: this.clonePageDrawData(idx),
+                meta: this.pageMeta[idx] || null,
+            }));
+        },
         clonePageDrawData(idx) {
             return (this.drawData[idx] || []).map(stroke => this.cloneStroke(stroke));
         },
@@ -1518,6 +1524,7 @@ new Vue({
                 },
                 body: JSON.stringify({
                     drawImages: images,
+                    drawData: this.buildAnnotationPayload(),
                     scoreItems: mergedScoreItems
                 })
             })
