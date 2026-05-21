@@ -53,10 +53,30 @@
           </div>
           <div class="stamp-actions">
             <button class="btn btn-sm btn-outline-primary" @click="addStampToCase(stamp)">ケースへ追加</button>
+            <button class="btn btn-sm btn-outline-secondary" @click="startEditStamp(stamp)">レイアウト編集</button>
             <button v-if="stamp.can_delete" class="btn btn-sm btn-outline-danger" @click="deleteStamp(stamp.id)">削除</button>
           </div>
         </div>
         <div v-if="filteredStamps.length === 0" class="text-muted small">該当するスタンプはありません。</div>
+      </div>
+    </section>
+
+    <section v-if="editingStamp" class="stamp-panel">
+      <h5>登録済みスタンプのレイアウト編集</h5>
+      <div class="small text-muted mb-2">元のスタンプ文字: {{ editingStamp.text }}</div>
+      <textarea
+        v-model="editingLayoutText"
+        class="stamp-layout-editor mb-2"
+        rows="4"
+      ></textarea>
+      <div class="stamp-preview mb-3">
+        <span v-text="editingLayoutText"></span>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" @click="saveStampLayout" :disabled="savingStampLayout">
+          {{ savingStampLayout ? '保存中...' : 'レイアウトを保存' }}
+        </button>
+        <button class="btn btn-outline-secondary" @click="cancelEditStamp">キャンセル</button>
       </div>
     </section>
 

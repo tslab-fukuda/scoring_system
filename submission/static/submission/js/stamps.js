@@ -25,6 +25,9 @@ new Vue({
     draggedStamp: null,
     statusMessage: '',
     statusLevel: 'success',
+    editingStamp: null,
+    editingLayoutText: '',
+    savingStampLayout: false,
   },
   computed: {
     filteredStamps() {
@@ -113,6 +116,62 @@ new Vue({
       if (!label) return;
       this.sections.push({ label, stamps: [] });
       this.newSectionLabel = '';
+    },
+    startEditStamp(stamp) {
+      this.editingStamp = stamp;
+      this.editingLayoutText = stamp.layout_text || stamp.text || '';
+      this.statusMessage = '';
+    },
+    cancelEditStamp() {
+      this.editingStamp = null;
+      this.editingLayoutText = '';
+    },
+    replaceStampEverywhere(updatedStamp) {
+      const replace = stamp => (stamp.id === updatedStamp.id ? { ...stamp, ...updatedStamp } : stamp);
+      this.stamps = this.stamps.map(replace);
+      this.sections.forEach(section => {
+        section.stamps = section.stamps.map(replace);
+      });
+    },
+    saveStampLayout() {
+      if (!this.editingStamp) return;
+      const layoutText = (this.editingLayoutText || '').trim();
+      if (!layoutText) return;
+      this.savingStampLayout = true;
+      this.statusMessage = '';
+      fetch(`/submission/update_stamp_api/${this.editingStamp.id}/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': this.csrfToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ layout_text: layoutText }),
+      })
+        .then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.message || `保存失敗 (${res.status})`);
+          }
+          return data;
+        })
+        .then(data => {
+          if (data.status === 'ok' && data.stamp) {
+            this.replaceStampEverywhere(data.stamp);
+            this.cancelEditStamp();
+            this.statusLevel = 'success';
+            this.statusMessage = 'スタンプレイアウトを更新しました。';
+          } else {
+            throw new Error(data.message || '保存失敗');
+          }
+        })
+        .catch(err => {
+          this.statusLevel = 'error';
+          this.statusMessage = err.message || '保存失敗';
+        })
+        .finally(() => {
+          this.savingStampLayout = false;
+        });
     },
     removeSection(index) {
       if (this.sections.length <= 1) return;

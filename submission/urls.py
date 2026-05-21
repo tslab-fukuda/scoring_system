@@ -75,6 +75,7 @@ urlpatterns = [
     path('scoring_items/', views_admin.scoring_items, name='scoring_items'),  # admin only
     path('stamps/', views_admin.stamps_view, name='stamp_list'),
     path('stamp_case_api/', views_admin.stamp_case_api, name='stamp_case_api'),
+    path('update_stamp_api/<int:stamp_id>/', views_admin.update_stamp_api, name='update_stamp_api'),
     path('delete_stamp_api/<int:stamp_id>/', views_admin.delete_stamp_api, name='delete_stamp_api'),
     path('accept_submission/', views_admin.accept_submission, name='accept_submission'),
     

@@ -3371,6 +3371,22 @@ def stamp_case_api(request):
 
 
 @role_required(*STAMP_MANAGE_ROLES)
+@require_POST
+def update_stamp_api(request, stamp_id):
+    data = json.loads(request.body)
+    layout_text = (data.get('layout_text') or '').strip()
+    if not layout_text:
+        return JsonResponse({'status': 'error', 'message': 'レイアウト文字を入力してください'}, status=400)
+    try:
+        stamp = Stamp.objects.select_related('created_by', 'created_by__userprofile').get(id=stamp_id, is_active=True)
+    except Stamp.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Stampが見つかりません'}, status=404)
+    stamp.layout_text = layout_text
+    stamp.save(update_fields=['layout_text', 'updated_at'])
+    return JsonResponse({'status': 'ok', 'stamp': _serialize_stamp(stamp, request.user)})
+
+
+@role_required(*STAMP_MANAGE_ROLES)
 def delete_stamp_api(request, stamp_id):
     if request.method == 'POST':
         try:
