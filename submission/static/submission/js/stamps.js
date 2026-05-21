@@ -45,6 +45,37 @@ new Vue({
     }
   },
   methods: {
+    resolvePreviewElement(refName) {
+      const ref = this.$refs[refName];
+      return Array.isArray(ref) ? ref[0] : ref;
+    },
+    normalizeLayoutForPreview(text, refName) {
+      const source = String(text || '').trim();
+      if (!source) return '';
+      const preview = this.resolvePreviewElement(refName);
+      if (!preview) return source;
+      const style = window.getComputedStyle(preview);
+      const horizontalPadding =
+        (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const width = Math.max(40, preview.clientWidth - horizontalPadding);
+      const probe = document.createElement('canvas').getContext('2d');
+      probe.font = `${style.fontWeight || '700'} ${style.fontSize || '16px'} ${style.fontFamily || 'sans-serif'}`;
+      return source.split(/\r?\n/).flatMap(paragraph => {
+        let line = '';
+        const lines = [];
+        Array.from(paragraph).forEach(char => {
+          const next = line + char;
+          if (line && probe.measureText(next).width > width) {
+            lines.push(line);
+            line = char;
+          } else {
+            line = next;
+          }
+        });
+        lines.push(line);
+        return lines;
+      }).join('\n');
+    },
     syncLayoutText() {
       if (!this.layoutText || this.layoutText === this.previousNewStamp) {
         this.layoutText = this.newStamp;
@@ -53,7 +84,7 @@ new Vue({
     },
     addStamp() {
       const text = (this.newStamp || '').trim();
-      const layoutText = (this.layoutText || text).trim();
+      const layoutText = this.normalizeLayoutForPreview(this.layoutText || text, 'newStampPreview');
       if (!text || !layoutText) return;
       this.savingStamp = true;
       this.statusMessage = '';
@@ -135,7 +166,7 @@ new Vue({
     },
     saveStampLayout() {
       if (!this.editingStamp) return;
-      const layoutText = (this.editingLayoutText || '').trim();
+      const layoutText = this.normalizeLayoutForPreview(this.editingLayoutText || '', 'editStampPreview');
       if (!layoutText) return;
       this.savingStampLayout = true;
       this.statusMessage = '';

@@ -25,7 +25,7 @@
         placeholder="改行を入れて表示レイアウトを調整"
       ></textarea>
       <div class="small text-muted mb-2">色・枠線・横幅は固定です。改行だけを調整してください。</div>
-      <div class="stamp-preview mb-3">
+      <div class="stamp-preview mb-3" ref="newStampPreview">
         <span v-text="layoutText || newStamp"></span>
       </div>
       <button class="btn btn-primary" @click="addStamp" :disabled="savingStamp">
@@ -69,7 +69,7 @@
         class="stamp-layout-editor mb-2"
         rows="4"
       ></textarea>
-      <div class="stamp-preview mb-3">
+      <div class="stamp-preview mb-3" ref="editStampPreview">
         <span v-text="editingLayoutText"></span>
       </div>
       <div class="d-flex gap-2">
