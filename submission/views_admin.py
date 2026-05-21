@@ -4,6 +4,8 @@ from submission.models import (
     Submission,
     Schedule,
     Stamp,
+    StampCaseItem,
+    StampCaseSection,
     ScoringItem,
     DiscussionBonus,
     ExperimentCompletion,
@@ -3274,24 +3276,109 @@ def scoring_items(request):
         'selected_offering_id': selected_offering_id if selected_offering_id else 'common',
     })
 
-@role_required('admin')
+STAMP_MANAGE_ROLES = ('teacher', 'course-teacher', 'admin')
+
+
+def _serialize_stamp(stamp, user):
+    return {
+        'id': stamp.id,
+        'text': stamp.text,
+        'layout_text': stamp.layout_text or stamp.text,
+        'created_by_id': stamp.created_by_id,
+        'created_by_name': stamp.created_by.userprofile.full_name if stamp.created_by_id and hasattr(stamp.created_by, 'userprofile') else '',
+        'can_delete': user.userprofile.role == 'admin' or stamp.created_by_id == user.id,
+    }
+
+
+def _serialize_stamp_case(user):
+    sections = (
+        StampCaseSection.objects
+        .filter(user=user)
+        .prefetch_related('items__stamp')
+        .order_by('display_order', 'id')
+    )
+    payload = []
+    for section in sections:
+        stamps = [
+            _serialize_stamp(item.stamp, user)
+            for item in section.items.all()
+            if item.stamp.is_active
+        ]
+        if stamps:
+            payload.append({
+                'id': section.id,
+                'label': section.label,
+                'stamps': stamps,
+                'is_default': False,
+            })
+    return payload
+
+
+@role_required(*STAMP_MANAGE_ROLES)
 def stamps_view(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        text = data.get('text', '')
-        stamp = Stamp.objects.create(text=text)
-        return JsonResponse({'status': 'ok', 'stamp': {'id': stamp.id, 'text': stamp.text}})
-    stamps = list(Stamp.objects.all().values('id', 'text'))
+        text = (data.get('text') or '').strip()
+        layout_text = (data.get('layout_text') or text).strip()
+        if not text or not layout_text:
+            return JsonResponse({'status': 'error', 'message': 'スタンプ文字を入力してください'}, status=400)
+        stamp = Stamp.objects.create(text=text[:64], layout_text=layout_text, created_by=request.user)
+        return JsonResponse({'status': 'ok', 'stamp': _serialize_stamp(stamp, request.user)})
+    stamps = [_serialize_stamp(stamp, request.user) for stamp in Stamp.objects.filter(is_active=True).select_related('created_by', 'created_by__userprofile')]
+    sections = _serialize_stamp_case(request.user)
     return render(request, 'submission/stamps.html', {
-        'stamps': json.dumps(stamps, ensure_ascii=False)
+        'stamps': stamps,
+        'stamp_case_sections': sections,
+        'csrf_token_json': get_token(request),
     })
 
-@role_required('admin')
+
+@role_required(*STAMP_MANAGE_ROLES)
+@require_POST
+def stamp_case_api(request):
+    data = json.loads(request.body)
+    sections = data.get('sections') or []
+    if not isinstance(sections, list):
+        return JsonResponse({'status': 'error', 'message': 'sections が不正です'}, status=400)
+
+    active_stamp_ids = set(Stamp.objects.filter(is_active=True).values_list('id', flat=True))
+    with transaction.atomic():
+        StampCaseSection.objects.filter(user=request.user).delete()
+        for section_order, section_payload in enumerate(sections):
+            label = (section_payload.get('label') or '').strip()
+            stamp_ids = section_payload.get('stamp_ids') or []
+            if not label or not isinstance(stamp_ids, list):
+                continue
+            section = StampCaseSection.objects.create(
+                user=request.user,
+                label=label[:40],
+                display_order=section_order,
+            )
+            for item_order, stamp_id in enumerate(stamp_ids):
+                try:
+                    normalized_stamp_id = int(stamp_id)
+                except (TypeError, ValueError):
+                    continue
+                if normalized_stamp_id not in active_stamp_ids:
+                    continue
+                StampCaseItem.objects.create(
+                    section=section,
+                    stamp_id=normalized_stamp_id,
+                    display_order=item_order,
+                )
+
+    return JsonResponse({'status': 'ok', 'sections': _serialize_stamp_case(request.user)})
+
+
+@role_required(*STAMP_MANAGE_ROLES)
 def delete_stamp_api(request, stamp_id):
     if request.method == 'POST':
         try:
             stamp = Stamp.objects.get(id=stamp_id)
-            stamp.delete()
+            if request.user.userprofile.role != 'admin' and stamp.created_by_id != request.user.id:
+                return JsonResponse({'status': 'error', 'message': '削除権限がありません'}, status=403)
+            stamp.is_active = False
+            stamp.save(update_fields=['is_active', 'updated_at'])
             return JsonResponse({'status': 'success'})
         except Stamp.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Stampが見つかりません'}, status=404)

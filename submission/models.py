@@ -126,7 +126,39 @@ class ScoringItem(models.Model):
         ordering = ['category', 'order']
 
 class Stamp(models.Model):
-    text = models.CharField(max_length=32)
+    text = models.CharField(max_length=64)
+    layout_text = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_stamps')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+    def __str__(self):
+        return self.layout_text or self.text
+
+
+class StampCaseSection(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stamp_case_sections')
+    label = models.CharField(max_length=40)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+
+    def __str__(self):
+        return f"{self.user.username} / {self.label}"
+
+
+class StampCaseItem(models.Model):
+    section = models.ForeignKey(StampCaseSection, on_delete=models.CASCADE, related_name='items')
+    stamp = models.ForeignKey(Stamp, on_delete=models.CASCADE, related_name='case_items')
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
         
 class ExperimentCompletion(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE)

@@ -1,0 +1,145 @@
+.stamp-admin-page {
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.stamp-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(360px, 1fr);
+  gap: 18px;
+}
+
+.stamp-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.stamp-case-panel {
+  grid-column: 1 / -1;
+}
+
+.stamp-layout-editor {
+  width: 100%;
+  min-height: 96px;
+  color: #ff0000;
+  border: 2px solid #ff6b6b;
+  background: transparent;
+  resize: vertical;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.stamp-preview {
+  width: 168px;
+  min-height: 34px;
+  color: #ff0000;
+  border: 2px solid #ff6b6b;
+  background: rgba(255, 255, 255, 0.02);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: pre-wrap;
+  line-height: 1.25;
+  padding: 6px 8px;
+  font-weight: 700;
+}
+
+.stamp-preview-sm {
+  font-size: 0.9rem;
+}
+
+.stamp-section-select {
+  max-width: 180px;
+}
+
+.stamp-list {
+  display: grid;
+  gap: 10px;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.stamp-list-item,
+.case-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.stamp-actions,
+.case-item-tools,
+.case-section-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.case-section-list {
+  display: grid;
+  gap: 14px;
+}
+
+.case-section {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.case-section-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.case-label-input {
+  max-width: 320px;
+  font-weight: 700;
+}
+
+.case-items {
+  display: grid;
+  gap: 8px;
+  min-height: 48px;
+  border-radius: 8px;
+}
+
+.case-items-drop-active {
+  outline: 1px dashed rgba(96, 165, 250, 0.7);
+  outline-offset: 4px;
+}
+
+.case-item {
+  cursor: grab;
+}
+
+.case-item:active {
+  cursor: grabbing;
+}
+
+.case-item-dragging {
+  opacity: 0.45;
+}
+
+@media (max-width: 900px) {
+  .stamp-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stamp-list-item,
+  .case-item,
+  .case-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

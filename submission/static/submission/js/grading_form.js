@@ -15,7 +15,10 @@ new Vue({
         historyStack: [],
         undoStack: [],
         stamps: [],
-        selectedStamp: "",
+        stampSections: [],
+        selectedStamp: null,
+        showStampPicker: false,
+        stampBoxWidth: 168,
         penWidth: 2,
         textFontSize: 18,
         defaultPenColor: '#ff0000',
@@ -105,6 +108,9 @@ new Vue({
             if (this.tool === nextTool) return;
             this.finalizeActiveTextEditor();
             this.tool = nextTool;
+            if (nextTool !== 'stamp') {
+                this.showStampPicker = false;
+            }
         },
         getCanvasPoint(idx, canvas, e) {
             const rect = canvas.getBoundingClientRect();
@@ -577,6 +583,37 @@ new Vue({
             });
             ctx.restore();
         },
+        splitStampLines(stroke) {
+            const text = String((stroke && (stroke.layout_text || stroke.text)) || '');
+            return text.split(/\r?\n/).map(line => line || ' ');
+        },
+        getStampBoxMetrics(idx, stroke) {
+            const meta = this.pageMeta[idx] || {};
+            const cssWidth = meta.cssWidth || 1;
+            const width = Math.max(80, (stroke && stroke.widthRatio ? stroke.widthRatio * cssWidth : this.stampBoxWidth));
+            const fontSize = 16;
+            const lineHeight = Math.round(fontSize * 1.25);
+            const padding = 4;
+            const lines = this.splitStampLines(stroke);
+            return {
+                width,
+                height: (lines.length * lineHeight) + (padding * 2),
+                fontSize,
+                lineHeight,
+                padding,
+                lines,
+            };
+        },
+        toggleStampPicker() {
+            if (this.tool !== 'stamp') {
+                this.setTool('stamp');
+            }
+            this.showStampPicker = !this.showStampPicker;
+        },
+        selectStamp(stamp) {
+            this.selectedStamp = stamp;
+            this.showStampPicker = false;
+        },
         buildAnnotationPayload() {
             return this.pdfPages.map((_, idx) => ({
                 strokes: this.clonePageDrawData(idx),
@@ -774,18 +811,12 @@ new Vue({
             const cssHeight = meta.cssHeight;
             const x = (stroke.xRatio || 0) * cssWidth;
             const y = (stroke.yRatio || 0) * cssHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.font = '16px sans-serif';
-            const textWidth = ctx.measureText(stroke.text || '').width;
-            ctx.restore();
-            const padding = 4;
+            const metrics = this.getStampBoxMetrics(idx, stroke);
             const rect = {
-                left: x - padding,
-                right: x + textWidth + padding,
-                top: y - 16 - padding,
-                bottom: y + padding,
+                left: x - metrics.padding,
+                right: x + metrics.width + metrics.padding,
+                top: y - metrics.fontSize - metrics.padding,
+                bottom: y - metrics.fontSize - metrics.padding + metrics.height,
             };
             const samples = [
                 { x: rect.left, y: rect.top },
@@ -1225,12 +1256,20 @@ new Vue({
                 }
             }
             if (this.tool === 'stamp') {
+                if (!this.selectedStamp) {
+                    this.showStampPicker = true;
+                    if (e.cancelable) e.preventDefault();
+                    return;
+                }
                 const point = this.getCanvasPoint(idx, canvas, e);
                 this.snapshotForHistory(idx);
                 this.clearRedoHistory(idx);
                 this.drawData[idx].push({
                     tool: 'stamp',
-                    text: this.selectedStamp,
+                    stampId: this.selectedStamp.id,
+                    text: this.selectedStamp.layout_text || this.selectedStamp.text,
+                    layout_text: this.selectedStamp.layout_text || this.selectedStamp.text,
+                    widthRatio: this.stampBoxWidth / Math.max(point.cssWidth, 1),
                     xRatio: point.x / point.cssWidth,
                     yRatio: point.y / point.cssHeight
                 });
@@ -1429,15 +1468,18 @@ new Vue({
                 if (stroke.tool === 'stamp') {
                     const x = stroke.xRatio * cssWidth;
                     const y = stroke.yRatio * cssHeight;
+                    const metrics = this.getStampBoxMetrics(idx, stroke);
                     ctx.save();
-                    ctx.font = '16px sans-serif';
-                    const textWidth = ctx.measureText(stroke.text).width;
-                    const padding = 4;
+                    ctx.font = `${metrics.fontSize}px sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'alphabetic';
                     ctx.strokeStyle = 'red';
                     ctx.lineWidth = 1;
-                    ctx.strokeRect(x - padding, y - 16 - padding, textWidth + padding * 2, 16 + padding * 2);
+                    ctx.strokeRect(x - metrics.padding, y - metrics.fontSize - metrics.padding, metrics.width + metrics.padding * 2, metrics.height);
                     ctx.fillStyle = 'red';
-                    ctx.fillText(stroke.text, x, y);
+                    metrics.lines.forEach((line, lineIndex) => {
+                        ctx.fillText(line, x + (metrics.width / 2), y + (lineIndex * metrics.lineHeight));
+                    });
                     ctx.restore();
                     return;
                 }
@@ -1685,8 +1727,9 @@ new Vue({
         fetch("/submission/stamps_api/")
             .then(res => res.json())
             .then(data => {
+                this.stampSections = data.sections || [];
                 this.stamps = data.stamps || [];
-                if (this.stamps.length) this.selectedStamp = this.stamps[0].text;
+                if (this.stamps.length) this.selectedStamp = this.stamps[0];
             });
 
         // キーボードショートカット

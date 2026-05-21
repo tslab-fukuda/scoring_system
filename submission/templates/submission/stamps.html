@@ -5,30 +5,120 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="{% static 'submission/css/stamps.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="p-4">
+<div id="stamp-app" class="stamp-admin-page p-4" v-cloak>
   <h2 class="mb-4">スタンプ管理</h2>
-  <div id="stamp-app">
-    <div class="mb-3">
-      <input v-model="newStamp" class="form-control d-inline-block" style="width:200px;" placeholder="スタンプ文字">
-      <button class="btn btn-primary ms-2" @click="addStamp">追加</button>
-    </div>
-    <ul class="list-group" style="max-width:300px;">
-      {% verbatim %}
-      <li class="list-group-item d-flex justify-content-between align-items-center" v-for="s in stamps" :key="s.id">
-        <span>{{ s.text }}</span>
-        <button class="btn btn-sm btn-outline-danger" @click="deleteStamp(s.id)">削除</button>
-      </li>
-      {% endverbatim %}
-    </ul>
+  {% verbatim %}
+  <div class="stamp-admin-grid">
+    <section class="stamp-panel">
+      <h5>スタンプ作成</h5>
+      <label class="form-label">スタンプ文字</label>
+      <input v-model="newStamp" class="form-control mb-3" placeholder="例: 実験全てに考察せよ" @input="syncLayoutText">
+      <label class="form-label">レイアウト編集</label>
+      <textarea
+        v-model="layoutText"
+        class="stamp-layout-editor mb-2"
+        rows="4"
+        placeholder="改行を入れて表示レイアウトを調整"
+      ></textarea>
+      <div class="small text-muted mb-2">色・枠線・横幅は固定です。改行だけを調整してください。</div>
+      <div class="stamp-preview mb-3">
+        <span v-text="layoutText || newStamp"></span>
+      </div>
+      <button class="btn btn-primary" @click="addStamp" :disabled="savingStamp">
+        {{ savingStamp ? '登録中...' : 'スタンプを登録' }}
+      </button>
+    </section>
+
+    <section class="stamp-panel">
+      <h5>登録済みスタンプ</h5>
+      <div class="d-flex gap-2 mb-3">
+        <input v-model="stampFilter" class="form-control" placeholder="スタンプを検索">
+        <select v-model.number="targetSectionIndex" class="form-select stamp-section-select">
+          <option v-for="(section, index) in sections" :key="'target-' + index" :value="index">
+            {{ section.label }}
+          </option>
+        </select>
+      </div>
+      <div v-if="statusMessage" class="alert py-2 mb-3" :class="statusLevel === 'error' ? 'alert-danger' : 'alert-success'">
+        {{ statusMessage }}
+      </div>
+      <div class="stamp-list" ref="stampList">
+        <div class="stamp-list-item" v-for="stamp in filteredStamps" :key="stamp.id">
+          <div class="stamp-preview stamp-preview-sm">
+            <span v-text="stamp.layout_text || stamp.text"></span>
+          </div>
+          <div class="stamp-actions">
+            <button class="btn btn-sm btn-outline-primary" @click="addStampToCase(stamp)">ケースへ追加</button>
+            <button v-if="stamp.can_delete" class="btn btn-sm btn-outline-danger" @click="deleteStamp(stamp.id)">削除</button>
+          </div>
+        </div>
+        <div v-if="filteredStamps.length === 0" class="text-muted small">該当するスタンプはありません。</div>
+      </div>
+    </section>
+
+    <section class="stamp-panel stamp-case-panel">
+      <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+        <h5 class="mb-0">自分のスタンプケース</h5>
+        <button class="btn btn-success" @click="saveCase" :disabled="savingCase">
+          {{ savingCase ? '保存中...' : 'ケースを保存' }}
+        </button>
+      </div>
+      <div class="d-flex gap-2 mb-3">
+        <input v-model="newSectionLabel" class="form-control" placeholder="例: よく使う / I-01,02用">
+        <button class="btn btn-outline-primary" @click="addSection">ラベル追加</button>
+      </div>
+      <div class="case-section-list">
+        <div class="case-section" v-for="(section, sectionIndex) in sections" :key="'section-' + sectionIndex">
+          <div class="case-section-header">
+            <input v-model="section.label" class="form-control case-label-input">
+            <div class="case-section-tools">
+              <button class="btn btn-sm btn-outline-secondary" @click="moveSection(sectionIndex, -1)" :disabled="sectionIndex === 0">↑</button>
+              <button class="btn btn-sm btn-outline-secondary" @click="moveSection(sectionIndex, 1)" :disabled="sectionIndex === sections.length - 1">↓</button>
+              <button class="btn btn-sm btn-outline-danger" @click="removeSection(sectionIndex)" :disabled="sections.length === 1">削除</button>
+            </div>
+          </div>
+          <div
+            class="case-items"
+            :class="{ 'case-items-drop-active': draggedStamp }"
+            @dragover.prevent
+            @drop.prevent="dropCaseStamp(sectionIndex)"
+          >
+            <div
+              class="case-item"
+              :class="{ 'case-item-dragging': draggedStamp && draggedStamp.sourceSectionIndex === sectionIndex && draggedStamp.sourceStampIndex === stampIndex }"
+              v-for="(stamp, stampIndex) in section.stamps"
+              :key="'case-' + sectionIndex + '-' + stampIndex + '-' + stamp.id"
+              draggable="true"
+              @dragstart="startCaseStampDrag(sectionIndex, stampIndex)"
+              @dragend="clearCaseStampDrag"
+              @dragover.prevent
+              @drop.stop.prevent="dropCaseStamp(sectionIndex, stampIndex)"
+            >
+              <div class="stamp-preview stamp-preview-sm">
+                <span v-text="stamp.layout_text || stamp.text"></span>
+              </div>
+              <div class="case-item-tools">
+                <button class="btn btn-sm btn-outline-secondary" @click="moveStamp(sectionIndex, stampIndex, -1)" :disabled="stampIndex === 0">↑</button>
+                <button class="btn btn-sm btn-outline-secondary" @click="moveStamp(sectionIndex, stampIndex, 1)" :disabled="stampIndex === section.stamps.length - 1">↓</button>
+                <button class="btn btn-sm btn-outline-danger" @click="removeStampFromCase(sectionIndex, stampIndex)">外す</button>
+              </div>
+            </div>
+            <div v-if="section.stamps.length === 0" class="text-muted small">このラベルにはまだスタンプがありません。</div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
+  {% endverbatim %}
 </div>
-<script>
-  window.csrfToken = '{{ csrf_token }}';
-  window.initialStamps = {{ stamps|safe }};
-</script>
+
+{{ stamps|json_script:"stamps-data" }}
+{{ stamp_case_sections|json_script:"stamp-case-sections-data" }}
+{{ csrf_token_json|json_script:"csrf-token" }}
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="{% static 'submission/js/stamps.js' %}"></script>
 {% endblock %}

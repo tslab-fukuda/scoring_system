@@ -35,6 +35,7 @@
             <li><a href="{% url 'course_management' %}" class="menu-link"><span class="menu-ico">📚</span> 科目/年度管理</a></li>
           </template>
           <template v-else-if="role === 'teacher' || role === 'course-teacher' || role === 'non-editing teacher'">
+            <li v-if="role === 'teacher' || role === 'course-teacher'"><a href="{% url 'stamp_list' %}" class="menu-link"><span class="menu-ico">🔖</span> スタンプ管理</a></li>
             <li v-if="role === 'non-editing teacher'"><a href="{% url 'final_rubric_settings' %}" class="menu-link"><span class="menu-ico">📐</span> 最終評価基準設定</a></li>
           </template>
           {% endif %}

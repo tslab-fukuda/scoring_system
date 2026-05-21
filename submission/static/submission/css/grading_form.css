@@ -326,3 +326,74 @@
     outline: none;
     box-shadow: 0 0 0 1px rgba(255, 0, 0, 0.08);
 }
+
+.stamp-selected-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 34px;
+    color: #ff0000;
+    border: 2px solid #ff6b6b;
+    padding: 2px 6px;
+    white-space: pre-wrap;
+    line-height: 1.05;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    vertical-align: middle;
+    overflow: hidden;
+    word-break: break-all;
+}
+
+.stamp-picker-popover {
+    position: fixed;
+    z-index: 1500;
+    top: calc(var(--ts-header-height, 60px) + 72px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(640px, calc(100vw - 32px));
+    max-height: min(68vh, 620px);
+    overflow: auto;
+    background: #1f1f1f;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
+    padding: 16px;
+}
+
+.stamp-picker-popover::before {
+    content: "スタンプケース";
+    display: block;
+    color: #f3f4f6;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.stamp-picker-section + .stamp-picker-section {
+    margin-top: 14px;
+}
+
+.stamp-picker-section-title {
+    color: #f3f4f6;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.stamp-choice {
+    width: 168px;
+    min-height: 34px;
+    margin: 0 8px 8px 0;
+    color: #ff0000;
+    border: 2px solid #ff6b6b;
+    background: transparent;
+    white-space: pre-wrap;
+    line-height: 1.25;
+    font-weight: 700;
+    text-align: center;
+    padding: 6px 8px;
+}
+
+.stamp-choice:hover {
+    background: rgba(255, 0, 0, 0.08);
+}

@@ -51,12 +51,29 @@
                     <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
                         @click="setTool('eraser')">消しゴム</button>
                     <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
-                        @click="setTool('stamp')">スタンプ</button>
-                    <select v-if="tool==='stamp'" v-model="selectedStamp" class="form-select d-inline-block ms-2" style="width:auto;">
-                        {% verbatim %}
-                        <option v-for="s in stamps" :key="s.id" :value="s.text">{{ s.text }}</option>
-                        {% endverbatim %}
-                    </select>
+                        @click="toggleStampPicker">スタンプ</button>
+                    {% verbatim %}
+                    <span
+                        v-if="tool==='stamp' && selectedStamp"
+                        class="stamp-selected-label ms-2"
+                        v-text="selectedStamp.layout_text || selectedStamp.text"
+                    ></span>
+                    <div v-if="tool==='stamp' && showStampPicker" class="stamp-picker-popover">
+                        <div v-if="stamps.length === 0" class="text-muted small">登録済みスタンプがありません。</div>
+                        <div v-for="section in stampSections" :key="'stamp-section-' + section.label" class="stamp-picker-section">
+                            <div class="stamp-picker-section-title">{{ section.label }}</div>
+                            <button
+                                v-for="stamp in section.stamps"
+                                :key="'stamp-choice-' + stamp.id"
+                                type="button"
+                                class="stamp-choice"
+                                @click="selectStamp(stamp)"
+                            >
+                                <span v-text="stamp.layout_text || stamp.text"></span>
+                            </button>
+                        </div>
+                    </div>
+                    {% endverbatim %}
                     {% if effective_role != 'non-editing teacher' %}
                     <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                     {% verbatim %}

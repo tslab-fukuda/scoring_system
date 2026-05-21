@@ -11,6 +11,7 @@ from submission.models import (
     ExperimentProgress,
     ExperimentTaskConfig,
     FinalRubric,
+    StampCaseSection,
 )
 from submission.models import Stamp
 from django.http import JsonResponse, HttpResponse
@@ -166,19 +167,22 @@ def _draw_pdf_polyline(page, stroke, meta):
 
 
 def _draw_pdf_stamp(page, stroke, meta):
-    text = str(stroke.get('text') or '')
+    text = str(stroke.get('layout_text') or stroke.get('text') or '').replace('\r\n', '\n')
     if not text:
         return
 
     point = _page_point(page, stroke)
     font_size = _css_to_pdf_width(page, 16, meta, fallback=16)
     padding = _css_to_pdf_width(page, 4, meta, fallback=4)
-    text_width = fitz.get_text_length(text, fontname=GRADING_PDF_FONT, fontsize=font_size)
+    line_height = font_size * 1.25
+    lines = [line or ' ' for line in text.split('\n')]
+    stamp_width = _ratio_to_pdf_width(page, stroke.get('widthRatio') or 0.18, minimum=70)
+    stamp_height = (line_height * len(lines)) + (padding * 2)
     rect = fitz.Rect(
         point.x - padding,
         point.y - font_size - padding,
-        point.x + text_width + padding,
-        point.y + padding,
+        point.x + stamp_width + padding,
+        point.y - font_size - padding + stamp_height,
     )
     page.draw_rect(
         rect,
@@ -186,14 +190,18 @@ def _draw_pdf_stamp(page, stroke, meta):
         width=max(_css_to_pdf_width(page, 1, meta, fallback=1), 0.2),
         overlay=True,
     )
-    page.insert_text(
-        point,
-        text,
-        fontsize=font_size,
-        fontname=GRADING_PDF_FONT,
-        color=(1, 0, 0),
-        overlay=True,
-    )
+    for index, line in enumerate(lines):
+        text_width = fitz.get_text_length(line, fontname=GRADING_PDF_FONT, fontsize=font_size)
+        line_x = point.x + max(0, (stamp_width - text_width) / 2)
+        line_y = point.y + (line_height * index)
+        page.insert_text(
+            fitz.Point(line_x, line_y),
+            line,
+            fontsize=font_size,
+            fontname=GRADING_PDF_FONT,
+            color=(1, 0, 0),
+            overlay=True,
+        )
 
 
 def _draw_pdf_text(page, stroke, meta):
@@ -635,8 +643,42 @@ def scoring_items_api(request):
 @login_required
 @role_required('teacher', 'admin', 'course-teacher', 'non-editing teacher')
 def stamps_api(request):
-    stamps = list(Stamp.objects.all().values('id','text'))
-    return JsonResponse({'stamps': stamps})
+    def serialize_stamp(stamp):
+        return {
+            'id': stamp.id,
+            'text': stamp.text,
+            'layout_text': stamp.layout_text or stamp.text,
+        }
+
+    case_sections = (
+        StampCaseSection.objects
+        .filter(user=request.user)
+        .prefetch_related('items__stamp')
+        .order_by('display_order', 'id')
+    )
+    sections = []
+    for section in case_sections:
+        stamps = [
+            serialize_stamp(item.stamp)
+            for item in section.items.all()
+            if item.stamp.is_active
+        ]
+        if stamps:
+            sections.append({
+                'label': section.label,
+                'stamps': stamps,
+                'is_default': False,
+            })
+
+    if not sections:
+        sections = [{
+            'label': 'すべて',
+            'stamps': [serialize_stamp(stamp) for stamp in Stamp.objects.filter(is_active=True).order_by('created_at', 'id')],
+            'is_default': True,
+        }]
+
+    flat_stamps = [stamp for section in sections for stamp in section['stamps']]
+    return JsonResponse({'sections': sections, 'stamps': flat_stamps})
 
 
 @login_required
