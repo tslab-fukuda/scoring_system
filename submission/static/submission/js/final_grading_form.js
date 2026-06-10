@@ -5,6 +5,8 @@ new Vue({
     data: {
         showDeduction: false,
         showRubric: false,
+        showPdfControls: true,
+        pdfControlsStorageKey: 'finalGradingForm.showPdfControls',
         showCompare: false,
         syncScroll: true,
         compareUserId: "",
@@ -99,6 +101,27 @@ new Vue({
         },
     },
     methods: {
+        loadPdfControlsPreference() {
+            try {
+                const saved = window.localStorage.getItem(this.pdfControlsStorageKey);
+                if (saved !== null) {
+                    this.showPdfControls = saved !== 'false';
+                }
+            } catch (error) {
+                this.showPdfControls = true;
+            }
+        },
+        savePdfControlsPreference() {
+            try {
+                window.localStorage.setItem(this.pdfControlsStorageKey, String(this.showPdfControls));
+            } catch (error) {
+                // localStorage が使えない環境では当回表示だけ維持する。
+            }
+        },
+        togglePdfControls() {
+            this.showPdfControls = !this.showPdfControls;
+            this.savePdfControlsPreference();
+        },
         selectRubricOption(criterionId, optionId) {
             this.$set(this.rubricSelectedOptionIds, String(criterionId), optionId);
             this.rubricSubmitError = "";
@@ -456,6 +479,7 @@ new Vue({
         },
     },
     mounted() {
+        this.loadPdfControlsPreference();
         this.renderMainPdf();
         window.addEventListener('keydown', this.handleGlobalKeydown);
     },

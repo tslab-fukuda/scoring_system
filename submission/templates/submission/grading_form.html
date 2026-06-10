@@ -13,127 +13,137 @@
     <div class="row" style="position:relative;">
         <div class="grading-pdf-wrap w-100" :class="{ 'compare-active': showCompare, 'single-mode': !showCompare }">
             <div class="pdf-col pdf-header main-header">
-                <div class="mb-2">
-                    <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
-                    <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
-                    <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
-                </div>
                 {% verbatim %}
-                <div class="compare-controls mb-2">
-                    <button class="btn btn-outline-secondary" :class="{ active: showCompare }" @click="toggleCompare">
-                        {{ showCompare ? '比較を閉じる' : '比較を表示' }}
+                <div class="grading-controls-toggle mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @click="togglePdfControls">
+                        {{ showPdfControls ? '操作欄を隠す' : '操作欄を表示' }}
                     </button>
-                    <button class="btn btn-outline-secondary" @click="toggleSyncScroll" :disabled="!showCompare">
-                        同期スクロール: {{ syncScroll ? 'ON' : 'OFF' }}
-                    </button>
-                    <button
-                        class="btn btn-outline-warning similarity-progress-btn"
-                        :class="{ loading: similarityLoading }"
-                        :style="{ '--sim-progress': similarityProgress + '%' }"
-                        @click="handleSimilarityButton"
-                        :disabled="similarityLoading"
-                    >
-                        {{ similarityButtonLabel }}
-                    </button>
-                    <span v-if="comparePdfUrl" class="text-muted small">比較対象提出日: {{ compareSubmittedAt }}</span>
-                    <span v-else class="text-muted small">比較対象なし</span>
+                    <span v-if="!showPdfControls" class="text-muted small">操作欄を折りたたみ中</span>
                 </div>
                 {% endverbatim %}
-                <div class="pdf-toolbar mb-2">
-                    {% if effective_role != 'non-editing teacher' %}
-                    <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
-                        @click="setTool('pen')">ペン</button>
-                    <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
-                        @click="setTool('highlight')">蛍光ペン</button>
-                    <button class="btn btn-outline-secondary" :class="{active: tool==='text'}"
-                        @click="setTool('text')">テキスト</button>
-                    {% endif %}
-                    <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
-                        @click="setTool('eraser')">消しゴム</button>
-                    <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
-                        @click="toggleStampPicker">スタンプ</button>
-                    {% verbatim %}
-                    <span
-                        v-if="tool==='stamp' && selectedStamp"
-                        class="stamp-selected-label ms-2"
-                        v-text="selectedStamp.layout_text || selectedStamp.text"
-                    ></span>
-                    <div v-if="tool==='stamp' && showStampPicker" class="stamp-picker-popover">
-                        <div v-if="stamps.length === 0" class="text-muted small">登録済みスタンプがありません。</div>
-                        <div v-for="section in stampSections" :key="'stamp-section-' + section.label" class="stamp-picker-section">
-                            <div class="stamp-picker-section-title">{{ section.label }}</div>
-                            <button
-                                v-for="stamp in section.stamps"
-                                :key="'stamp-choice-' + stamp.id"
-                                type="button"
-                                class="stamp-choice"
-                                @click="selectStamp(stamp)"
-                            >
-                                <span v-text="stamp.layout_text || stamp.text"></span>
-                            </button>
-                        </div>
+                <div v-show="showPdfControls" class="grading-control-panel">
+                    <div class="mb-2">
+                        <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
+                        <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
+                        <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
                     </div>
-                    {% endverbatim %}
-                    {% if effective_role != 'non-editing teacher' %}
-                    <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
                     {% verbatim %}
-                    <div v-if="tool==='pen'" class="tool-color-palette ms-2">
+                    <div class="compare-controls mb-2">
+                        <button class="btn btn-outline-secondary" :class="{ active: showCompare }" @click="toggleCompare">
+                            {{ showCompare ? '比較を閉じる' : '比較を表示' }}
+                        </button>
+                        <button class="btn btn-outline-secondary" @click="toggleSyncScroll" :disabled="!showCompare">
+                            同期スクロール: {{ syncScroll ? 'ON' : 'OFF' }}
+                        </button>
                         <button
-                            v-for="color in penColors"
-                            :key="'pen-' + color"
-                            type="button"
-                            class="tool-color-chip"
-                            :class="{ active: penColor === color }"
-                            :style="{ backgroundColor: color }"
-                            @click="penColor = color"
-                        ></button>
-                    </div>
-                    {% endverbatim %}
-                    <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
-                    {% verbatim %}
-                    <div v-if="tool==='highlight'" class="tool-color-palette ms-2">
-                        <button
-                            v-for="color in highlightColors"
-                            :key="'highlight-' + color"
-                            type="button"
-                            class="tool-color-chip tool-color-chip-highlight"
-                            :class="{ active: highlightBaseColor === color }"
-                            :style="{ backgroundColor: color }"
-                            @click="highlightBaseColor = color"
-                        ></button>
-                    </div>
-                    <input
-                        v-if="tool==='highlight'"
-                        type="range"
-                        min="15"
-                        max="60"
-                        step="5"
-                        v-model.number="highlightOpacity"
-                        class="form-range d-inline-block ms-2"
-                        style="width:100px;"
-                    >
-                    <div v-if="tool==='text'" class="text-tool-controls ms-2">
-                        <span class="small text-muted">文字サイズ</span>
-                        <input
-                            type="range"
-                            min="10"
-                            max="40"
-                            step="1"
-                            v-model.number="textFontSize"
-                            class="form-range d-inline-block ms-2"
-                            style="width:120px;"
+                            class="btn btn-outline-warning similarity-progress-btn"
+                            :class="{ loading: similarityLoading }"
+                            :style="{ '--sim-progress': similarityProgress + '%' }"
+                            @click="handleSimilarityButton"
+                            :disabled="similarityLoading"
                         >
-                        <span class="small text-muted ms-1" v-text="textFontSize + 'px'"></span>
+                            {{ similarityButtonLabel }}
+                        </button>
+                        <span v-if="comparePdfUrl" class="text-muted small">比較対象提出日: {{ compareSubmittedAt }}</span>
+                        <span v-else class="text-muted small">比較対象なし</span>
                     </div>
                     {% endverbatim %}
-                    <input v-if="tool==='eraser'" type="range" min="1" max="60" step="5" v-model.number="eraserWidth" class="form-range d-inline-block ms-2" style="width:100px;">
-                    <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
-                    <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
-                    {% endif %}
-                    <div class="btn-group ms-2" role="group" aria-label="PDFズーム">
-                        <button class="btn btn-outline-secondary" @click="zoomOut" :disabled="zoomPercent <= zoomMin">-</button>
-                        <span class="btn btn-outline-secondary disabled" v-text="zoomPercent + '%'"></span>
-                        <button class="btn btn-outline-secondary" @click="zoomIn" :disabled="zoomPercent >= zoomMax">+</button>
+                    <div class="pdf-toolbar mb-2">
+                        {% if effective_role != 'non-editing teacher' %}
+                        <button class="btn btn-outline-secondary" :class="{active: tool==='pen'}"
+                            @click="setTool('pen')">ペン</button>
+                        <button class="btn btn-outline-secondary" :class="{active: tool==='highlight'}"
+                            @click="setTool('highlight')">蛍光ペン</button>
+                        <button class="btn btn-outline-secondary" :class="{active: tool==='text'}"
+                            @click="setTool('text')">テキスト</button>
+                        {% endif %}
+                        <button class="btn btn-outline-secondary" :class="{active: tool==='eraser'}"
+                            @click="setTool('eraser')">消しゴム</button>
+                        <button class="btn btn-outline-secondary" :class="{active: tool==='stamp'}"
+                            @click="toggleStampPicker">スタンプ</button>
+                        {% verbatim %}
+                        <span
+                            v-if="tool==='stamp' && selectedStamp"
+                            class="stamp-selected-label ms-2"
+                            v-text="selectedStamp.layout_text || selectedStamp.text"
+                        ></span>
+                        <div v-if="tool==='stamp' && showStampPicker" class="stamp-picker-popover">
+                            <div v-if="stamps.length === 0" class="text-muted small">登録済みスタンプがありません。</div>
+                            <div v-for="section in stampSections" :key="'stamp-section-' + section.label" class="stamp-picker-section">
+                                <div class="stamp-picker-section-title">{{ section.label }}</div>
+                                <button
+                                    v-for="stamp in section.stamps"
+                                    :key="'stamp-choice-' + stamp.id"
+                                    type="button"
+                                    class="stamp-choice"
+                                    @click="selectStamp(stamp)"
+                                >
+                                    <span v-text="stamp.layout_text || stamp.text"></span>
+                                </button>
+                            </div>
+                        </div>
+                        {% endverbatim %}
+                        {% if effective_role != 'non-editing teacher' %}
+                        <input v-if="tool==='pen'" type="range" min="1" max="10" v-model.number="penWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                        {% verbatim %}
+                        <div v-if="tool==='pen'" class="tool-color-palette ms-2">
+                            <button
+                                v-for="color in penColors"
+                                :key="'pen-' + color"
+                                type="button"
+                                class="tool-color-chip"
+                                :class="{ active: penColor === color }"
+                                :style="{ backgroundColor: color }"
+                                @click="penColor = color"
+                            ></button>
+                        </div>
+                        {% endverbatim %}
+                        <input v-if="tool==='highlight'" type="range" min="5" max="30" v-model.number="highlightWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                        {% verbatim %}
+                        <div v-if="tool==='highlight'" class="tool-color-palette ms-2">
+                            <button
+                                v-for="color in highlightColors"
+                                :key="'highlight-' + color"
+                                type="button"
+                                class="tool-color-chip tool-color-chip-highlight"
+                                :class="{ active: highlightBaseColor === color }"
+                                :style="{ backgroundColor: color }"
+                                @click="highlightBaseColor = color"
+                            ></button>
+                        </div>
+                        <input
+                            v-if="tool==='highlight'"
+                            type="range"
+                            min="15"
+                            max="60"
+                            step="5"
+                            v-model.number="highlightOpacity"
+                            class="form-range d-inline-block ms-2"
+                            style="width:100px;"
+                        >
+                        <div v-if="tool==='text'" class="text-tool-controls ms-2">
+                            <span class="small text-muted">文字サイズ</span>
+                            <input
+                                type="range"
+                                min="10"
+                                max="40"
+                                step="1"
+                                v-model.number="textFontSize"
+                                class="form-range d-inline-block ms-2"
+                                style="width:120px;"
+                            >
+                            <span class="small text-muted ms-1" v-text="textFontSize + 'px'"></span>
+                        </div>
+                        {% endverbatim %}
+                        <input v-if="tool==='eraser'" type="range" min="1" max="60" step="5" v-model.number="eraserWidth" class="form-range d-inline-block ms-2" style="width:100px;">
+                        <button class="btn btn-outline-secondary ms-2" @click="undo(currentPage != null ? currentPage : 0)">戻る</button>
+                        <button class="btn btn-outline-secondary ms-2" @click="redo(currentPage != null ? currentPage : 0)">進む</button>
+                        {% endif %}
+                        <div class="btn-group ms-2" role="group" aria-label="PDFズーム">
+                            <button class="btn btn-outline-secondary" @click="zoomOut" :disabled="zoomPercent <= zoomMin">-</button>
+                            <span class="btn btn-outline-secondary disabled" v-text="zoomPercent + '%'"></span>
+                            <button class="btn btn-outline-secondary" @click="zoomIn" :disabled="zoomPercent >= zoomMax">+</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -2,6 +2,8 @@ new Vue({
     el: '#grading-form',
     data: {
         tool: 'pen',
+        showPdfControls: true,
+        pdfControlsStorageKey: 'gradingForm.showPdfControls',
         showScore: false,
         scoreItems: [],
         hiddenScoreItems: [],
@@ -94,6 +96,30 @@ new Vue({
         }
     },
     methods: {
+        loadPdfControlsPreference() {
+            try {
+                const saved = window.localStorage.getItem(this.pdfControlsStorageKey);
+                if (saved !== null) {
+                    this.showPdfControls = saved !== 'false';
+                }
+            } catch (error) {
+                this.showPdfControls = true;
+            }
+        },
+        savePdfControlsPreference() {
+            try {
+                window.localStorage.setItem(this.pdfControlsStorageKey, String(this.showPdfControls));
+            } catch (error) {
+                // localStorage が使えない環境では当回表示だけ維持する。
+            }
+        },
+        togglePdfControls() {
+            this.showPdfControls = !this.showPdfControls;
+            if (!this.showPdfControls) {
+                this.showStampPicker = false;
+            }
+            this.savePdfControlsPreference();
+        },
         getCanvasMeta(idx, canvas) {
             const meta = this.pageMeta[idx];
             if (meta) return meta;
@@ -1621,6 +1647,7 @@ new Vue({
         }
     },
     mounted() {
+        this.loadPdfControlsPreference();
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         this.useTouchType = isIOS;
