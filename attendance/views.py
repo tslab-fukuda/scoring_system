@@ -54,14 +54,28 @@ def _finalize_previous_day():
     """Set checkout time to 23:59 for yesterday's unfinished records."""
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
-    incomplete = AttendanceRecord.objects.filter(
+    incomplete = AttendanceRecord.objects.select_related(
+        'user',
+        'course_offering',
+    ).filter(
         date=yesterday, check_in__isnull=False, check_out__isnull=True
     )
     if not incomplete:
         return
     default_dt = datetime.combine(yesterday, time(23, 59))
     aware_dt = timezone.make_aware(default_dt, JST)
-    incomplete.update(check_out=aware_dt)
+    for record in incomplete:
+        if record.course_offering_id:
+            _apply_attendance_action(
+                record.user,
+                record.course_offering,
+                'check_out',
+                aware_dt,
+                overwrite_checkout=True,
+            )
+        else:
+            record.check_out = aware_dt
+            record.save(update_fields=['check_out'])
 
 
 def _user_actual_role(user):
