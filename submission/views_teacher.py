@@ -384,6 +384,7 @@ def get_ungraded_submissions(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    student_id_filter = (request.GET.get('student_id') or '').strip()
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
@@ -400,6 +401,8 @@ def get_ungraded_submissions(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    if student_id_filter:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id_filter)
     result = []
     for items in qs.select_related('student', 'student__userprofile'):
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
@@ -426,6 +429,7 @@ def get_graded_submissions(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    student_id_filter = (request.GET.get('student_id') or '').strip()
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
         return error_response
@@ -442,6 +446,8 @@ def get_graded_submissions(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    if student_id_filter:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id_filter)
     result = []
     for items in qs.select_related('student', 'student__userprofile'):
         exp_day, exp_group, full_name, student_id = _student_enrollment_info(items.student, offering_id)
@@ -473,6 +479,7 @@ def get_ungraded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    student_id_filter = (request.GET.get('student_id') or '').strip()
     actual_role = get_effective_role(request)
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
@@ -498,6 +505,8 @@ def get_ungraded_main_reports(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    if student_id_filter:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id_filter)
     all_main = Submission.objects.filter(report_type='main')
     if offering_id:
         all_main = all_main.filter(
@@ -531,6 +540,7 @@ def get_graded_main_reports(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
+    student_id_filter = (request.GET.get('student_id') or '').strip()
     actual_role = get_effective_role(request)
     offering_id, _, error_response = _resolve_offering(request.user, request.GET.get('offering_id'))
     if error_response:
@@ -570,6 +580,8 @@ def get_graded_main_reports(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
+    if student_id_filter:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id_filter)
     result = []
     for items in qs:
         result.append(_serialize_main_report_score_payload(items, offering_id, actual_role))

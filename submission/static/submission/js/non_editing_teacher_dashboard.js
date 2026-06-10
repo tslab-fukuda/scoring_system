@@ -175,6 +175,7 @@ new Vue({
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
             if (params.length) url += '?' + params.join('&');
             fetch(url).then(r => r.json()).then(data => {
                 this.resetCurrentListDisplayLimit();

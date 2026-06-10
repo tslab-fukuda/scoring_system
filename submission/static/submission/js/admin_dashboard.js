@@ -305,6 +305,7 @@ window.app = new Vue({
             if (this.filter.experiment_day) params.push('experiment_day=' + encodeURIComponent(this.filter.experiment_day));
             if (this.filter.experiment_group) params.push('experiment_group=' + encodeURIComponent(this.filter.experiment_group));
             if (this.filter.experiment_number) params.push('experiment_number=' + encodeURIComponent(this.filter.experiment_number));
+            if (this.filter.student_id) params.push('student_id=' + encodeURIComponent(this.filter.student_id));
             if (this.selectedOfferingId) params.push('offering_id=' + encodeURIComponent(this.selectedOfferingId));
             params.push('graded=' + (this.tab === 'corrected' ? '1' : '0'));
             let url = '/submission/admin_submissions_api/';

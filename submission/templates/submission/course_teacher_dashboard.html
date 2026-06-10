@@ -57,6 +57,9 @@
         </div>
         {% endverbatim %}
         <div class="col-auto">
+            <input type="text" class="form-control" v-model="filter.student_id" placeholder="学籍番号">
+        </div>
+        <div class="col-auto">
             <button class="btn btn-outline-primary" @click="fetchList()">検索</button>
         </div>
     </div>
