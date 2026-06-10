@@ -20,11 +20,21 @@
     <div class="grading-pdf-wrap" :class="{ 'compare-active': showCompare }">
       <div class="pdf-col pdf-header main-header">
         {% verbatim %}
-        <div class="grading-controls-toggle mb-2">
-          <button id="final-pdf-controls-toggle" type="button" class="btn btn-sm btn-outline-secondary">
-            {{ showPdfControls ? '操作欄を隠す' : '操作欄を表示' }}
-          </button>
-          <span v-if="!showPdfControls" class="text-muted small">操作欄を折りたたみ中</span>
+        <div class="grading-controls-toggle final-controls-toggle mb-2">
+          <div class="final-controls-toggle-left">
+            <button id="final-pdf-controls-toggle" type="button" class="btn btn-sm btn-outline-secondary">
+              {{ showPdfControls ? '操作欄を隠す' : '操作欄を表示' }}
+            </button>
+            <span v-if="!showPdfControls" class="text-muted small">操作欄を折りたたみ中</span>
+          </div>
+          <div class="score-toggle-wrapper final-score-toggle-inline">
+            <button class="btn btn-outline-primary score-toggle-btn" @click="toggleDeduction" :class="{ active: showDeduction }">
+              減点詳細
+            </button>
+            <button class="btn btn-primary score-toggle-btn" @click="toggleRubric" :class="{ active: showRubric }">
+              採点
+            </button>
+          </div>
         </div>
         {% endverbatim %}
         <div v-if="showPdfControls" class="grading-control-panel">
@@ -178,14 +188,6 @@
           </div>
         </div>
       </div>
-    </div>
-    <div class="score-toggle-wrapper">
-      <button class="btn btn-outline-primary score-toggle-btn" @click="toggleDeduction" :class="{ active: showDeduction }">
-        減点詳細
-      </button>
-      <button class="btn btn-primary score-toggle-btn" @click="toggleRubric" :class="{ active: showRubric }">
-        採点
-      </button>
     </div>
     <transition name="slide-right">
       <div v-if="showDeduction" class="score-modal-float deduction-modal-float">

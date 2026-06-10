@@ -70,7 +70,6 @@
 
 .grading-controls-toggle {
     position: relative;
-    z-index: 1301;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -82,9 +81,17 @@
     pointer-events: auto;
 }
 
-#final-grading-form .main-header {
-    position: relative;
-    z-index: 1301;
+.final-controls-toggle {
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+}
+
+.final-controls-toggle-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
 }
 
 .grading-control-panel {
@@ -215,10 +222,6 @@
     width: var(--final-score-panel-width);
 }
 
-#final-grading-form.final-score-open .score-toggle-wrapper {
-    right: calc(var(--final-score-panel-width) + 16px);
-}
-
 @media (max-width: 1100px) {
     #final-grading-form.final-score-open .grading-pdf-wrap {
         width: 100%;
@@ -229,9 +232,6 @@
         width: min(760px, calc(100vw - 16px));
     }
 
-    #final-grading-form.final-score-open .score-toggle-wrapper {
-        right: 16px;
-    }
 }
 
 .slide-right-enter-active,
@@ -252,7 +252,7 @@
     left: auto;
     right: 16px;
     top: calc(var(--ts-header-height, 60px) + 12px);
-    z-index: 1200;
+    z-index: 1400;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -261,6 +261,18 @@
 
 .score-toggle-wrapper .score-toggle-btn.active {
     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+}
+
+.final-score-toggle-inline {
+    position: static;
+    z-index: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+}
+
+.final-score-toggle-inline .score-toggle-btn {
+    border-radius: 8px;
 }
 
 [v-cloak] {
