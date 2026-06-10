@@ -53,6 +53,30 @@ from submission.final_rubric_utils import (
 RUBRIC_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 GRADING_ACCESS_ROLES = ['teacher', 'course-teacher', 'non-editing teacher']
 GRADING_PDF_FONT = 'japan'
+SYSTEM_SCORE_CODES = {'late', 'absence', 'lab_time', 'discussion'}
+SYSTEM_SCORE_LABELS = {'遅刻', '欠席', '実験時間', 'ディスカッション'}
+
+
+def _is_system_score_detail(item):
+    if not isinstance(item, dict):
+        return False
+    code = str(item.get('code') or item.get('key') or '').strip()
+    label = str(item.get('label') or '').strip()
+    return code in SYSTEM_SCORE_CODES or label in SYSTEM_SCORE_LABELS
+
+
+def _merge_score_details_preserving_system(current_details, incoming_details):
+    incoming = incoming_details if isinstance(incoming_details, list) else []
+    current = current_details if isinstance(current_details, list) else []
+    non_system = [
+        item for item in incoming
+        if isinstance(item, dict) and not _is_system_score_detail(item)
+    ]
+    system_details = [
+        item for item in current
+        if isinstance(item, dict) and _is_system_score_detail(item)
+    ]
+    return non_system + system_details
 
 
 def _normalized_graded_stem(current_file_name, submission_id):
@@ -520,7 +544,10 @@ def grading_form(request, submission_id):
 
             submission.file.name = saved_name
             submission.graded = True
-            submission.score_details = data.get('scoreItems')
+            submission.score_details = _merge_score_details_preserving_system(
+                submission.score_details,
+                data.get('scoreItems'),
+            )
             submission.save()
             # デバッグ用にURLをログ出力
             print(f"[graded_pdf] saved: {submission.file.url}")
