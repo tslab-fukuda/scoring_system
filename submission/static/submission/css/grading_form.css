@@ -175,6 +175,42 @@
     width: min(1320px, calc(100vw - 16px));
 }
 
+#final-grading-form {
+    --final-score-panel-width: clamp(520px, 50vw, 980px);
+}
+
+#final-grading-form .grading-pdf-wrap {
+    transition: width 0.25s ease, padding-right 0.25s ease;
+}
+
+#final-grading-form.final-score-open .grading-pdf-wrap {
+    width: calc(100% - var(--final-score-panel-width));
+    padding-right: 16px;
+}
+
+#final-grading-form.final-score-open .score-modal-float {
+    width: var(--final-score-panel-width);
+}
+
+#final-grading-form.final-score-open .score-toggle-wrapper {
+    right: calc(var(--final-score-panel-width) + 16px);
+}
+
+@media (max-width: 1100px) {
+    #final-grading-form.final-score-open .grading-pdf-wrap {
+        width: 100%;
+        padding-right: 0;
+    }
+
+    #final-grading-form.final-score-open .score-modal-float {
+        width: min(760px, calc(100vw - 16px));
+    }
+
+    #final-grading-form.final-score-open .score-toggle-wrapper {
+        right: 16px;
+    }
+}
+
 .slide-right-enter-active,
 .slide-right-leave-active {
     transition: transform 0.3s;

@@ -10,7 +10,12 @@
 {% endblock %}
 
 {% block content %}
-<div id="final-grading-form" class="container-fluid" v-cloak>
+<div
+  id="final-grading-form"
+  class="container-fluid"
+  :class="{ 'final-score-open': showRubric || showDeduction }"
+  v-cloak
+>
   <div class="row" style="position:relative;">
     <div class="grading-pdf-wrap" :class="{ 'compare-active': showCompare }">
       <div class="pdf-col pdf-header main-header">
@@ -45,6 +50,11 @@
           >
             {{ similarityLoading ? 'コピペチェック中...' : 'コピペチェック' }}
           </button>
+          <div class="btn-group" role="group" aria-label="PDFズーム">
+            <button class="btn btn-outline-secondary" @click="zoomOut" :disabled="zoomPercent <= zoomMin">-</button>
+            <span class="btn btn-outline-secondary disabled" v-text="zoomPercent + '%'"></span>
+            <button class="btn btn-outline-secondary" @click="zoomIn" :disabled="zoomPercent >= zoomMax">+</button>
+          </div>
           <select class="form-select d-inline-block" style="width:auto;" v-model="compareUserId" @change="loadCompareUser">
             <option value="">比較ユーザを選択</option>
             <option v-for="u in compareCandidates" :key="u.user_id" :value="String(u.user_id)">

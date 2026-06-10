@@ -31,6 +31,10 @@ new Vue({
         rubricSavedTotal: window.finalRubricSavedTotal,
         scoreDetailsTotal: window.finalScoreDetailsTotal,
         adjustmentScoreInput: String(window.finalAdjustmentScore ?? 0),
+        zoomPercent: 100,
+        zoomMin: 50,
+        zoomMax: 200,
+        zoomStep: 5,
     },
     computed: {
         rubricExists() {
@@ -276,6 +280,32 @@ new Vue({
             if (!this.showCompare) return;
             this.syncScroll = !this.syncScroll;
         },
+        normalizeZoom(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return this.zoomPercent;
+            const stepped = Math.round(numeric / this.zoomStep) * this.zoomStep;
+            return Math.min(this.zoomMax, Math.max(this.zoomMin, stepped));
+        },
+        setZoom(value) {
+            const next = this.normalizeZoom(value);
+            if (next === this.zoomPercent) return;
+            this.zoomPercent = next;
+            this.$nextTick(() => {
+                this.renderMainPdf();
+                if (this.showCompare && this.comparePdfUrl) {
+                    this.renderComparePdf();
+                }
+            });
+        },
+        zoomIn() {
+            this.setZoom(this.zoomPercent + this.zoomStep);
+        },
+        zoomOut() {
+            this.setZoom(this.zoomPercent - this.zoomStep);
+        },
+        getPdfRenderScale() {
+            return 1.2 * (this.zoomPercent / 100);
+        },
         onMainScroll(e) {
             if (!this.showCompare || !this.syncScroll || this.syncingScroll) return;
             const target = this.$refs.comparePdfArea;
@@ -348,7 +378,7 @@ new Vue({
             });
 
             const renderPagesSequentially = async (pdf) => {
-                const baseScale = 1.2;
+                const baseScale = this.getPdfRenderScale();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
@@ -399,7 +429,7 @@ new Vue({
                 standardFontDataUrl: STANDARD_FONT_URL,
             });
             loadingTask.promise.then(async pdf => {
-                const baseScale = 1.2;
+                const baseScale = this.getPdfRenderScale();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
