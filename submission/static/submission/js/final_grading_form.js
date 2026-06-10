@@ -37,6 +37,8 @@ new Vue({
         zoomMin: 50,
         zoomMax: 200,
         zoomStep: 5,
+        mainPdfRenderToken: 0,
+        comparePdfRenderToken: 0,
     },
     computed: {
         rubricExists() {
@@ -110,6 +112,7 @@ new Vue({
             } catch (error) {
                 this.showPdfControls = true;
             }
+            this.$nextTick(() => this.applyPdfControlsVisibility());
         },
         savePdfControlsPreference() {
             try {
@@ -118,8 +121,15 @@ new Vue({
                 // localStorage が使えない環境では当回表示だけ維持する。
             }
         },
+        applyPdfControlsVisibility() {
+            const panel = this.$el ? this.$el.querySelector('.grading-control-panel') : null;
+            if (panel) {
+                panel.hidden = !this.showPdfControls;
+            }
+        },
         togglePdfControls() {
             this.showPdfControls = !this.showPdfControls;
+            this.$nextTick(() => this.applyPdfControlsVisibility());
             this.savePdfControlsPreference();
         },
         selectRubricOption(criterionId, optionId) {
@@ -297,6 +307,8 @@ new Vue({
             this.showCompare = !this.showCompare;
             if (this.showCompare) {
                 this.$nextTick(() => this.renderComparePdf());
+            } else {
+                this.comparePdfRenderToken += 1;
             }
         },
         toggleSyncScroll() {
@@ -384,6 +396,7 @@ new Vue({
                 });
         },
         renderMainPdf() {
+            const renderToken = ++this.mainPdfRenderToken;
             const url = window.pdf_url;
             const container = this.$refs.pdfArea;
             if (!container) return;
@@ -401,10 +414,20 @@ new Vue({
             });
 
             const renderPagesSequentially = async (pdf) => {
+                if (renderToken !== this.mainPdfRenderToken) return;
                 const baseScale = this.getPdfRenderScale();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const pageSlots = [];
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'pdf-render-page-slot';
+                    container.appendChild(slot);
+                    pageSlots.push(slot);
+                }
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    if (renderToken !== this.mainPdfRenderToken) return;
                     const page = await pdf.getPage(pageNum);
+                    if (renderToken !== this.mainPdfRenderToken) return;
                     const viewport = page.getViewport({ scale: baseScale });
                     const cssWidth = viewport.width;
                     const cssHeight = viewport.height;
@@ -419,7 +442,7 @@ new Vue({
                     canvas.style.width = `${cssWidth}px`;
                     canvas.style.height = `${cssHeight}px`;
 
-                    container.appendChild(canvas);
+                    pageSlots[pageNum - 1].appendChild(canvas);
 
                     await page.render({
                         canvasContext: ctx,
@@ -430,11 +453,13 @@ new Vue({
             };
 
             loadingTask.promise.then(pdf => renderPagesSequentially(pdf)).catch(err => {
+                if (renderToken !== this.mainPdfRenderToken) return;
                 console.error('PDF 読み込みエラー:', err);
                 container.innerHTML = '<p class="text-danger text-center mt-3">PDF を表示できませんでした。</p>';
             });
         },
         renderComparePdf() {
+            const renderToken = ++this.comparePdfRenderToken;
             const container = this.$refs.comparePdfPages;
             if (!container) return;
             container.innerHTML = '';
@@ -452,10 +477,20 @@ new Vue({
                 standardFontDataUrl: STANDARD_FONT_URL,
             });
             loadingTask.promise.then(async pdf => {
+                if (renderToken !== this.comparePdfRenderToken) return;
                 const baseScale = this.getPdfRenderScale();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const pageSlots = [];
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'pdf-render-page-slot';
+                    container.appendChild(slot);
+                    pageSlots.push(slot);
+                }
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    if (renderToken !== this.comparePdfRenderToken) return;
                     const page = await pdf.getPage(pageNum);
+                    if (renderToken !== this.comparePdfRenderToken) return;
                     const viewport = page.getViewport({ scale: baseScale });
                     const cssWidth = viewport.width;
                     const cssHeight = viewport.height;
@@ -467,13 +502,15 @@ new Vue({
                     canvas.height = Math.floor(cssHeight * dpr);
                     canvas.style.width = `${cssWidth}px`;
                     canvas.style.height = `${cssHeight}px`;
-                    container.appendChild(canvas);
+                    pageSlots[pageNum - 1].appendChild(canvas);
                     await page.render({ canvasContext: ctx, viewport, transform: [dpr, 0, 0, dpr, 0, 0] }).promise;
                 }
             }).catch(err => {
+                if (renderToken !== this.comparePdfRenderToken) return;
                 console.error('Compare PDF 読み込みエラー:', err);
                 container.innerHTML = '<p class="text-danger text-center mt-3">比較PDF を表示できませんでした。</p>';
             }).finally(() => {
+                if (renderToken !== this.comparePdfRenderToken) return;
                 this.compareLoading = false;
             });
         },
