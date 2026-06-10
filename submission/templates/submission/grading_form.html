@@ -24,6 +24,7 @@
                 <div v-show="showPdfControls" class="grading-control-panel">
                     <div class="mb-2">
                         <span class="me-3">学生名: {{ submission.student.userprofile.full_name }}</span>
+                        <span class="me-3">学生番号: {{ submission.student.userprofile.student_id }}</span>
                         <span class="me-3">実験番号: {{ submission.experiment_number }}</span>
                         <span>提出日: {{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
                     </div>
