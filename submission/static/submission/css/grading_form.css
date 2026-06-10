@@ -69,10 +69,22 @@
 }
 
 .grading-controls-toggle {
+    position: relative;
+    z-index: 1301;
     display: flex;
     align-items: center;
     gap: 10px;
     min-height: 32px;
+    pointer-events: auto;
+}
+
+.grading-controls-toggle .btn {
+    pointer-events: auto;
+}
+
+#final-grading-form .main-header {
+    position: relative;
+    z-index: 1301;
 }
 
 .grading-control-panel {

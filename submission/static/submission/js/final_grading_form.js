@@ -112,7 +112,10 @@ new Vue({
             } catch (error) {
                 this.showPdfControls = true;
             }
-            this.$nextTick(() => this.applyPdfControlsVisibility());
+            this.$nextTick(() => {
+                this.applyPdfControlsVisibility();
+                this.updatePdfControlsToggleButton();
+            });
         },
         savePdfControlsPreference() {
             try {
@@ -127,9 +130,18 @@ new Vue({
                 panel.hidden = !this.showPdfControls;
             }
         },
+        updatePdfControlsToggleButton() {
+            const button = document.getElementById('final-pdf-controls-toggle');
+            if (button) {
+                button.textContent = this.showPdfControls ? '操作欄を隠す' : '操作欄を表示';
+            }
+        },
         togglePdfControls() {
             this.showPdfControls = !this.showPdfControls;
-            this.$nextTick(() => this.applyPdfControlsVisibility());
+            this.$nextTick(() => {
+                this.applyPdfControlsVisibility();
+                this.updatePdfControlsToggleButton();
+            });
             this.savePdfControlsPreference();
         },
         selectRubricOption(criterionId, optionId) {
@@ -517,6 +529,14 @@ new Vue({
     },
     mounted() {
         this.loadPdfControlsPreference();
+        const toggleButton = document.getElementById('final-pdf-controls-toggle');
+        if (toggleButton) {
+            toggleButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.togglePdfControls();
+            });
+        }
         this.renderMainPdf();
         window.addEventListener('keydown', this.handleGlobalKeydown);
     },

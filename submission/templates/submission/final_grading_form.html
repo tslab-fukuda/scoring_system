@@ -21,7 +21,7 @@
       <div class="pdf-col pdf-header main-header">
         {% verbatim %}
         <div class="grading-controls-toggle mb-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" @click.prevent.stop="togglePdfControls">
+          <button id="final-pdf-controls-toggle" type="button" class="btn btn-sm btn-outline-secondary">
             {{ showPdfControls ? '操作欄を隠す' : '操作欄を表示' }}
           </button>
           <span v-if="!showPdfControls" class="text-muted small">操作欄を折りたたみ中</span>
