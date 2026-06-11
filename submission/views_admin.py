@@ -1934,7 +1934,7 @@ def admin_get_submissions_api(request):
     day = request.GET.get('experiment_day')
     group = request.GET.get('experiment_group')
     exp_no = request.GET.get('experiment_number')
-    student_id = (request.GET.get('student_id') or '').strip()
+    student_id_filter = (request.GET.get('student_id') or '').strip()
     offering_id = request.GET.get('offering_id')
     graded_filter = _request_bool_param(request, 'graded', False)
     base_qs = Submission.objects.filter(report_type='main', accepted=False).select_related('student', 'student__userprofile')
@@ -1946,9 +1946,9 @@ def admin_get_submissions_api(request):
         count_map = Counter((sub.student_id, sub.course_offering_id, sub.experiment_number) for sub in base_qs)
 
         # 3回提出され、進捗条件を満たすものを最新1件だけ自動受付
-        for (student_id, course_offering_id, experiment_number), cnt in count_map.items():
+        for (sub_student_id, course_offering_id, experiment_number), cnt in count_map.items():
             comp_qs = ExperimentCompletion.objects.filter(
-                student_id=student_id,
+                student_id=sub_student_id,
                 experiment_number=experiment_number,
                 course_offering_id=course_offering_id,
             )
@@ -1956,7 +1956,7 @@ def admin_get_submissions_api(request):
             completed = comp_status[0] if comp_status else False
 
             progress_qs = ExperimentProgress.objects.filter(
-                student_id=student_id,
+                student_id=sub_student_id,
                 experiment_number=experiment_number,
                 course_offering_id=course_offering_id,
             )
@@ -1966,7 +1966,7 @@ def admin_get_submissions_api(request):
                 already_accepted = Submission.objects.filter(
                     report_type='main',
                     accepted=True,
-                    student_id=student_id,
+                    student_id=sub_student_id,
                     experiment_number=experiment_number,
                     course_offering_id=course_offering_id,
                 ).exists()
@@ -1977,7 +1977,7 @@ def admin_get_submissions_api(request):
                     report_type='main',
                     graded=False,
                     accepted=False,
-                    student_id=student_id,
+                    student_id=sub_student_id,
                     experiment_number=experiment_number,
                     course_offering_id=course_offering_id,
                 ).order_by('-submitted_at', '-id').first()
@@ -1990,8 +1990,8 @@ def admin_get_submissions_api(request):
     qs = filter_queryset_by_student_enrollment(qs, offering_id, day=day, group=group)
     if exp_no:
         qs = qs.filter(experiment_number=exp_no)
-    if student_id:
-        qs = qs.filter(student__userprofile__student_id__icontains=student_id)
+    if student_id_filter:
+        qs = qs.filter(student__userprofile__student_id__icontains=student_id_filter)
     qs = qs.order_by('-submitted_at')
     
     # 各実験ごとの student/course_offering/experiment_number 内での提出順を算出
