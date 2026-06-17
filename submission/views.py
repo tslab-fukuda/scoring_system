@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.conf import settings
 
 # Create your views here.
 import json
@@ -6,6 +7,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.auth import login
 from django.shortcuts import redirect
+from django.http import Http404
 from django.contrib.auth.models import User
 from django.core.serializers import serialize
 from django.contrib.auth.decorators import user_passes_test
@@ -45,6 +47,12 @@ def signup_view(request):
     else:
         form = SignUpForm()
     return render(request, 'registration/signup.html', {'form': form})
+
+
+def learning_content_view(request):
+    if not getattr(settings, 'DEBUG', False):
+        raise Http404("Learning content is available only in the test environment.")
+    return render(request, 'submission/learning_content.html')
 
 @login_required
 def index_redirect(request):

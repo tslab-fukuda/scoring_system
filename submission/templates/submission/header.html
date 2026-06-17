@@ -12,7 +12,7 @@
   <span class="ts-header-title">情報工学実験　管理システム</span>
   <span v-if="overrideActive" class="view-as-indicator">閲覧ロール: [[ viewRoleLabel ]]</span>
   <!-- <sub class="subtitle">presented by TSlab</sub> -->
-  <button class="notification-toggle" type="button" @click="openNotifications" aria-label="お知らせ">
+  <button v-if="isAuthenticated" class="notification-toggle" type="button" @click="openNotifications" aria-label="お知らせ">
     <span>🔔</span>
     <span v-if="notificationUnreadCount > 0" class="notification-badge">[[ notificationBadgeText ]]</span>
   </button>
@@ -25,6 +25,11 @@
       <aside class="menu-panel glass" @click.stop>
         <ul class="menu-list">
           {% if not attendance_only %}
+          {% if learning_content_enabled %}
+          <li><a href="{% url 'learning_content' %}" class="menu-link"><span class="menu-ico">📘</span> 学習コンテンツ</a></li>
+          {% endif %}
+          {% if request.user.is_authenticated %}
+          <template v-if="isAuthenticated">
           <template v-if="role === 'admin'">
             <li><a href="{% url 'user_list' %}" class="menu-link"><span class="menu-ico">👤</span> ユーザ一覧</a></li>
             <li><a href="{% url 'group_assignment_builder' %}" class="menu-link"><span class="menu-ico">👥</span> 班分け作成</a></li>
@@ -38,6 +43,8 @@
             <li v-if="role === 'teacher' || role === 'course-teacher'"><a href="{% url 'stamp_list' %}" class="menu-link"><span class="menu-ico">🔖</span> スタンプ管理</a></li>
             <li v-if="role === 'non-editing teacher'"><a href="{% url 'final_rubric_settings' %}" class="menu-link"><span class="menu-ico">📐</span> 最終評価基準設定</a></li>
           </template>
+          </template>
+          {% endif %}
           {% endif %}
           <!-- <template v-else>
             <li><span class="menu-link disabled"><span class="menu-ico">🙍</span>（メニュー例）</span></li>
@@ -45,8 +52,10 @@
           {% if not attendance_only and can_view_attendance %}
           <li><a href="/attendance/list/" class="menu-link"><span class="menu-ico">🕒</span> 出席確認</a></li>
           {% endif %}
-          <li class="divider"></li>
+          <li v-if="isAuthenticated" class="divider"></li>
           {% if not attendance_only %}
+          {% if request.user.is_authenticated %}
+          <template v-if="isAuthenticated">
           <li class="user-label">
             <a href="/submission/user_profile/" class="menu-link">
               <span class="menu-ico">🙍</span> プロフィール
@@ -68,8 +77,11 @@
           <li v-if="['teacher', 'admin', 'course-teacher'].includes(actualRole)">
             <a href="{% url 'study_analytics' %}" class="menu-link"><span class="menu-ico">📊</span> 授業分析</a>
           </li>
+          </template>
+          {% endif %}
           {% endif %}
           {% if not attendance_only %}
+          {% if request.user.is_authenticated %}
           <li v-if="actualRole === 'admin'" class="view-as-section">
             <div class="view-as-label">閲覧ロール切替</div>
             <div class="view-as-controls">
@@ -96,6 +108,8 @@
             <div v-if="overrideActive" class="view-as-note">現在: [[ viewRoleLabel ]]</div>
           </li>
           {% endif %}
+          {% endif %}
+          {% if request.user.is_authenticated %}
           <li>
             <form method="post" action="{% url 'logout' %}" style="margin:0; padding:0; display:inline;">
               {% csrf_token %}
@@ -105,6 +119,7 @@
               </button>
             </form>
           </li>
+          {% endif %}
         </ul>
       </aside>
     </div>

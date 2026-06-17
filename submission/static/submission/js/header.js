@@ -3,11 +3,12 @@ new Vue({
     delimiters: ['[[', ']]'],
     data: {
         showMenu: false,
-        role: USER_ROLE || 'student',
+        isAuthenticated: !!window.USER_IS_AUTHENTICATED,
+        role: USER_ROLE || '',
         userName: USER_NAME || 'USER',
         isDark: localStorage.getItem('dark-mode') === 'true',
-        actualRole: ACTUAL_ROLE || USER_ROLE || 'student',
-        viewRole: USER_ROLE || 'student',
+        actualRole: ACTUAL_ROLE || USER_ROLE || '',
+        viewRole: USER_ROLE || '',
         showNotifications: false,
         notificationLoading: false,
         notificationItems: [],
@@ -590,6 +591,9 @@ new Vue({
     mounted() {
         if (this.isDark) {
             document.body.classList.add('dark-mode');
+        }
+        if (!this.isAuthenticated) {
+            return;
         }
         this.refreshNotificationState();
         this.notificationPollTimer = window.setInterval(() => {

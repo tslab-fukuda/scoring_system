@@ -28,6 +28,7 @@
         var USER_ROLE = "{{ effective_role }}";
         var ACTUAL_ROLE = "{{ actual_role }}";
         var ROLE_OVERRIDE = "{{ role_override }}";
+        var USER_IS_AUTHENTICATED = {{ request.user.is_authenticated|yesno:"true,false" }};
         var CSRF_TOKEN = "{{ csrf_token }}";
         var INDEX_URL = "{% url 'index_redirect' %}";
     </script>

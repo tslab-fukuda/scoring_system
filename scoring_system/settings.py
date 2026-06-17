@@ -145,6 +145,7 @@ TEMPLATES = [
                 'submission.context_processors.login_flags',
                 'submission.context_processors.role_context',
                 'submission.context_processors.attendance_flags',
+                'submission.context_processors.learning_content_flags',
             ],
         },
     },

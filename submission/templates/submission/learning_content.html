@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}学習コンテンツ{% endblock %}
+
+{% block extra_css %}
+<style>
+  .learning-content-page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+  }
+
+  .learning-content-header {
+    margin-bottom: 24px;
+  }
+
+  .learning-content-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .learning-content-shell {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .learning-content-section {
+    border-left: 4px solid #0d6efd;
+    padding-left: 16px;
+    margin-bottom: 24px;
+  }
+
+  .learning-content-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .learning-content-section h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .learning-content-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .learning-content-card {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .learning-content-card-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .learning-content-note {
+    color: #6c757d;
+    font-size: 0.95rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="learning-content-page">
+  <div class="learning-content-header">
+    <h1>学習コンテンツ</h1>
+    <p class="learning-content-note">
+      テスト環境でコンテンツ閲覧サービスの導線と表示構成を確認するためのページです。
+    </p>
+  </div>
+
+  <div class="learning-content-shell">
+    <section class="learning-content-section">
+      <h2>コンテンツ閲覧サービス</h2>
+      <p>
+        PDF、MP4、外部ストレージ上の教材リンクを実験番号単位で提示する想定です。
+        現段階では要件整理用のプレースホルダーとして表示しています。
+      </p>
+      <div class="learning-content-list">
+        <div class="learning-content-card">
+          <div class="learning-content-card-title">実験番号単位のページ</div>
+          <div class="learning-content-note">実験番号ごとに教材セクションを作成します。</div>
+        </div>
+        <div class="learning-content-card">
+          <div class="learning-content-card-title">外部リンク管理</div>
+          <div class="learning-content-note">Google Drive / Box のPDF・MP4リンクを扱います。</div>
+        </div>
+        <div class="learning-content-card">
+          <div class="learning-content-card-title">公開期間</div>
+          <div class="learning-content-note">公開開始日時と終了日時を設定する想定です。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="learning-content-section">
+      <h2>今後追加する機能</h2>
+      <p class="learning-content-note">
+        大学ドメイン認証、閲覧ログ、course-teacher / admin 向け編集画面、ドラッグ&ドロップによる並び替えを段階的に追加します。
+      </p>
+    </section>
+  </div>
+</main>
+{% endblock %}

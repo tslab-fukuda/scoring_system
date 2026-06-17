@@ -33,3 +33,9 @@ def attendance_flags(request):
         'attendance_only': is_attendance_only(request.user),
         'can_view_attendance': can_view_attendance(request.user),
     }
+
+
+def learning_content_flags(request):
+    return {
+        'learning_content_enabled': getattr(settings, 'DEBUG', False),
+    }
