@@ -13,6 +13,7 @@ urlpatterns = [
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('', views.index_redirect, name='index_redirect'),
     path('learning_content/', views.learning_content_view, name='learning_content'),
+    path('learning_content/manage/', views.learning_content_manage_view, name='learning_content_manage'),
     
     # 全員共通
     path('api_user_profile/', views.api_user_profile, name='api_user_profile'),

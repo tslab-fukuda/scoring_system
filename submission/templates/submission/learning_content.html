@@ -6,12 +6,16 @@
 {% block extra_css %}
 <style>
   .learning-content-page {
-    max-width: 1120px;
+    max-width: 1180px;
     margin: 0 auto;
-    padding: 32px 16px 48px;
+    padding: 32px 16px 56px;
   }
 
   .learning-content-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
     margin-bottom: 24px;
   }
 
@@ -21,50 +25,238 @@
     margin-bottom: 8px;
   }
 
-  .learning-content-shell {
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 8px;
-    padding: 24px;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .learning-content-section {
-    border-left: 4px solid #0d6efd;
-    padding-left: 16px;
-    margin-bottom: 24px;
-  }
-
-  .learning-content-section:last-child {
-    margin-bottom: 0;
-  }
-
-  .learning-content-section h2 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-
-  .learning-content-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 12px;
-    margin-top: 16px;
-  }
-
-  .learning-content-card {
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 8px;
-    padding: 16px;
-  }
-
-  .learning-content-card-title {
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-
   .learning-content-note {
     color: #6c757d;
     font-size: 0.95rem;
+  }
+
+  .learning-editor-panel {
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    background: rgba(13, 110, 253, 0.06);
+  }
+
+  .learning-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 420px) auto;
+    gap: 16px;
+    align-items: end;
+  }
+
+  .learning-content-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .learning-content-card {
+    position: relative;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    overflow: visible;
+  }
+
+  .learning-content-card.is-hidden {
+    border-style: dashed;
+    opacity: 0.72;
+  }
+
+  .learning-content-card-inner {
+    padding: 22px 24px;
+  }
+
+  .learning-content-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .learning-content-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .learning-content-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+
+  .learning-content-summary {
+    white-space: pre-wrap;
+    margin-bottom: 0;
+  }
+
+  .learning-menu {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .learning-menu > summary {
+    list-style: none;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(148, 163, 184, 0.55);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .learning-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .learning-menu-list {
+    position: absolute;
+    top: 42px;
+    right: 0;
+    min-width: 190px;
+    z-index: 20;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+    padding: 8px;
+  }
+
+  .learning-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #212529;
+    text-align: left;
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+
+  .learning-menu-item:hover {
+    background: #f1f5f9;
+  }
+
+  .learning-menu-item.danger {
+    color: #dc3545;
+  }
+
+  .learning-edit-panel {
+    border-top: 1px dashed rgba(148, 163, 184, 0.55);
+    padding: 18px 24px 22px;
+    background: rgba(248, 250, 252, 0.72);
+  }
+
+  .learning-create-panel {
+    border: 1px dashed rgba(13, 110, 253, 0.45);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+
+  .learning-empty {
+    border: 1px dashed rgba(148, 163, 184, 0.45);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    color: #6c757d;
+  }
+
+  .learning-block-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 18px;
+  }
+
+  .learning-block {
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    border-radius: 8px;
+    background: rgba(248, 250, 252, 0.72);
+    overflow: visible;
+  }
+
+  .learning-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  }
+
+  .learning-block-title {
+    font-weight: 700;
+  }
+
+  .learning-block-frame {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: #fff;
+  }
+
+  .learning-block-edit {
+    border-top: 1px dashed rgba(148, 163, 184, 0.55);
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .learning-block-create {
+    border: 1px dashed rgba(13, 110, 253, 0.45);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 18px;
+  }
+
+  .learning-code-area {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    min-height: 160px;
+  }
+
+  body.dark-mode .learning-menu-list {
+    background: #242424;
+    border-color: #444;
+  }
+
+  body.dark-mode .learning-menu-item {
+    color: #e9ecef;
+  }
+
+  body.dark-mode .learning-menu-item:hover {
+    background: #333;
+  }
+
+  body.dark-mode .learning-edit-panel {
+    background: rgba(32, 32, 32, 0.88);
+  }
+
+  body.dark-mode .learning-block {
+    background: rgba(32, 32, 32, 0.78);
+  }
+
+  body.dark-mode .learning-block-edit,
+  body.dark-mode .learning-block-create {
+    background: rgba(24, 24, 24, 0.88);
+  }
+
+  @media (max-width: 720px) {
+    .learning-content-header,
+    .learning-toolbar {
+      display: block;
+    }
+
+    .learning-toolbar .btn {
+      margin-top: 12px;
+    }
   }
 </style>
 {% endblock %}
@@ -72,41 +264,576 @@
 {% block content %}
 <main class="learning-content-page">
   <div class="learning-content-header">
-    <h1>学習コンテンツ</h1>
-    <p class="learning-content-note">
-      テスト環境でコンテンツ閲覧サービスの導線と表示構成を確認するためのページです。
-    </p>
+    <div>
+      <h1>学習コンテンツ</h1>
+      <p class="learning-content-note mb-0">
+        PDF、MP4、外部ストレージ上の教材リンクを実験番号単位で提示するページです。
+      </p>
+    </div>
   </div>
 
-  <div class="learning-content-shell">
-    <section class="learning-content-section">
-      <h2>コンテンツ閲覧サービス</h2>
-      <p>
-        PDF、MP4、外部ストレージ上の教材リンクを実験番号単位で提示する想定です。
-        現段階では要件整理用のプレースホルダーとして表示しています。
-      </p>
-      <div class="learning-content-list">
-        <div class="learning-content-card">
-          <div class="learning-content-card-title">実験番号単位のページ</div>
-          <div class="learning-content-note">実験番号ごとに教材セクションを作成します。</div>
+  {% if can_manage_learning_content %}
+    <section class="learning-editor-panel">
+      <form method="get" class="learning-toolbar">
+        <div>
+          <label class="form-label">編集対象の科目 / 年度</label>
+          <select class="form-select" name="offering_id" onchange="this.form.submit()">
+            {% for offering in offerings %}
+              <option value="{{ offering.id }}" {% if selected_offering and selected_offering.id == offering.id %}selected{% endif %}>
+                {{ offering.course.code }} {{ offering.course.name }} / {{ offering.year }}
+              </option>
+            {% empty %}
+              <option value="">管理可能な科目/年度がありません</option>
+            {% endfor %}
+          </select>
         </div>
-        <div class="learning-content-card">
-          <div class="learning-content-card-title">外部リンク管理</div>
-          <div class="learning-content-note">Google Drive / Box のPDF・MP4リンクを扱います。</div>
+        <div>
+          <a class="btn btn-outline-primary" href="{% url 'learning_content' %}{% if selected_offering %}?offering_id={{ selected_offering.id }}&create=1{% endif %}">
+            コンテンツを追加
+          </a>
         </div>
-        <div class="learning-content-card">
-          <div class="learning-content-card-title">公開期間</div>
-          <div class="learning-content-note">公開開始日時と終了日時を設定する想定です。</div>
-        </div>
+      </form>
+      <div class="learning-content-note mt-2">
+        この画面上で公開時の見え方を確認しながら、各コンテンツの設定を編集できます。
       </div>
     </section>
 
-    <section class="learning-content-section">
-      <h2>今後追加する機能</h2>
-      <p class="learning-content-note">
-        大学ドメイン認証、閲覧ログ、course-teacher / admin 向け編集画面、ドラッグ&ドロップによる並び替えを段階的に追加します。
-      </p>
-    </section>
+    {% if form_error %}
+      <div class="alert alert-danger">{{ form_error }}</div>
+    {% endif %}
+
+    {% if request.GET.create and selected_offering %}
+      <section class="learning-create-panel">
+        <h2 class="h5 mb-3">コンテンツを追加</h2>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_page">
+          <input type="hidden" name="course_offering_id" value="{{ selected_offering.id }}">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">タイトル</label>
+              <input type="text" class="form-control" name="title" required placeholder="例: I-01,02 予習資料">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">実験番号</label>
+              <input type="text" class="form-control" name="experiment_number" placeholder="例: I-01,02">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">URL用識別子</label>
+              <input type="text" class="form-control" name="slug" placeholder="自動生成">
+            </div>
+            <div class="col-12">
+              <label class="form-label">説明</label>
+              <textarea class="form-control" name="summary" rows="3"></textarea>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">公開開始</label>
+              <input type="datetime-local" class="form-control" name="publish_start_at">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">公開終了</label>
+              <input type="datetime-local" class="form-control" name="publish_end_at">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="create-is-published" name="is_published" value="1">
+                <label class="form-check-label" for="create-is-published">公開する</label>
+              </div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+              <button type="submit" class="btn btn-primary">登録</button>
+              <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ selected_offering.id }}">キャンセル</a>
+            </div>
+          </div>
+        </form>
+      </section>
+    {% endif %}
+  {% endif %}
+
+  <div class="learning-content-list">
+    {% for page in pages %}
+      <article class="learning-content-card {% if can_manage_learning_content and not page.is_published %}is-hidden{% endif %}">
+        <div class="learning-content-card-inner">
+          <div class="learning-content-title-row">
+            <div>
+              <div class="learning-content-meta">
+                {% if page.experiment_number %}
+                  <span class="badge text-bg-primary">{{ page.experiment_number }}</span>
+                {% endif %}
+                <span class="badge text-bg-light">{{ page.course_offering.course.code }} / {{ page.course_offering.year }}</span>
+                {% if can_manage_learning_content %}
+                  {% if page.is_published %}
+                    <span class="badge text-bg-success">公開</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">非公開</span>
+                  {% endif %}
+                {% endif %}
+              </div>
+              <h2 class="learning-content-title">{{ page.title }}</h2>
+            </div>
+            {% if can_manage_learning_content %}
+              <details class="learning-menu">
+                <summary aria-label="コンテンツ操作">⋮</summary>
+                <div class="learning-menu-list">
+	                  <a class="learning-menu-item" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}&edit_page={{ page.id }}">設定を編集する</a>
+                  <a class="learning-menu-item" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}&add_block={{ page.id }}#learning-page-{{ page.id }}">ブロックを追加</a>
+	                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_page">
+                    <input type="hidden" name="page_id" value="{{ page.id }}">
+                    <input type="hidden" name="course_offering_id" value="{{ page.course_offering_id }}">
+                    <button type="submit" class="learning-menu-item">
+                      {% if page.is_published %}非表示{% else %}公開{% endif %}
+                    </button>
+                  </form>
+                  <form method="post" onsubmit="return confirm('このコンテンツを削除します。よろしいですか？');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_page">
+                    <input type="hidden" name="page_id" value="{{ page.id }}">
+                    <input type="hidden" name="course_offering_id" value="{{ page.course_offering_id }}">
+                    <button type="submit" class="learning-menu-item danger">削除</button>
+                  </form>
+                </div>
+              </details>
+            {% endif %}
+          </div>
+          {% if page.summary %}
+            <p class="learning-content-summary">{{ page.summary }}</p>
+          {% else %}
+            <p class="learning-content-note mb-0">このコンテンツには説明文がありません。</p>
+          {% endif %}
+	          {% if can_manage_learning_content %}
+	            <div class="learning-content-note mt-3">
+              公開期間:
+              {{ page.publish_start_at|date:"Y-m-d H:i"|default:"指定なし" }}
+              -
+              {{ page.publish_end_at|date:"Y-m-d H:i"|default:"指定なし" }}
+              / slug: <code>{{ page.slug }}</code>
+            </div>
+	          {% endif %}
+
+          <div id="learning-page-{{ page.id }}" class="learning-block-list">
+            {% for block in page.render_blocks %}
+              <section id="learning-block-{{ block.id }}" class="learning-block">
+                {% if can_manage_learning_content %}
+                  <div class="learning-block-head">
+                    <div>
+                      <span class="learning-block-title">{{ block.title|default:"テキストおよびメディア領域" }}</span>
+                      <span class="badge text-bg-light ms-2">text/media</span>
+                      {% if block.content_type %}
+                        <span class="badge text-bg-secondary ms-1">{{ block.content_type }}</span>
+                      {% endif %}
+                    </div>
+                    <details class="learning-menu">
+                      <summary aria-label="ブロック操作">⋮</summary>
+                      <div class="learning-menu-list">
+                        <a class="learning-menu-item" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}&edit_block={{ block.id }}#learning-block-{{ block.id }}">設定を編集する</a>
+                        <form method="post">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="move_block">
+                          <input type="hidden" name="page_id" value="{{ page.id }}">
+                          <input type="hidden" name="block_id" value="{{ block.id }}">
+                          <input type="hidden" name="direction" value="up">
+                          <button type="submit" class="learning-menu-item">上へ移動</button>
+                        </form>
+                        <form method="post">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="move_block">
+                          <input type="hidden" name="page_id" value="{{ page.id }}">
+                          <input type="hidden" name="block_id" value="{{ block.id }}">
+                          <input type="hidden" name="direction" value="down">
+                          <button type="submit" class="learning-menu-item">下へ移動</button>
+                        </form>
+                        <form method="post" onsubmit="return confirm('このブロックを削除します。よろしいですか？');">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="delete_block">
+                          <input type="hidden" name="page_id" value="{{ page.id }}">
+                          <input type="hidden" name="block_id" value="{{ block.id }}">
+                          <button type="submit" class="learning-menu-item danger">削除</button>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
+                {% endif %}
+                <iframe
+                  class="learning-block-frame"
+                  title="{{ block.title|default:'学習コンテンツブロック' }}"
+                  sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+                  allow="fullscreen"
+                  style="height: {{ block.iframe_height }}px;"
+                  srcdoc="{{ block.render_srcdoc }}"
+                ></iframe>
+
+                {% if can_manage_learning_content and edit_block and edit_block.id == block.id %}
+                  <div class="learning-block-edit">
+                    <h3 class="h5 mb-3">ブロックを編集する</h3>
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="update_block">
+                      <input type="hidden" name="page_id" value="{{ page.id }}">
+                      <input type="hidden" name="block_id" value="{{ block.id }}">
+                      <div class="row g-3">
+                        <div class="col-md-6">
+                          <label class="form-label">ブロック名</label>
+                          <input type="text" class="form-control" name="block_title" value="{{ block.title }}">
+                        </div>
+                        <div class="col-md-3">
+                          <label class="form-label">コンテンツ種別</label>
+                          <select class="form-select" name="content_type">
+                            <option value="" {% if not block.content_type %}selected{% endif %}>なし</option>
+                            <option value="pdf" {% if block.content_type == 'pdf' %}selected{% endif %}>PDF</option>
+                            <option value="mp4" {% if block.content_type == 'mp4' %}selected{% endif %}>MP4</option>
+                            <option value="link" {% if block.content_type == 'link' %}selected{% endif %}>リンク</option>
+                          </select>
+                        </div>
+                        <div class="col-md-3">
+                          <label class="form-label">高さ(px)</label>
+                          <input type="number" class="form-control" name="height" min="160" max="1600" value="{{ block.iframe_height }}">
+                        </div>
+                        <div class="col-12">
+                          <label class="form-label">参照URL</label>
+                          <input type="url" class="form-control" name="external_url" value="{{ block.external_url }}" placeholder="Google Drive / Box など">
+                          <div class="form-text">ログ記録や今後の補助表示用です。表示自体はHTMLにリンクや埋め込みを記述してください。</div>
+                        </div>
+                        <div class="col-12">
+                          <label class="form-label">テンプレート</label>
+                          <div class="d-flex gap-2 align-items-center mb-2">
+                            <select class="form-select learning-template-select" style="max-width: 280px;">
+                              <option value="">選択</option>
+                              <option value="table">表</option>
+                              <option value="list">リスト</option>
+                              <option value="notice">案内文</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary learning-template-apply">挿入</button>
+                          </div>
+                        </div>
+                        <div class="col-12">
+                          <label class="form-label">HTML</label>
+                          <textarea class="form-control learning-code-area" name="body" rows="8">{{ block.body }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label">CSS</label>
+                          <textarea class="form-control learning-code-area" name="custom_css" rows="8">{{ block.custom_css }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label">JS</label>
+                          <textarea class="form-control learning-code-area" name="custom_js" rows="8">{{ block.custom_js }}</textarea>
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                          <button type="submit" class="btn btn-primary">保存</button>
+                          <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}#learning-block-{{ block.id }}">閉じる</a>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                {% endif %}
+              </section>
+            {% endfor %}
+          </div>
+
+          {% if can_manage_learning_content and add_block_page_id == page.id|stringformat:"s" %}
+            <section class="learning-block-create">
+              <h3 class="h5 mb-3">ブロックを追加する</h3>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_block">
+                <input type="hidden" name="page_id" value="{{ page.id }}">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">ブロック名</label>
+                    <input type="text" class="form-control" name="block_title" placeholder="例: 事前確認資料">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">ブロック内レイアウト</label>
+                    <select class="form-select" disabled>
+                      <option>テキストおよびメディア領域</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">高さ(px)</label>
+                    <input type="number" class="form-control" name="height" min="160" max="1600" value="280">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">コンテンツ種別</label>
+                    <select class="form-select" name="content_type">
+                      <option value="">なし</option>
+                      <option value="pdf">PDF</option>
+                      <option value="mp4">MP4</option>
+                      <option value="link">リンク</option>
+                    </select>
+                  </div>
+                  <div class="col-md-8">
+                    <label class="form-label">参照URL</label>
+                    <input type="url" class="form-control" name="external_url" placeholder="Google Drive / Box など">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">テンプレート</label>
+                    <div class="d-flex gap-2 align-items-center mb-2">
+                      <select class="form-select learning-template-select" style="max-width: 280px;">
+                        <option value="">選択</option>
+                        <option value="table">表</option>
+                        <option value="list">リスト</option>
+                        <option value="notice">案内文</option>
+                      </select>
+                      <button type="button" class="btn btn-outline-secondary learning-template-apply">挿入</button>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">HTML</label>
+                    <textarea class="form-control learning-code-area" name="body" rows="8" placeholder="<p>説明文</p>&#10;<a href=&quot;https://...&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;>資料を開く</a>"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">CSS</label>
+                    <textarea class="form-control learning-code-area" name="custom_css" rows="8"></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">JS</label>
+                    <textarea class="form-control learning-code-area" name="custom_js" rows="8"></textarea>
+                  </div>
+                  <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">追加</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}#learning-page-{{ page.id }}">キャンセル</a>
+                  </div>
+                </div>
+              </form>
+            </section>
+          {% endif %}
+	        </div>
+
+        {% if can_manage_learning_content and edit_page and edit_page.id == page.id %}
+          <div class="learning-edit-panel">
+            <h3 class="h5 mb-3">設定を編集する</h3>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update_page">
+              <input type="hidden" name="page_id" value="{{ page.id }}">
+              <input type="hidden" name="course_offering_id" value="{{ page.course_offering_id }}">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">タイトル</label>
+                  <input type="text" class="form-control" name="title" value="{{ page.title }}" required>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">実験番号</label>
+                  <input type="text" class="form-control" name="experiment_number" value="{{ page.experiment_number }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">URL用識別子</label>
+                  <input type="text" class="form-control" name="slug" value="{{ page.slug }}">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">説明</label>
+                  <textarea class="form-control" name="summary" rows="4">{{ page.summary }}</textarea>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">公開開始</label>
+                  <input type="datetime-local" class="form-control" name="publish_start_at" value="{{ page.publish_start_at|date:'Y-m-d\\TH:i' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">公開終了</label>
+                  <input type="datetime-local" class="form-control" name="publish_end_at" value="{{ page.publish_end_at|date:'Y-m-d\\TH:i' }}">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="edit-is-published-{{ page.id }}" name="is_published" value="1" {% if page.is_published %}checked{% endif %}>
+                    <label class="form-check-label" for="edit-is-published-{{ page.id }}">公開する</label>
+                  </div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end gap-2">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}">閉じる</a>
+                </div>
+              </div>
+            </form>
+          </div>
+        {% endif %}
+      </article>
+    {% empty %}
+      <div class="learning-empty">
+        {% if can_manage_learning_content %}
+          表示対象のコンテンツはまだありません。上の「コンテンツを追加」から作成してください。
+        {% else %}
+          現在公開されている学習コンテンツはありません。
+        {% endif %}
+      </div>
+    {% endfor %}
   </div>
 </main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const templates = {
+    table: {
+      html: `<section class="lc-table-block">
+  <h3>資料一覧</h3>
+  <p>必要な資料を確認してください。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>項目</th>
+        <th>内容</th>
+        <th>リンク</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>資料1</td>
+        <td>説明を入力</td>
+        <td><a href="https://example.com" target="_blank" rel="noopener">開く</a></td>
+      </tr>
+      <tr>
+        <td>資料2</td>
+        <td>説明を入力</td>
+        <td><a href="https://example.com" target="_blank" rel="noopener">開く</a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>`,
+      css: `.lc-table-block h3 {
+  margin: 0 0 10px;
+  font-size: 1.25rem;
+}
+.lc-table-block p {
+  margin: 0 0 14px;
+}
+.lc-table-block table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lc-table-block th {
+  background: #eef5ff;
+  font-weight: 700;
+}
+.lc-table-block th,
+.lc-table-block td {
+  border: 1px solid #cbd5e1;
+  padding: 10px 12px;
+  vertical-align: top;
+}`,
+      js: ''
+    },
+    list: {
+      html: `<section class="lc-link-list">
+  <h3>関連資料</h3>
+  <ul>
+    <li>
+      <a href="https://example.com" target="_blank" rel="noopener">PDF資料</a>
+      <span>予習前に確認してください。</span>
+    </li>
+    <li>
+      <a href="https://example.com" target="_blank" rel="noopener">動画資料</a>
+      <span>実験手順の確認用です。</span>
+    </li>
+    <li>
+      <a href="https://example.com" target="_blank" rel="noopener">補足資料</a>
+      <span>必要に応じて参照してください。</span>
+    </li>
+  </ul>
+</section>`,
+      css: `.lc-link-list h3 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+}
+.lc-link-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.lc-link-list li {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+.lc-link-list a {
+  display: inline-block;
+  font-weight: 700;
+  margin-right: 8px;
+}
+.lc-link-list span {
+  color: #475569;
+}`,
+      js: ''
+    },
+    notice: {
+      html: `<section class="lc-notice">
+  <div class="lc-notice-label">重要</div>
+  <h3>大切なお知らせ</h3>
+  <p>
+    ここに案内文を入力してください。実験前に確認してほしい内容や、提出時の注意点などを記載できます。
+  </p>
+  <a class="lc-notice-button" href="https://example.com" target="_blank" rel="noopener">関連資料を開く</a>
+</section>`,
+      css: `.lc-notice {
+  border: 1px solid #bfdbfe;
+  border-left: 6px solid #0d6efd;
+  border-radius: 8px;
+  padding: 18px 20px;
+  background: #eff6ff;
+}
+.lc-notice-label {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0d6efd;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.lc-notice h3 {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+}
+.lc-notice p {
+  margin: 0 0 14px;
+}
+.lc-notice-button {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #0d6efd;
+  color: #fff !important;
+  font-weight: 700;
+}`,
+      js: ''
+    }
+  };
+
+  function hasContent(form) {
+    return ['body', 'custom_css', 'custom_js'].some((name) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      return field && field.value.trim();
+    });
+  }
+
+  function applyTemplate(button) {
+    const form = button.closest('form');
+    if (!form) return;
+    const select = form.querySelector('.learning-template-select');
+    const selected = select ? templates[select.value] : null;
+    if (!selected) return;
+    if (hasContent(form) && !window.confirm('現在のHTML/CSS/JSをテンプレートで上書きします。よろしいですか？')) {
+      return;
+    }
+    const body = form.querySelector('[name="body"]');
+    const css = form.querySelector('[name="custom_css"]');
+    const js = form.querySelector('[name="custom_js"]');
+    if (body) body.value = selected.html;
+    if (css) css.value = selected.css;
+    if (js) js.value = selected.js;
+  }
+
+  document.addEventListener('click', function(event) {
+    const button = event.target.closest('.learning-template-apply');
+    if (!button) return;
+    event.preventDefault();
+    applyTemplate(button);
+  });
+})();
+</script>
 {% endblock %}

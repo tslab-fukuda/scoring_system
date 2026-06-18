@@ -410,6 +410,152 @@ class Enrollment(models.Model):
         return f"{self.user.username} - {self.course_offering} ({self.role})"
 
 
+class LearningContentPage(models.Model):
+    LAYOUT_MODE_SECTION = 'section'
+    LAYOUT_MODE_CHOICES = [
+        (LAYOUT_MODE_SECTION, 'セクション'),
+    ]
+
+    course_offering = models.ForeignKey(
+        CourseOffering,
+        on_delete=models.CASCADE,
+        related_name='learning_content_pages'
+    )
+    experiment_number = models.CharField(max_length=32, blank=True)
+    title = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=120)
+    summary = models.TextField(blank=True)
+    layout_mode = models.CharField(max_length=24, choices=LAYOUT_MODE_CHOICES, default=LAYOUT_MODE_SECTION)
+    layout_json = models.JSONField(default=dict, blank=True)
+    is_published = models.BooleanField(default=False)
+    publish_start_at = models.DateTimeField(null=True, blank=True)
+    publish_end_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_learning_content_pages'
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_learning_content_pages'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['course_offering', 'experiment_number', 'title', 'id']
+        unique_together = ('course_offering', 'slug')
+        indexes = [
+            models.Index(fields=['course_offering', 'experiment_number']),
+            models.Index(fields=['is_published', 'publish_start_at', 'publish_end_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.course_offering} / {self.experiment_number or '-'} / {self.title}"
+
+
+class LearningContentBlock(models.Model):
+    BLOCK_TEXT_MEDIA = 'text_media'
+    BLOCK_SECTION = 'section'
+    BLOCK_TEXT = 'text'
+    BLOCK_LINK = 'link'
+    BLOCK_TABLE = 'table'
+    BLOCK_TABS = 'tabs'
+    BLOCK_TYPE_CHOICES = [
+        (BLOCK_TEXT_MEDIA, 'テキストおよびメディア領域'),
+        (BLOCK_SECTION, 'セクション'),
+        (BLOCK_TEXT, 'テキスト'),
+        (BLOCK_LINK, 'リンク'),
+        (BLOCK_TABLE, '表'),
+        (BLOCK_TABS, 'タブ'),
+    ]
+    CONTENT_NONE = ''
+    CONTENT_PDF = 'pdf'
+    CONTENT_MP4 = 'mp4'
+    CONTENT_LINK = 'link'
+    CONTENT_TYPE_CHOICES = [
+        (CONTENT_NONE, 'なし'),
+        (CONTENT_PDF, 'PDF'),
+        (CONTENT_MP4, 'MP4'),
+        (CONTENT_LINK, 'リンク'),
+    ]
+
+    page = models.ForeignKey(
+        LearningContentPage,
+        on_delete=models.CASCADE,
+        related_name='blocks'
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children'
+    )
+    block_type = models.CharField(max_length=16, choices=BLOCK_TYPE_CHOICES, default=BLOCK_LINK)
+    content_type = models.CharField(max_length=16, choices=CONTENT_TYPE_CHOICES, blank=True, default=CONTENT_NONE)
+    title = models.CharField(max_length=120, blank=True)
+    body = models.TextField(blank=True)
+    external_url = models.URLField(max_length=1000, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    metadata_json = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        indexes = [
+            models.Index(fields=['page', 'parent', 'display_order']),
+            models.Index(fields=['content_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.page_id} / {self.block_type} / {self.title or self.external_url}"
+
+
+class LearningContentAccessLog(models.Model):
+    ACTION_PAGE_VIEW = 'page_view'
+    ACTION_CONTENT_OPEN = 'content_open'
+    ACTION_CHOICES = [
+        (ACTION_PAGE_VIEW, 'ページ閲覧'),
+        (ACTION_CONTENT_OPEN, 'コンテンツを開く'),
+    ]
+
+    page = models.ForeignKey(
+        LearningContentPage,
+        on_delete=models.CASCADE,
+        related_name='access_logs'
+    )
+    block = models.ForeignKey(
+        LearningContentBlock,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='access_logs'
+    )
+    viewer_email = models.EmailField(max_length=255, blank=True)
+    viewer_domain = models.CharField(max_length=255, blank=True)
+    action = models.CharField(max_length=24, choices=ACTION_CHOICES)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    accessed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-accessed_at', '-id']
+        indexes = [
+            models.Index(fields=['page', 'action', 'accessed_at']),
+            models.Index(fields=['viewer_email', 'accessed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.viewer_email or '-'} / {self.page_id} / {self.action} / {self.accessed_at}"
+
+
 class SubmissionTextIndex(models.Model):
     submission = models.OneToOneField(
         Submission,
