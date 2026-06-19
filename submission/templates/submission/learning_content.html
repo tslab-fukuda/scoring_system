@@ -46,22 +46,60 @@
   }
 
   .learning-content-list {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
+    --learning-carousel-height: 680px;
+    position: relative;
+    display: block;
+    min-height: 520px;
+    height: var(--learning-carousel-height);
+    overflow: hidden;
+    perspective: 1400px;
+    perspective-origin: 50% 42%;
+    margin: 0 -16px;
+    padding: 0 16px;
   }
 
   .learning-content-card {
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: min(920px, calc(100vw - 64px));
+    max-height: var(--learning-carousel-height);
+    overflow: auto;
     border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.03);
-    overflow: visible;
+    transform:
+      translateX(-50%)
+      translateX(var(--carousel-x, 0px))
+      translateZ(var(--carousel-z, 0px))
+      rotateY(var(--carousel-rotate-y, 0deg))
+      rotateX(var(--carousel-rotate-x, 0deg))
+      scale(var(--carousel-scale, 1))
+      translateY(var(--carousel-hover-y, 0px));
+    opacity: var(--carousel-opacity, 1);
+    z-index: var(--carousel-z-index, 1);
+    transform-style: preserve-3d;
+    transition: transform 360ms ease, opacity 280ms ease, filter 280ms ease, box-shadow 280ms ease;
+    will-change: transform, opacity;
+    cursor: pointer;
+    scrollbar-width: thin;
   }
 
   .learning-content-card.is-hidden {
     border-style: dashed;
-    opacity: 0.72;
+  }
+
+  .learning-content-card.is-active {
+    cursor: default;
+    background: #fff;
+    box-shadow: 0 18px 46px rgba(15, 23, 42, 0.18);
+  }
+
+  .learning-content-card:hover {
+    --carousel-hover-y: -10px;
+    opacity: 1 !important;
+    filter: saturate(1.08) brightness(1.02);
+    box-shadow: 0 22px 52px rgba(15, 23, 42, 0.22);
   }
 
   .learning-content-card-inner {
@@ -170,6 +208,37 @@
     color: #6c757d;
   }
 
+  .learning-carousel-help {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 12px;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .learning-carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 12px 0 0;
+  }
+
+  .learning-carousel-dot {
+    width: 9px;
+    height: 9px;
+    border: 0;
+    border-radius: 999px;
+    background: #adb5bd;
+    opacity: 0.7;
+    padding: 0;
+  }
+
+  .learning-carousel-dot.is-active {
+    width: 26px;
+    background: #0d6efd;
+    opacity: 1;
+  }
+
   .learning-block-list {
     display: flex;
     flex-direction: column;
@@ -248,6 +317,11 @@
     background: rgba(24, 24, 24, 0.88);
   }
 
+  body.dark-mode .learning-content-card.is-active {
+    background: #1f1f1f;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  }
+
   @media (max-width: 720px) {
     .learning-content-header,
     .learning-toolbar {
@@ -256,6 +330,16 @@
 
     .learning-toolbar .btn {
       margin-top: 12px;
+    }
+
+    .learning-content-list {
+      --learning-carousel-height: 640px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .learning-content-card {
+      width: min(96vw, 720px);
     }
   }
 </style>
@@ -350,9 +434,13 @@
     {% endif %}
   {% endif %}
 
-  <div class="learning-content-list">
+  {% if pages %}
+    <div class="learning-carousel-help">ホイール操作でコンテンツを切り替えます</div>
+  {% endif %}
+
+  <div class="learning-content-list" data-learning-carousel>
     {% for page in pages %}
-      <article class="learning-content-card {% if can_manage_learning_content and not page.is_published %}is-hidden{% endif %}">
+      <article class="learning-content-card {% if can_manage_learning_content and not page.is_published %}is-hidden{% endif %}" data-learning-card data-carousel-index="{{ forloop.counter0 }}" data-page-id="{{ page.id }}">
         <div class="learning-content-card-inner">
           <div class="learning-content-title-row">
             <div>
@@ -658,12 +746,180 @@
       </div>
     {% endfor %}
   </div>
+  {% if pages %}
+    <div class="learning-carousel-dots" data-learning-carousel-dots>
+      {% for page in pages %}
+        <button type="button" class="learning-carousel-dot" data-learning-dot="{{ forloop.counter0 }}" aria-label="{{ page.title }}"></button>
+      {% endfor %}
+    </div>
+  {% endif %}
 </main>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function() {
+  function initLearningCarousel() {
+    const carousel = document.querySelector('[data-learning-carousel]');
+    if (!carousel) return;
+    const cards = Array.from(carousel.querySelectorAll('[data-learning-card]'));
+    if (!cards.length) return;
+    const dots = Array.from(document.querySelectorAll('[data-learning-dot]'));
+    const params = new URLSearchParams(window.location.search);
+    let activeIndex = 0;
+    const targetPageId = params.get('edit_page') || params.get('add_block');
+    const targetBlockId = params.get('edit_block');
+
+    if (targetPageId) {
+      const target = cards.find((card) => card.dataset.pageId === targetPageId);
+      if (target) activeIndex = cards.indexOf(target);
+    } else if (targetBlockId) {
+      const targetBlock = document.getElementById(`learning-block-${targetBlockId}`);
+      const target = targetBlock ? targetBlock.closest('[data-learning-card]') : null;
+      if (target) activeIndex = cards.indexOf(target);
+    }
+
+    let wheelLocked = false;
+    let resizeTimer = null;
+
+    function clampIndex(index) {
+      return Math.max(0, Math.min(cards.length - 1, index));
+    }
+
+    function setCarouselHeight() {
+      const activeCard = cards[activeIndex];
+      if (!activeCard) return;
+      const viewportLimit = Math.max(560, window.innerHeight - 210);
+      const desired = Math.max(520, Math.min(activeCard.scrollHeight + 24, viewportLimit));
+      carousel.style.setProperty('--learning-carousel-height', `${desired}px`);
+    }
+
+    function updateCarousel() {
+      const width = carousel.clientWidth || window.innerWidth;
+      const step = Math.min(360, Math.max(230, width * 0.32));
+      cards.forEach((card, index) => {
+        const offset = index - activeIndex;
+        const distance = Math.min(Math.abs(offset), 4);
+        const side = offset === 0 ? 0 : (offset > 0 ? 1 : -1);
+        const x = offset * step;
+        const z = -distance * 135;
+        const scale = Math.max(0.72, 1 - distance * 0.105);
+        const opacity = offset === 0 ? 1 : Math.max(0.42, 0.62 - (distance - 1) * 0.07);
+        const rotateY = side * Math.min(46, distance * 18);
+        const rotateX = offset === 0 ? 0 : Math.min(12, 5 + distance * 2);
+        const zIndex = offset === 0 ? 1000 : 100 - distance;
+        card.style.setProperty('--carousel-x', `${x}px`);
+        card.style.setProperty('--carousel-z', `${z}px`);
+        card.style.setProperty('--carousel-scale', String(scale));
+        card.style.setProperty('--carousel-opacity', String(opacity));
+        card.style.setProperty('--carousel-rotate-y', `${rotateY}deg`);
+        card.style.setProperty('--carousel-rotate-x', `${rotateX}deg`);
+        card.style.setProperty('--carousel-z-index', String(zIndex));
+        card.classList.toggle('is-active', offset === 0);
+        card.setAttribute('aria-hidden', offset === 0 ? 'false' : 'true');
+      });
+      dots.forEach((dot, index) => {
+        dot.classList.toggle('is-active', index === activeIndex);
+      });
+      setCarouselHeight();
+    }
+
+    function activate(index) {
+      activeIndex = clampIndex(index);
+      updateCarousel();
+    }
+
+    function stepByDelta(delta) {
+      if (cards.length < 2) return;
+      if (wheelLocked) return;
+      if (Math.abs(delta) < 4) return;
+      activate(activeIndex + (delta > 0 ? 1 : -1));
+      wheelLocked = true;
+      window.setTimeout(() => {
+        wheelLocked = false;
+      }, 330);
+    }
+
+    carousel.addEventListener('wheel', function(event) {
+      if (cards.length < 2) return;
+      if (event.target.closest('textarea, select, input')) return;
+      event.preventDefault();
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      stepByDelta(delta);
+    }, { passive: false });
+
+    window.addEventListener('message', function(event) {
+      if (!event.data || event.data.type !== 'learning-content-wheel') return;
+      const delta = Math.abs(event.data.deltaY) >= Math.abs(event.data.deltaX) ? event.data.deltaY : event.data.deltaX;
+      stepByDelta(Number(delta) || 0);
+    });
+
+    cards.forEach((card, index) => {
+      card.addEventListener('click', function(event) {
+        if (index === activeIndex) return;
+        const interactive = event.target.closest('a, button, input, textarea, select, details, summary, iframe, form');
+        if (interactive) return;
+        activate(index);
+      });
+    });
+
+    dots.forEach((dot, index) => {
+      dot.addEventListener('click', () => activate(index));
+    });
+
+    window.addEventListener('resize', function() {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(updateCarousel, 120);
+    });
+
+    updateCarousel();
+  }
+
+  function initLearningBlockThemeSync() {
+    function isDarkMode() {
+      let storedDarkMode = false;
+      try {
+        storedDarkMode = window.localStorage.getItem('dark-mode') === 'true';
+      } catch (e) {
+        storedDarkMode = false;
+      }
+      return document.body.classList.contains('dark-mode') || storedDarkMode;
+    }
+
+    function sendThemeToFrame(frame) {
+      if (!frame || !frame.contentWindow) return;
+      frame.contentWindow.postMessage({
+        type: 'learning-content-theme',
+        isDark: isDarkMode()
+      }, '*');
+    }
+
+    function syncAllFrames() {
+      document.querySelectorAll('.learning-block-frame').forEach(sendThemeToFrame);
+    }
+
+    document.querySelectorAll('.learning-block-frame').forEach((frame) => {
+      frame.addEventListener('load', () => sendThemeToFrame(frame));
+    });
+
+    window.addEventListener('message', function(event) {
+      if (!event.data || event.data.type !== 'learning-content-theme-request') return;
+      syncAllFrames();
+    });
+
+    const observer = new MutationObserver(syncAllFrames);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    window.addEventListener('storage', function(event) {
+      if (event.key === 'dark-mode') syncAllFrames();
+    });
+
+    syncAllFrames();
+  }
+
   const templates = {
     table: {
       html: `<section class="lc-table-block">
@@ -834,6 +1090,16 @@
     event.preventDefault();
     applyTemplate(button);
   });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      initLearningCarousel();
+      initLearningBlockThemeSync();
+    });
+  } else {
+    initLearningCarousel();
+    initLearningBlockThemeSync();
+  }
 })();
 </script>
 {% endblock %}

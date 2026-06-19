@@ -93,7 +93,7 @@ def _learning_content_block_srcdoc(block):
     custom_css = str(metadata.get('custom_css') or '')
     custom_js = str(metadata.get('custom_js') or '')
     base_css = """
-        :root { color-scheme: light; }
+        :root { color-scheme: light dark; }
         * { box-sizing: border-box; }
         html, body {
             margin: 0;
@@ -111,6 +111,36 @@ def _learning_content_block_srcdoc(block):
         table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #dee2e6; padding: 8px; }
         pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
+        body.dark-mode {
+            color: #f1f5f9;
+            background: transparent;
+        }
+        body.dark-mode a { color: #8ab4f8; }
+        body.dark-mode table,
+        body.dark-mode th,
+        body.dark-mode td {
+            border-color: #495057;
+        }
+        body.dark-mode th {
+            background: #2f3a4a;
+        }
+        body.dark-mode td {
+            background: #242424;
+        }
+        body.dark-mode .lc-table-block th {
+            background: #2f3a4a;
+        }
+        body.dark-mode .lc-link-list li,
+        body.dark-mode .lc-notice {
+            border-color: #495057;
+            background: #242424;
+        }
+        body.dark-mode .lc-link-list span {
+            color: #cbd5e1;
+        }
+        body.dark-mode .lc-notice {
+            border-left-color: #8ab4f8;
+        }
     """
     return f"""<!doctype html>
 <html lang="ja">
@@ -135,6 +165,29 @@ def _learning_content_block_srcdoc(block):
       }}, '*');
     }} catch (e) {{}}
   }});
+  document.addEventListener('wheel', function(event) {{
+    var formControl = event.target.closest && event.target.closest('textarea, select, input');
+    if (formControl) return;
+    try {{
+      window.parent.postMessage({{
+        type: 'learning-content-wheel',
+        blockId: {block.id},
+        deltaX: event.deltaX,
+        deltaY: event.deltaY
+      }}, '*');
+      event.preventDefault();
+    }} catch (e) {{}}
+  }}, {{ passive: false }});
+  window.addEventListener('message', function(event) {{
+    if (!event.data || event.data.type !== 'learning-content-theme') return;
+    document.body.classList.toggle('dark-mode', !!event.data.isDark);
+  }});
+  try {{
+    window.parent.postMessage({{
+      type: 'learning-content-theme-request',
+      blockId: {block.id}
+    }}, '*');
+  }} catch (e) {{}}
 }})();
 </script>
 <script>{custom_js}</script>
