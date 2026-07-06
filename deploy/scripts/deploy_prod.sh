@@ -13,8 +13,29 @@ fi
 
 cd "$ROOT_DIR"
 
-echo "[prod] Pull latest code..."
-git pull --ff-only
+echo "[prod] Fetch origin/main..."
+git fetch --prune origin main:refs/remotes/origin/main
+
+git update-index -q --refresh
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "ERROR: working tree is dirty. Refusing to deploy because prod must use origin/main exactly." >&2
+  git status --short >&2
+  exit 1
+fi
+
+echo "[prod] Checkout origin/main..."
+git switch --detach origin/main
+
+HEAD_COMMIT="$(git rev-parse HEAD)"
+ORIGIN_MAIN_COMMIT="$(git rev-parse origin/main)"
+if [[ "$HEAD_COMMIT" != "$ORIGIN_MAIN_COMMIT" ]]; then
+  echo "ERROR: deployed HEAD does not match origin/main." >&2
+  echo "HEAD:        $HEAD_COMMIT" >&2
+  echo "origin/main: $ORIGIN_MAIN_COMMIT" >&2
+  exit 1
+fi
+
+echo "[prod] Using origin/main at $HEAD_COMMIT"
 
 if [[ -f "$DB_PATH" ]]; then
   echo "[prod] Backup DB..."

@@ -1,14 +1,26 @@
+const HEADER_USER_ROLE = window.USER_ROLE || '';
+const HEADER_USER_NAME = window.USER_NAME || 'USER';
+const HEADER_ACTUAL_ROLE = window.ACTUAL_ROLE || HEADER_USER_ROLE;
+const HEADER_CSRF_TOKEN = window.CSRF_TOKEN || '';
+const HEADER_INDEX_URL = window.INDEX_URL || '/';
+let HEADER_IS_DARK = false;
+try {
+    HEADER_IS_DARK = window.localStorage.getItem('dark-mode') === 'true';
+} catch (e) {
+    HEADER_IS_DARK = false;
+}
+
 new Vue({
     el: '#vue-header-app',
     delimiters: ['[[', ']]'],
     data: {
         showMenu: false,
         isAuthenticated: !!window.USER_IS_AUTHENTICATED,
-        role: USER_ROLE || '',
-        userName: USER_NAME || 'USER',
-        isDark: localStorage.getItem('dark-mode') === 'true',
-        actualRole: ACTUAL_ROLE || USER_ROLE || '',
-        viewRole: USER_ROLE || '',
+        role: HEADER_USER_ROLE,
+        userName: HEADER_USER_NAME,
+        isDark: HEADER_IS_DARK,
+        actualRole: HEADER_ACTUAL_ROLE,
+        viewRole: HEADER_USER_ROLE,
         showNotifications: false,
         notificationLoading: false,
         notificationItems: [],
@@ -119,7 +131,7 @@ new Vue({
             } else {
                 document.body.classList.remove('dark-mode');
             }
-            localStorage.setItem('dark-mode', this.isDark);
+            try { window.localStorage.setItem('dark-mode', this.isDark); } catch (e) {}
         },
         applyViewRole() {
             if (!['admin', 'course-teacher'].includes(this.actualRole)) return;
@@ -127,7 +139,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 body: JSON.stringify({ role: this.viewRole })
             })
@@ -137,7 +149,7 @@ new Vue({
                         alert(data.message || '切替に失敗しました');
                         return;
                     }
-                    window.location.href = INDEX_URL || '/';
+                    window.location.href = HEADER_INDEX_URL || '/';
                 })
                 .catch(() => alert('通信エラーが発生しました'));
         },
@@ -196,7 +208,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({})
@@ -396,7 +408,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
@@ -491,7 +503,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
@@ -524,7 +536,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({ decision })
@@ -560,7 +572,7 @@ new Vue({
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
+                    'X-CSRFToken': HEADER_CSRF_TOKEN
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({

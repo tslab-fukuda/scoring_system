@@ -253,6 +253,10 @@
     overflow: visible;
   }
 
+  .learning-block.is-expanded {
+    overflow: hidden;
+  }
+
   .learning-block-head {
     display: flex;
     align-items: center;
@@ -262,8 +266,45 @@
     border-bottom: 1px solid rgba(148, 163, 184, 0.28);
   }
 
+  .learning-block:not(.is-expanded) .learning-block-head {
+    border-bottom: 0;
+  }
+
+  .learning-block-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1 1 auto;
+    gap: 12px;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .learning-block-toggle-main {
+    min-width: 0;
+  }
+
   .learning-block-title {
     font-weight: 700;
+  }
+
+  .learning-block-toggle-icon {
+    flex: 0 0 auto;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .learning-block.is-expanded .learning-block-toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  .learning-block-body {
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
   }
 
   .learning-block-frame {
@@ -310,6 +351,10 @@
 
   body.dark-mode .learning-block {
     background: rgba(32, 32, 32, 0.78);
+  }
+
+  body.dark-mode .learning-block-toggle-icon {
+    color: #cbd5e1;
   }
 
   body.dark-mode .learning-block-edit,
@@ -502,16 +547,25 @@
 
           <div id="learning-page-{{ page.id }}" class="learning-block-list">
             {% for block in page.render_blocks %}
-              <section id="learning-block-{{ block.id }}" class="learning-block">
-                {% if can_manage_learning_content %}
-                  <div class="learning-block-head">
-                    <div>
-                      <span class="learning-block-title">{{ block.title|default:"テキストおよびメディア領域" }}</span>
+              <section id="learning-block-{{ block.id }}" class="learning-block {% if edit_block and edit_block.id == block.id %}is-expanded{% endif %}">
+                <div class="learning-block-head">
+                  <button
+                    type="button"
+                    class="learning-block-toggle"
+                    data-learning-block-toggle
+                    aria-expanded="{% if edit_block and edit_block.id == block.id %}true{% else %}false{% endif %}"
+                    aria-controls="learning-block-body-{{ block.id }}"
+                  >
+                    <span class="learning-block-toggle-main">
+                      <span class="learning-block-title">{{ block.title|default:"ブロック名未設定" }}</span>
                       <span class="badge text-bg-light ms-2">text/media</span>
                       {% if block.content_type %}
                         <span class="badge text-bg-secondary ms-1">{{ block.content_type }}</span>
                       {% endif %}
-                    </div>
+                    </span>
+                    <span class="learning-block-toggle-icon" aria-hidden="true">▶</span>
+                  </button>
+                  {% if can_manage_learning_content %}
                     <details class="learning-menu">
                       <summary aria-label="ブロック操作">⋮</summary>
                       <div class="learning-menu-list">
@@ -541,80 +595,82 @@
                         </form>
                       </div>
                     </details>
-                  </div>
-                {% endif %}
-                <iframe
-                  class="learning-block-frame"
-                  title="{{ block.title|default:'学習コンテンツブロック' }}"
-                  sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
-                  allow="fullscreen"
-                  style="height: {{ block.iframe_height }}px;"
-                  srcdoc="{{ block.render_srcdoc }}"
-                ></iframe>
+                  {% endif %}
+                </div>
+                <div id="learning-block-body-{{ block.id }}" class="learning-block-body" {% if not edit_block or edit_block.id != block.id %}hidden{% endif %}>
+                  <iframe
+                    class="learning-block-frame"
+                    title="{{ block.title|default:'学習コンテンツブロック' }}"
+                    sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+                    allow="fullscreen"
+                    style="height: {{ block.iframe_height }}px;"
+                    srcdoc="{{ block.render_srcdoc }}"
+                  ></iframe>
 
-                {% if can_manage_learning_content and edit_block and edit_block.id == block.id %}
-                  <div class="learning-block-edit">
-                    <h3 class="h5 mb-3">ブロックを編集する</h3>
-                    <form method="post">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="update_block">
-                      <input type="hidden" name="page_id" value="{{ page.id }}">
-                      <input type="hidden" name="block_id" value="{{ block.id }}">
-                      <div class="row g-3">
-                        <div class="col-md-6">
-                          <label class="form-label">ブロック名</label>
-                          <input type="text" class="form-control" name="block_title" value="{{ block.title }}">
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">コンテンツ種別</label>
-                          <select class="form-select" name="content_type">
-                            <option value="" {% if not block.content_type %}selected{% endif %}>なし</option>
-                            <option value="pdf" {% if block.content_type == 'pdf' %}selected{% endif %}>PDF</option>
-                            <option value="mp4" {% if block.content_type == 'mp4' %}selected{% endif %}>MP4</option>
-                            <option value="link" {% if block.content_type == 'link' %}selected{% endif %}>リンク</option>
-                          </select>
-                        </div>
-                        <div class="col-md-3">
-                          <label class="form-label">高さ(px)</label>
-                          <input type="number" class="form-control" name="height" min="160" max="1600" value="{{ block.iframe_height }}">
-                        </div>
-                        <div class="col-12">
-                          <label class="form-label">参照URL</label>
-                          <input type="url" class="form-control" name="external_url" value="{{ block.external_url }}" placeholder="Google Drive / Box など">
-                          <div class="form-text">ログ記録や今後の補助表示用です。表示自体はHTMLにリンクや埋め込みを記述してください。</div>
-                        </div>
-                        <div class="col-12">
-                          <label class="form-label">テンプレート</label>
-                          <div class="d-flex gap-2 align-items-center mb-2">
-                            <select class="form-select learning-template-select" style="max-width: 280px;">
-                              <option value="">選択</option>
-                              <option value="table">表</option>
-                              <option value="list">リスト</option>
-                              <option value="notice">案内文</option>
+                  {% if can_manage_learning_content and edit_block and edit_block.id == block.id %}
+                    <div class="learning-block-edit">
+                      <h3 class="h5 mb-3">ブロックを編集する</h3>
+                      <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_block">
+                        <input type="hidden" name="page_id" value="{{ page.id }}">
+                        <input type="hidden" name="block_id" value="{{ block.id }}">
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label">ブロック名</label>
+                            <input type="text" class="form-control" name="block_title" value="{{ block.title }}" required>
+                          </div>
+                          <div class="col-md-3">
+                            <label class="form-label">コンテンツ種別</label>
+                            <select class="form-select" name="content_type">
+                              <option value="" {% if not block.content_type %}selected{% endif %}>なし</option>
+                              <option value="pdf" {% if block.content_type == 'pdf' %}selected{% endif %}>PDF</option>
+                              <option value="mp4" {% if block.content_type == 'mp4' %}selected{% endif %}>MP4</option>
+                              <option value="link" {% if block.content_type == 'link' %}selected{% endif %}>リンク</option>
                             </select>
-                            <button type="button" class="btn btn-outline-secondary learning-template-apply">挿入</button>
+                          </div>
+                          <div class="col-md-3">
+                            <label class="form-label">高さ(px)</label>
+                            <input type="number" class="form-control" name="height" min="160" max="1600" value="{{ block.iframe_height }}">
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">参照URL</label>
+                            <input type="url" class="form-control" name="external_url" value="{{ block.external_url }}" placeholder="Google Drive / Box など">
+                            <div class="form-text">ログ記録や今後の補助表示用です。表示自体はHTMLにリンクや埋め込みを記述してください。</div>
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">テンプレート</label>
+                            <div class="d-flex gap-2 align-items-center mb-2">
+                              <select class="form-select learning-template-select" style="max-width: 280px;">
+                                <option value="">選択</option>
+                                <option value="table">表</option>
+                                <option value="list">リスト</option>
+                                <option value="notice">案内文</option>
+                              </select>
+                              <button type="button" class="btn btn-outline-secondary learning-template-apply">挿入</button>
+                            </div>
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">HTML</label>
+                            <textarea class="form-control learning-code-area" name="body" rows="8">{{ block.body }}</textarea>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">CSS</label>
+                            <textarea class="form-control learning-code-area" name="custom_css" rows="8">{{ block.custom_css }}</textarea>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">JS</label>
+                            <textarea class="form-control learning-code-area" name="custom_js" rows="8">{{ block.custom_js }}</textarea>
+                          </div>
+                          <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">保存</button>
+                            <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}#learning-block-{{ block.id }}">閉じる</a>
                           </div>
                         </div>
-                        <div class="col-12">
-                          <label class="form-label">HTML</label>
-                          <textarea class="form-control learning-code-area" name="body" rows="8">{{ block.body }}</textarea>
-                        </div>
-                        <div class="col-md-6">
-                          <label class="form-label">CSS</label>
-                          <textarea class="form-control learning-code-area" name="custom_css" rows="8">{{ block.custom_css }}</textarea>
-                        </div>
-                        <div class="col-md-6">
-                          <label class="form-label">JS</label>
-                          <textarea class="form-control learning-code-area" name="custom_js" rows="8">{{ block.custom_js }}</textarea>
-                        </div>
-                        <div class="col-12 d-flex gap-2">
-                          <button type="submit" class="btn btn-primary">保存</button>
-                          <a class="btn btn-outline-secondary" href="{% url 'learning_content' %}?offering_id={{ page.course_offering_id }}#learning-block-{{ block.id }}">閉じる</a>
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-                {% endif %}
+                      </form>
+                    </div>
+                  {% endif %}
+                </div>
               </section>
             {% endfor %}
           </div>
@@ -629,7 +685,7 @@
                 <div class="row g-3">
                   <div class="col-md-6">
                     <label class="form-label">ブロック名</label>
-                    <input type="text" class="form-control" name="block_title" placeholder="例: 事前確認資料">
+                    <input type="text" class="form-control" name="block_title" placeholder="例: 事前確認資料" required>
                   </div>
                   <div class="col-md-3">
                     <label class="form-label">ブロック内レイアウト</label>
@@ -840,9 +896,18 @@
       }, 330);
     }
 
+    function activeCardNeedsVerticalScroll() {
+      const activeCard = cards[activeIndex];
+      return !!(
+        activeCard
+        && activeCard.querySelector('.learning-block.is-expanded, .learning-block-edit, .learning-block-create')
+      );
+    }
+
     carousel.addEventListener('wheel', function(event) {
       if (cards.length < 2) return;
       if (event.target.closest('textarea, select, input')) return;
+      if (activeCardNeedsVerticalScroll()) return;
       event.preventDefault();
       const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
       stepByDelta(delta);
@@ -850,9 +915,12 @@
 
     window.addEventListener('message', function(event) {
       if (!event.data || event.data.type !== 'learning-content-wheel') return;
+      if (activeCardNeedsVerticalScroll()) return;
       const delta = Math.abs(event.data.deltaY) >= Math.abs(event.data.deltaX) ? event.data.deltaY : event.data.deltaX;
       stepByDelta(Number(delta) || 0);
     });
+
+    document.addEventListener('learning-content-block-toggle', updateCarousel);
 
     cards.forEach((card, index) => {
       card.addEventListener('click', function(event) {
@@ -873,6 +941,22 @@
     });
 
     updateCarousel();
+  }
+
+  function initLearningBlockToggles() {
+    document.querySelectorAll('[data-learning-block-toggle]').forEach((button) => {
+      button.addEventListener('click', function() {
+        const block = button.closest('.learning-block');
+        const bodyId = button.getAttribute('aria-controls');
+        const body = bodyId ? document.getElementById(bodyId) : null;
+        if (!block || !body) return;
+        const willExpand = !block.classList.contains('is-expanded');
+        block.classList.toggle('is-expanded', willExpand);
+        body.hidden = !willExpand;
+        button.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
+        document.dispatchEvent(new CustomEvent('learning-content-block-toggle'));
+      });
+    });
   }
 
   function initLearningBlockThemeSync() {
@@ -1094,10 +1178,12 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       initLearningCarousel();
+      initLearningBlockToggles();
       initLearningBlockThemeSync();
     });
   } else {
     initLearningCarousel();
+    initLearningBlockToggles();
     initLearningBlockThemeSync();
   }
 })();

@@ -165,19 +165,6 @@ def _learning_content_block_srcdoc(block):
       }}, '*');
     }} catch (e) {{}}
   }});
-  document.addEventListener('wheel', function(event) {{
-    var formControl = event.target.closest && event.target.closest('textarea, select, input');
-    if (formControl) return;
-    try {{
-      window.parent.postMessage({{
-        type: 'learning-content-wheel',
-        blockId: {block.id},
-        deltaX: event.deltaX,
-        deltaY: event.deltaY
-      }}, '*');
-      event.preventDefault();
-    }} catch (e) {{}}
-  }}, {{ passive: false }});
   window.addEventListener('message', function(event) {{
     if (!event.data || event.data.type !== 'learning-content-theme') return;
     document.body.classList.toggle('dark-mode', !!event.data.isDark);
@@ -340,33 +327,37 @@ def learning_content_view(request):
                 form_error = '対象のコンテンツが見つかりません'
             elif action == 'create_block':
                 title = (request.POST.get('block_title') or '').strip()
-                metadata = {
-                    'custom_css': request.POST.get('custom_css') or '',
-                    'custom_js': request.POST.get('custom_js') or '',
-                    'height': request.POST.get('height') or 280,
-                }
-                max_order = (
-                    page.blocks
-                    .filter(parent__isnull=True)
-                    .order_by('-display_order')
-                    .values_list('display_order', flat=True)
-                    .first()
-                    or 0
-                )
-                block = LearningContentBlock.objects.create(
-                    page=page,
-                    block_type=LearningContentBlock.BLOCK_TEXT_MEDIA,
-                    content_type=request.POST.get('content_type') or LearningContentBlock.CONTENT_NONE,
-                    title=title,
-                    body=request.POST.get('body') or '',
-                    external_url=request.POST.get('external_url') or '',
-                    display_order=max_order + 1,
-                    metadata_json=metadata,
-                )
-                return redirect(
-                    f"{request.path}?offering_id={page.course_offering_id}"
-                    f"&edit_block={block.id}#learning-block-{block.id}"
-                )
+                if not title:
+                    form_error = 'ブロック名を入力してください'
+                    add_block_page_id = str(page.id)
+                else:
+                    metadata = {
+                        'custom_css': request.POST.get('custom_css') or '',
+                        'custom_js': request.POST.get('custom_js') or '',
+                        'height': request.POST.get('height') or 280,
+                    }
+                    max_order = (
+                        page.blocks
+                        .filter(parent__isnull=True)
+                        .order_by('-display_order')
+                        .values_list('display_order', flat=True)
+                        .first()
+                        or 0
+                    )
+                    block = LearningContentBlock.objects.create(
+                        page=page,
+                        block_type=LearningContentBlock.BLOCK_TEXT_MEDIA,
+                        content_type=request.POST.get('content_type') or LearningContentBlock.CONTENT_NONE,
+                        title=title,
+                        body=request.POST.get('body') or '',
+                        external_url=request.POST.get('external_url') or '',
+                        display_order=max_order + 1,
+                        metadata_json=metadata,
+                    )
+                    return redirect(
+                        f"{request.path}?offering_id={page.course_offering_id}"
+                        f"&edit_block={block.id}#learning-block-{block.id}"
+                    )
             else:
                 block = LearningContentBlock.objects.filter(
                     id=request.POST.get('block_id'),
@@ -392,20 +383,25 @@ def learning_content_view(request):
                             _renumber_learning_blocks(page)
                     return redirect(f"{request.path}?offering_id={page.course_offering_id}#learning-block-{block.id}")
                 else:
-                    block.title = (request.POST.get('block_title') or '').strip()
-                    block.content_type = request.POST.get('content_type') or LearningContentBlock.CONTENT_NONE
-                    block.body = request.POST.get('body') or ''
-                    block.external_url = request.POST.get('external_url') or ''
-                    block.metadata_json = {
-                        'custom_css': request.POST.get('custom_css') or '',
-                        'custom_js': request.POST.get('custom_js') or '',
-                        'height': request.POST.get('height') or 280,
-                    }
-                    block.save()
-                    return redirect(
-                        f"{request.path}?offering_id={page.course_offering_id}"
-                        f"&edit_block={block.id}#learning-block-{block.id}"
-                    )
+                    title = (request.POST.get('block_title') or '').strip()
+                    if not title:
+                        form_error = 'ブロック名を入力してください'
+                        edit_block = block
+                    else:
+                        block.title = title
+                        block.content_type = request.POST.get('content_type') or LearningContentBlock.CONTENT_NONE
+                        block.body = request.POST.get('body') or ''
+                        block.external_url = request.POST.get('external_url') or ''
+                        block.metadata_json = {
+                            'custom_css': request.POST.get('custom_css') or '',
+                            'custom_js': request.POST.get('custom_js') or '',
+                            'height': request.POST.get('height') or 280,
+                        }
+                        block.save()
+                        return redirect(
+                            f"{request.path}?offering_id={page.course_offering_id}"
+                            f"&edit_block={block.id}#learning-block-{block.id}"
+                        )
 
     pages = (
         LearningContentPage.objects
