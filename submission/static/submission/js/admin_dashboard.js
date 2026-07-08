@@ -14,6 +14,7 @@ window.app = new Vue({
         submissions: submissions,
         schedule: schedule,
         items: submissions,
+        summarySort: { key: 'student_id', direction: 'asc' },
         submissionLoaded: false,
         studentsLoaded: false,
         scheduleLoaded: false,
@@ -134,6 +135,47 @@ window.app = new Vue({
         },
         canShowMoreItems() {
             return Array.isArray(this.items) && this.items.length > this.currentListDisplayLimit;
+        },
+        sortedSubmissionSummary() {
+            if (!Array.isArray(this.submissionSummary)) return [];
+            const key = this.summarySort && this.summarySort.key ? this.summarySort.key : 'student_id';
+            const direction = this.summarySort && this.summarySort.direction === 'desc' ? -1 : 1;
+            const dayOrder = {};
+            this.dayOptions.forEach((day, index) => {
+                dayOrder[day] = index;
+            });
+            const numericKeys = ['submitted', 'missing'];
+            const naturalValue = (value) => {
+                const text = String(value ?? '').trim();
+                if (!text) return { empty: 1, number: 0, text: '' };
+                if (/^\d+$/.test(text)) return { empty: 0, number: Number(text), text };
+                return { empty: 0, number: Number.NaN, text };
+            };
+            const compareNatural = (a, b) => {
+                const av = naturalValue(a);
+                const bv = naturalValue(b);
+                if (av.empty !== bv.empty) return av.empty - bv.empty;
+                const aIsNum = Number.isFinite(av.number);
+                const bIsNum = Number.isFinite(bv.number);
+                if (aIsNum && bIsNum && av.number !== bv.number) return av.number - bv.number;
+                if (aIsNum !== bIsNum) return aIsNum ? -1 : 1;
+                return av.text.localeCompare(bv.text, 'ja', { numeric: true });
+            };
+            return [...this.submissionSummary].sort((a, b) => {
+                let result = 0;
+                if (numericKeys.includes(key)) {
+                    result = (Number(a[key]) || 0) - (Number(b[key]) || 0);
+                } else if (key === 'experiment_day') {
+                    const av = dayOrder[a.experiment_day] ?? 999;
+                    const bv = dayOrder[b.experiment_day] ?? 999;
+                    result = av === bv ? compareNatural(a.student_id, b.student_id) : av - bv;
+                } else {
+                    result = compareNatural(a[key], b[key]);
+                }
+                if (result === 0) result = compareNatural(a.student_id, b.student_id);
+                if (result === 0) result = String(a.name || '').localeCompare(String(b.name || ''), 'ja', { numeric: true });
+                return result * direction;
+            });
         }
     }),
     methods: Object.assign({}, offeringSelectorHelper.methods, {
@@ -299,6 +341,14 @@ window.app = new Vue({
             const key = this.currentListTabKey;
             if (!key) return;
             this.$set(this.listDisplayLimit, key, (this.listDisplayLimit[key] || 20) + 20);
+        },
+        setSummarySort(key) {
+            if (this.summarySort.key === key) {
+                this.summarySort.direction = this.summarySort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.summarySort.key = key;
+                this.summarySort.direction = 'asc';
+            }
         },
         fetchList() {
             const params = [];

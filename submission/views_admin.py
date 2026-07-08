@@ -2703,6 +2703,7 @@ def get_summary_api(request):
     offering_id = request.GET.get('offering_id')
     experiment_numbers = []
     students = UserProfile.objects.filter(role='student')
+    enr_map = {}
 
     # 科目/年度を選択している場合、その科目の実験番号とEnrollmentで対象学生を絞る
     if offering_id:
@@ -2713,6 +2714,7 @@ def get_summary_api(request):
             experiment_numbers = []
         user_ids = Enrollment.objects.filter(role='student', course_offering_id=offering_id).values_list('user_id', flat=True)
         students = students.filter(user_id__in=user_ids)
+        enr_map = get_student_enrollment_map(user_ids, offering_id)
     if not experiment_numbers:
         experiment_numbers = [x[0] for x in Submission.EXPERIMENT_NUMBER_CHOICES]
     if student_id:
@@ -2720,6 +2722,7 @@ def get_summary_api(request):
     results = []
     for item in students:
         user = item.user
+        student_context = build_student_context(profile=item, enrollment=enr_map.get(item.user_id))
         # 受付済みレポートのみ
         accepted_qs = Submission.objects.filter(
             student=user,
@@ -2732,13 +2735,16 @@ def get_summary_api(request):
         accepted_set = set(accepted_reports)
         missing_set = set(experiment_numbers) - accepted_set
         results.append({
-            'name': item.full_name,
-            'student_id': item.student_id,
+            'name': student_context['full_name'],
+            'student_id': student_context['student_id'],
+            'experiment_day': student_context['experiment_day'],
+            'experiment_group': student_context['experiment_group'],
             'submitted': len(accepted_set),
             'missing': len(missing_set),
             'accepted_numbers': list(accepted_set),
             'missing_numbers': list(missing_set),
         })
+    results.sort(key=_dashboard_student_sort_key)
     return JsonResponse({'submission_summary': results})
 
 def _normalize_schedule_pdf_line(text):

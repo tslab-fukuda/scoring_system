@@ -1,29 +1,51 @@
 <h4>提出状況</h4>
+{% verbatim %}
 <div class="teacher-table-scroll">
 <table class="table table-bordered">
   <thead>
     <tr>
       <th>氏名</th>
-      <th>学籍番号</th>
-      <th>提出数</th>
-      <th>未提出</th>
+      <th>
+        <button type="button" class="btn btn-link p-0 text-decoration-none" @click="setSummarySort('student_id')">
+          学籍番号 <span v-if="summarySort.key === 'student_id'">{{ summarySort.direction === 'asc' ? '▲' : '▼' }}</span>
+        </button>
+      </th>
+      <th>
+        <button type="button" class="btn btn-link p-0 text-decoration-none" @click="setSummarySort('experiment_day')">
+          曜日 <span v-if="summarySort.key === 'experiment_day'">{{ summarySort.direction === 'asc' ? '▲' : '▼' }}</span>
+        </button>
+      </th>
+      <th>
+        <button type="button" class="btn btn-link p-0 text-decoration-none" @click="setSummarySort('experiment_group')">
+          班番号 <span v-if="summarySort.key === 'experiment_group'">{{ summarySort.direction === 'asc' ? '▲' : '▼' }}</span>
+        </button>
+      </th>
+      <th>
+        <button type="button" class="btn btn-link p-0 text-decoration-none" @click="setSummarySort('submitted')">
+          提出数 <span v-if="summarySort.key === 'submitted'">{{ summarySort.direction === 'asc' ? '▲' : '▼' }}</span>
+        </button>
+      </th>
+      <th>
+        <button type="button" class="btn btn-link p-0 text-decoration-none" @click="setSummarySort('missing')">
+          未提出 <span v-if="summarySort.key === 'missing'">{{ summarySort.direction === 'asc' ? '▲' : '▼' }}</span>
+        </button>
+      </th>
     </tr>
   </thead>
-  {% verbatim %}
   <tbody>
-    <tr v-for="student in submissionSummary" :key="student.student_id">
+    <tr v-for="student in sortedSubmissionSummary" :key="student.student_id">
       <td>{{ student.name }}</td>
       <td>{{ student.student_id }}</td>
+      <td>{{ student.experiment_day || '-' }}</td>
+      <td>{{ student.experiment_group || '-' }}</td>
       <td>
         <a href="#" @click.prevent="openModal(student)">{{ student.submitted }}</a>
       </td>
       <td>{{ student.missing }}</td>
     </tr>
   </tbody>
-  {% endverbatim %}
 </table>
 </div>
-{% verbatim %}
 <div v-if="showModal" class="modal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.2)">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
