@@ -6,15 +6,17 @@ After=network.target
 Type=simple
 User=ceexpii
 Group=www-data
+SupplementaryGroups=ceexpii
 WorkingDirectory=/home/ceexpii/scoring_system
 RuntimeDirectory=scoring-system
 Environment="DJANGO_SETTINGS_MODULE=scoring_system.settings_prod"
+Environment="DJANGO_SECRET_KEY_FILE=/etc/scoring-system/secret-key"
 # 必要に応じて環境変数を追加
 # Environment="DJANGO_ALLOWED_HOSTS=ceexp.nu-tf-lab.jp"
 # Environment="DJANGO_CSRF_TRUSTED_ORIGINS=https://ceexp.nu-tf-lab.jp"
 # Environment="GOOGLE_CLIENT_ID=..."
 # Environment="GOOGLE_CLIENT_SECRET=..."
-ExecStart=/home/ceexpii/scoring_system/venv_prod/bin/gunicorn scoring_system.wsgi:application --workers 3 --bind unix:/run/scoring-system/scoring-system.sock --timeout 120
+ExecStart=/home/ceexpii/scoring_system/venv_prod/bin/python -m gunicorn scoring_system.wsgi:application --workers 3 --bind unix:/run/scoring-system/scoring-system.sock --timeout 120
 Restart=always
 RestartSec=5
 

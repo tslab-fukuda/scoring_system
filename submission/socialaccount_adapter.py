@@ -28,9 +28,11 @@ class EmailOnlySocialAccountAdapter(DefaultSocialAccountAdapter):
             sociallogin.account.extra_data.get("email")
             or sociallogin.user.email
         )
-        logger.info("Google login extra_data=%s, resolved_email=%s", sociallogin.account.extra_data, email)
         if not email:
             raise PermissionDenied("メールアドレスを取得できませんでした")
+        if not any(address.verified and address.email.casefold() == email.casefold()
+                   for address in sociallogin.email_addresses):
+            raise PermissionDenied("Googleで確認済みのメールアドレスが必要です")
 
         User = get_user_model()
         # 大文字小文字の違いも許容し、usernameでの登録も見る

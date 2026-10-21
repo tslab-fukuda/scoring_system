@@ -2,6 +2,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from submission.models import UserProfile, Submission, Schedule
 from django.contrib.auth.decorators import login_required
 from submission.decorators import role_required
+from submission.access import require_submission_access
+from submission.roles import get_effective_role
+from django.core.exceptions import PermissionDenied
 from submission.models import (
     ScoringItem,
     CourseOffering,
@@ -515,7 +518,10 @@ def _parse_rubric_import_workbook(uploaded_file):
 @role_required('teacher','admin','course-teacher','non-editing teacher')
 def grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
+    require_submission_access(request, submission)
     if request.method == 'POST':
+        if get_effective_role(request) not in ('admin', 'teacher', 'course-teacher'):
+            raise PermissionDenied('閲覧専用ロールでは添削を更新できません')
         data = json.loads(request.body)
         draw_data = data.get('drawData')
         old_file_name = submission.file.name
@@ -596,6 +602,7 @@ def grading_form(request, submission_id):
 def graded_pdf(request, submission_id):
     """Ensure graded PDF is served with correct content-type for preview iframe."""
     submission = get_object_or_404(Submission, pk=submission_id)
+    require_submission_access(request, submission)
     if not submission.file:
         raise Http404("file not found")
     try:
@@ -921,6 +928,7 @@ def final_rubric_import_api(request):
 @role_required('non-editing teacher', 'admin')
 def final_grading_form(request, submission_id):
     submission = get_object_or_404(Submission, pk=submission_id)
+    require_submission_access(request, submission)
     rubric_error = ''
     submitted_selection = None
     final_comment_value = submission.final_comment or ''
@@ -1122,6 +1130,7 @@ def compare_user_submission(request):
     if not submission_id or not user_id:
         return JsonResponse({'status': 'error', 'message': 'submission_id and user_id are required'}, status=400)
     submission = get_object_or_404(Submission, pk=submission_id)
+    require_submission_access(request, submission)
     candidate = Submission.objects.filter(
         student_id=user_id,
         experiment_number=submission.experiment_number,
@@ -1846,6 +1855,7 @@ def submission_similarity_api(request):
         return JsonResponse({'status': 'error', 'message': 'submission_id is required'}, status=400)
 
     submission = get_object_or_404(Submission, pk=submission_id)
+    require_submission_access(request, submission)
     if not submission.file:
         return JsonResponse({'status': 'error', 'message': '対象PDFがありません'}, status=404)
     now = timezone.now()

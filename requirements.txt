@@ -1,5 +1,5 @@
 asgiref==3.8.1
-Django==5.2.1
+Django==5.2.18
 pillow==11.2.1
 pycryptodome==3.23.0
 PyMuPDF==1.26.0

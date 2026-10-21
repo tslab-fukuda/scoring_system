@@ -1,6 +1,7 @@
 # Python 仮想環境
 venv/
-venv_prod/
+/venv_prod
+venv_prod_security_*/
 
 # Python キャッシュ
 __pycache__/

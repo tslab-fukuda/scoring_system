@@ -1,5 +1,16 @@
 from .settings import *
 import os
+from django.core.exceptions import ImproperlyConfigured
+
+# Never inherit the development signing key. Missing production secrets fail closed.
+_secret_file = os.environ.get('DJANGO_SECRET_KEY_FILE', '/etc/scoring-system/secret-key')
+try:
+    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or Path(_secret_file).read_text().strip()
+except OSError as exc:
+    raise ImproperlyConfigured('本番用SECRET_KEYファイルを読み込めません') from exc
+if len(SECRET_KEY) < 50 or SECRET_KEY.startswith('django-insecure-'):
+    raise ImproperlyConfigured('本番用SECRET_KEYが不正です')
+SECRET_KEY_FALLBACKS = []
 
 # ---- Core ----
 DEBUG = False
@@ -25,8 +36,8 @@ PASSWORD_LOGIN_ENABLED = False
 SITE_ID = 1
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    'submission.auth_backends.ModelBackend',
+    'submission.auth_backends.AccountBackend',
 ]
 
 SOCIALACCOUNT_PROVIDERS = {
@@ -41,6 +52,10 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 SOCIALACCOUNT_ADAPTER = 'submission.socialaccount_adapter.EmailOnlySocialAccountAdapter'
+ACCOUNT_ADAPTER = 'submission.auth_policy.AccountAdapter'
+MIDDLEWARE = list(MIDDLEWARE)
+MIDDLEWARE.insert(MIDDLEWARE.index('django.contrib.auth.middleware.AuthenticationMiddleware') + 1,
+                  'submission.auth_policy.PasswordPolicyMiddleware')
 
 # ---- Proxy/HTTPS ----
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -52,6 +67,8 @@ CSRF_COOKIE_SECURE = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_HSTS_SECONDS = 86400
+PRIVATE_MEDIA_ACCEL_REDIRECT = True
 
 # nginx で HTTPS 終端する場合は有効化
 SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', '1') == '1'

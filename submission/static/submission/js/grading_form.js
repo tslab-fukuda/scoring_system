@@ -1195,6 +1195,7 @@ new Vue({
             const CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/cmaps/";
             const STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/standard_fonts/";
             const loadingTask = pdfjsLib.getDocument({
+                isEvalSupported: false,
                 url: this.comparePdfUrl,
                 cMapUrl: CMAP_URL,
                 cMapPacked: true,
@@ -1745,6 +1746,7 @@ new Vue({
         // PDF.js lazy load
         const url = window.pdf_url;
         const loadingTask = pdfjsLib.getDocument({
+            isEvalSupported: false,
             url: url,
             cMapUrl: CMAP_URL,
             cMapPacked: true,

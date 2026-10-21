@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
         loadPdf() {
           const container = this.$refs.pdfPages;
           pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-          pdfjsLib.getDocument(this.pdfUrl).promise.then(pdfDoc => {
+          pdfjsLib.getDocument({ url: this.pdfUrl, isEvalSupported: false }).promise.then(pdfDoc => {
             for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
               pdfDoc.getPage(pageNum).then(page => {
                 const viewport = page.getViewport({ scale: 1.1 });

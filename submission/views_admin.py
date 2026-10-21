@@ -2662,6 +2662,7 @@ def admin_copy_equipment_configs(request):
     })
 
 
+@role_required('admin')
 def get_students_api(request):
     student_id = request.GET.get('student_id')
     day = request.GET.get('experiment_day')
@@ -2698,6 +2699,7 @@ def get_students_api(request):
     students.sort(key=_dashboard_student_sort_key)
     return JsonResponse({'students_json': students})
 
+@role_required('admin')
 def get_summary_api(request):
     student_id = request.GET.get('student_id')
     offering_id = request.GET.get('offering_id')
@@ -2883,9 +2885,15 @@ def _build_schedule_pdf_preview(offering, pdf_bytes):
         'found_face_to_face_count': len([x for x in candidates if x.get('date')]),
     }
 
+@role_required('admin', 'teacher', 'course-teacher', 'non-editing teacher', 'student')
 def get_schedule_api(request):
     offering_id = request.GET.get('offering_id')
-    schedule_qs = Schedule.objects.all()
+    from submission.access import accessible_offerings
+    from django.core.exceptions import PermissionDenied
+    allowed = accessible_offerings(request.user)
+    if offering_id and not allowed.filter(pk=offering_id).exists():
+        raise PermissionDenied('対象の科目/年度にはアクセスできません')
+    schedule_qs = Schedule.objects.filter(course_offering__in=allowed)
     if offering_id:
         schedule_qs = schedule_qs.filter(course_offering_id=offering_id)
     schedule_qs = schedule_qs.values('id', 'date', 'course_offering_id')
@@ -4286,6 +4294,16 @@ def upload_student_photo(request, student_id):
             photo = request.FILES.get('photo')
             if not photo:
                 return JsonResponse({'status': 'error', 'message': 'photo required'}, status=400)
+            if photo.size > 8 * 1024 * 1024:
+                return JsonResponse({'status': 'error', 'message': '写真は8MB以下にしてください'}, status=400)
+            from PIL import Image
+            from django.core.files.base import ContentFile
+            with Image.open(photo) as image:
+                if image.format not in ('PNG', 'JPEG', 'WEBP') or max(image.size) > 4096:
+                    return JsonResponse({'status': 'error', 'message': '対応する画像形式・サイズではありません'}, status=400)
+                normalized = io.BytesIO()
+                image.convert('RGB').save(normalized, format='PNG')
+                photo = ContentFile(normalized.getvalue())
             filename = f"{profile.student_id}_{profile.full_name}.png"
             path = default_storage.save(f"student_photos/{filename}", photo)
             profile.photo.name = path

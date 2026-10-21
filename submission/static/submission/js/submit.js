@@ -71,6 +71,7 @@ new Vue({
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
         pdfjsLib.getDocument({
+          isEvalSupported: false,
           url: this.pdfUrl,
           cMapUrl: this.cmapUrl,
           cMapPacked: true,

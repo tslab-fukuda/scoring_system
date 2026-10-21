@@ -18,9 +18,13 @@ from .forms import SubmissionForm, SignUpForm
 from submission.decorators import role_required
 from submission.enrollment_utils import get_student_context
 from django.http import HttpResponse
+from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from .roles import ROLE_OPTIONS, get_actual_role, get_effective_role
 
 def signup_view(request):
+    if not getattr(settings, 'PASSWORD_LOGIN_ENABLED', True):
+        raise PermissionDenied('この環境では公開ユーザー登録はできません')
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
@@ -178,6 +182,8 @@ def api_user_profile(request):
 @login_required
 @require_POST
 def api_change_password(request):
+    if not getattr(settings, 'PASSWORD_LOGIN_ENABLED', True):
+        raise PermissionDenied('この環境ではパスワード認証は無効です')
     import json
     data = json.loads(request.body)
     password = data.get("password")

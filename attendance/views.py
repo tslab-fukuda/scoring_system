@@ -825,6 +825,7 @@ def _build_override_student_rows(offering_id, target_date):
     }
 
 @login_required
+@require_POST
 def scan_card(request, student_id):
     _finalize_previous_day()
     if not can_change_attendance(request.user):

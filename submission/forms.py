@@ -19,6 +19,15 @@ class SubmissionForm(forms.ModelForm):
             content_type = uploaded.content_type
             if content_type != 'application/pdf' or not uploaded.name.lower().endswith('.pdf'):
                 raise ValidationError('PDFファイルのみアップロードできます。')
+            if uploaded.size > 50 * 1024 * 1024:
+                raise ValidationError('PDFファイルは50MB以下にしてください。')
+            position = uploaded.tell()
+            try:
+                uploaded.seek(0)
+                if not uploaded.read(1024).lstrip().startswith(b'%PDF-'):
+                    raise ValidationError('PDFファイルの内容が不正です。')
+            finally:
+                uploaded.seek(position)
         return uploaded
 
 # サインアップフォーム

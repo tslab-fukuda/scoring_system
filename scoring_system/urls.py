@@ -21,16 +21,29 @@ from django.conf.urls.static import static
 from submission.views_login import redirect_after_login
 from django.urls import include
 from django.views.generic import RedirectView
+from django.contrib.auth import views as auth_views
+from django.shortcuts import redirect
+from django.views.decorators.http import require_safe
+from submission.views_media import private_media
+
+
+@require_safe
+def google_admin_login(request):
+    return redirect('/admin/' if request.user.is_authenticated and request.user.is_staff else '/accounts/login/?next=/admin/')
 
 urlpatterns = [
+    *([path('admin/login/', google_admin_login)] if not settings.PASSWORD_LOGIN_ENABLED else []),
     path('', RedirectView.as_view(url='/submission/', permanent=False)),
     path('admin/', admin.site.urls),
     path('submission/', include('submission.urls')),
-    path('accounts/', include('django.contrib.auth.urls')),
+    *([path('accounts/', include('django.contrib.auth.urls'))] if settings.PASSWORD_LOGIN_ENABLED else [
+        path('accounts/login/', require_safe(auth_views.LoginView.as_view(template_name='registration/login.html')), name='login'),
+        path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    ]),
     # allauth は本番のみ（GOOGLE_LOGIN_ENABLED=True のとき）有効化
     *( [path('accounts/', include('allauth.urls'))] if getattr(settings, "GOOGLE_LOGIN_ENABLED", False) else [] ),
     path('users/', include('submission.urls')),
     path('attendance/', include('attendance.urls')),
+    path('media/<path:name>', private_media, name='private_media'),
     path('accounts/redirect-after-login/', redirect_after_login, name='redirect_after_login'),
 ]
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
