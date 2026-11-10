@@ -25,7 +25,7 @@ from .models import (
     Submission,
     UserProfile,
 )
-from attendance.models import AttendanceRecord
+from attendance.models import AttendanceRecord, AttendanceOverride
 from submission.enrollment_utils import (
     build_student_context,
     filter_queryset_by_student_enrollment,
@@ -875,7 +875,23 @@ def teacher_student_reports(request):
             date__in=schedule_dates
         ).values_list('date', flat=True)
     )
-    absence_count = len(schedule_dates - attendance_dates)
+    absence_dates = schedule_dates - attendance_dates
+    global_absence_overrides = {}
+    user_absence_overrides = {}
+    for override in AttendanceOverride.objects.filter(
+        course_offering_id=offering_id,
+        target_date__in=absence_dates,
+    ).filter(Q(user__isnull=True) | Q(user_id=profile.user_id)):
+        if override.user_id is None:
+            global_absence_overrides[override.target_date] = override.ignore_absence
+        else:
+            user_absence_overrides[override.target_date] = override.ignore_absence
+    absence_count = sum(
+        not user_absence_overrides.get(
+            target_date, global_absence_overrides.get(target_date, False)
+        )
+        for target_date in absence_dates
+    )
 
     attendance_logs = []
     records = AttendanceRecord.objects.filter(
