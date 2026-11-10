@@ -6,7 +6,11 @@
     const reasonLabels = {
         unsupported_scheme: 'この形式のURLは開けません', invalid_url: 'URL形式を確認してください',
         internal_address: '内部アドレスのため開けません', internal_host: '内部用ホスト名のため開けません',
-        unsupported_port: '対応外のポートのため開けません'
+        unsupported_port: '対応外のポートのため開けません',
+        outdated_extraction: '旧方式の抽出結果です。「URLを再抽出」で更新してください。',
+        archived_result: '以前の抽出結果です。原文との照合用にコピーできます。',
+        link_mismatch: 'PDFの表示文字と埋め込みリンク先が異なります。リンク先の行を確認してください。',
+        uncertain_url: 'URLの続きか判定が曖昧な箇所があります。原文を確認してください。'
     };
     Vue.component('reference-url-panel', {
         props: ['dataUrl', 'extractUrl'],
@@ -35,6 +39,7 @@
                     first: '初回提出のURLを表示しています。', ready: '前回提出と比較しています。',
                     pending: '抽出完了後に差分を表示します。失敗した提出があれば、履歴から再試行してください。',
                     missing_offering: '科目・年度が未設定のため、提出間の比較はできません。',
+                    version_mismatch: '前回と今回の抽出方式が異なります。「URLを再抽出」で比較元も更新してください。',
                     history_limit: '提出履歴の件数が上限を超えたため、差分比較は行いません。'
                 }[this.result.comparison] || '';
             }
@@ -117,7 +122,7 @@
                 return { references: '参考文献部分から抽出', whole_pdf_candidates: 'PDF全体から抽出した候補' }[scope] || '';
             },
             statusText(status) { return statusLabels[status] || status; },
-            reason(row) { return row.corrected ? '補正候補です。原文を確認してください。' : reasonLabels[row.reason] || ''; }
+            reason(row) { return reasonLabels[row.reason] || (row.corrected ? '改行等を復元した候補です。原文を確認してください。' : ''); }
         },
         mounted() { this.load(true); },
         beforeDestroy() { this.disposed = true; window.clearTimeout(this.pollTimer); },
@@ -128,10 +133,12 @@
               <p class="small mb-1">リンク先への自動アクセスは行いません。「開く」は外部サイトへ移動します。安全性を保証する表示ではありません。</p>
               <p class="small mb-1" v-text="comparisonMessage"></p>
               <p v-if="errorDetail" class="small" role="status" v-text="errorDetail"></p>
-              <p v-if="result && result.busy && polls >= 60" class="small">抽出が続いています。「再取得・再試行」で状態を更新できます。</p>
+              <p v-if="result && result.busy && polls >= 60" class="small">抽出が続いています。「URLを再抽出」で状態を更新できます。</p>
               <p v-if="error" class="text-danger" role="alert" v-text="error"></p>
               <p v-if="notice" class="small" role="status" v-text="notice"></p>
-              <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="loading" @click="extract(true)">再取得・再試行</button>
+              <p v-if="result && result.current.outdated && !result.busy" class="small">旧方式の保存結果です。改行されたURLを修正するには再抽出してください。以前の結果は履歴に残ります。</p>
+              <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="loading" @click="extract(true)">URLを再抽出</button>
+              <p class="small mb-1">添削済みPDFを再抽出する場合は、教員の追記も含む可能性があります。</p>
               <template v-if="result">
                 <div class="reference-url-tabs" role="group" aria-label="参考文献URLの表示切替">
                   <button v-for="choice in [{key:'added',label:'追加URL'},{key:'all',label:'現在の全URL'},{key:'history',label:'過去の履歴'}]" :key="choice.key"
@@ -148,8 +155,15 @@
                     <section v-for="item in result.history" :key="item.submission_id" class="reference-url-history">
                       <h5 class="h6">{{ item.ordinal }}回目 <span v-text="statusText(item.status)"></span></h5>
                       <p v-if="item.source_kind === 'legacy_graded'" class="small">添削済みPDFから後日抽出</p>
-                      <button v-if="['failed','partial','no_text','pending','running'].includes(item.status)" type="button" class="btn btn-sm btn-outline-secondary" :disabled="loading" @click="retryHistory(item)">この提出を再試行</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="loading" @click="retryHistory(item)">この提出のURLを再抽出</button>
                       <reference-url-row v-for="row in item.urls" :key="row.key" :row="row" :can-open="canOpen(row)" :reason="reason(row)" @copy="copy"></reference-url-row>
+                      <details v-if="item.revisions && item.revisions.length" class="mt-2">
+                        <summary>以前の抽出結果</summary>
+                        <section v-for="(revision,index) in item.revisions" :key="index">
+                          <div class="small">抽出方式: {{ revision.extractor_version || '旧方式' }} / {{ revision.extracted_at || '-' }}</div>
+                          <reference-url-row v-for="row in revision.urls" :key="row.key" :row="row" :can-open="false" :reason="reason(row)" @copy="copy"></reference-url-row>
+                        </section>
+                      </details>
                     </section>
                     <section v-if="result.removed.length"><h5 class="h6">今回削除されたURL</h5>
                       <reference-url-row v-for="row in result.removed" :key="row.key" :row="row" :can-open="canOpen(row)" :reason="reason(row)" @copy="copy"></reference-url-row>
@@ -166,7 +180,7 @@
           <span class="reference-url-text" v-text="row.url"></span>
           <span class="small" v-if="row.change" v-text="{first:'初回',added:'追加',retained:'継続',unknown:'差分未確定'}[row.change]"></span>
           <div class="small">掲載ページ: {{ row.pages.join(', ') }} / 初出: {{ row.first_seen }}回目 <span v-if="row.host"> / 接続先: <span v-text="row.host"></span></span></div>
-          <div v-if="row.corrected" class="small">PDFの原文: <span v-text="row.original_text"></span></div>
+          <div v-if="row.corrected" class="small">PDFの原文: <span class="reference-url-original" v-text="row.original_text"></span></div>
           <div v-for="(item,index) in row.occurrences.filter(item => item.source === 'link' && item.display_text && item.display_text !== row.url)" :key="index" class="small">PDFの表示文字: <span v-text="item.display_text"></span></div>
           <button type="button" class="btn btn-sm btn-outline-secondary" @click="$emit('copy', row, $event)">コピー</button>
           <a v-if="canOpen" class="btn btn-sm btn-outline-primary" :href="row.open_url" target="_blank" rel="noopener noreferrer">別タブで開く</a>

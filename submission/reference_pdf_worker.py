@@ -1,4 +1,5 @@
 import json
+import os
 import resource
 import sys
 
@@ -12,12 +13,10 @@ def main():
 
     fitz.TOOLS.mupdf_display_errors(False)
     fitz.TOOLS.mupdf_display_warnings(False)
-    with open(options['path'], 'rb') as source:
-        content = source.read(options['max_bytes'] + 1)
-    if len(content) > options['max_bytes']:
+    if os.path.getsize(options['path']) > options['max_bytes']:
         result = {'status': 'failed', 'urls': [], 'extraction_scope': '', 'error_code': 'file_size_limit'}
     else:
-        result = extract_reference_urls(content, options['limits'])
+        result = extract_reference_urls(options['path'], options['limits'])
     sys.stdout.write(json.dumps(result, ensure_ascii=True))
 
 

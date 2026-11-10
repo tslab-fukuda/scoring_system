@@ -426,6 +426,16 @@ class SubmissionReferenceUrls(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class SubmissionReferenceUrlRevision(models.Model):
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name='reference_url_revisions')
+    digest = models.CharField(max_length=64)
+    data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['submission', 'digest'], name='unique_reference_url_revision')]
+
+
 class SubmissionTextIndex(models.Model):
     submission = models.OneToOneField(
         Submission,

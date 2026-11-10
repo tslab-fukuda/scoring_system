@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import tempfile
 from unittest.mock import patch
@@ -10,11 +11,14 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.core.management import call_command
+from django.core.management.base import CommandError
+from io import StringIO
+from types import SimpleNamespace
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.templatetags.static import static
 from django.utils import timezone
 
-from .models import Course, CourseOffering, Enrollment, Submission, SubmissionReferenceUrls, UserProfile
+from .models import Course, CourseOffering, Enrollment, Submission, SubmissionReferenceUrls, SubmissionReferenceUrlRevision, UserProfile
 from .reference_pdf import extract_reference_urls, inspect_url
 from .reference_urls import (
     capture_before_grading, ensure_snapshot, process_snapshot, queue_extraction,
@@ -111,6 +115,127 @@ class PDFExtractionTests(SimpleTestCase):
         result = self.extract(['References', 'https://example.com/', '[2] Another reference'])
         self.assertEqual(result['urls'][0]['url'], 'https://example.com/')
         self.assertFalse(result['urls'][0]['corrected'])
+
+    def test_wrap_in_letters_host_numbers_and_multiple_lines(self):
+        cases = [
+            (['https://example.com/articles/experi', 'ment/report.pdf'], 'https://example.com/articles/experiment/report.pdf'),
+            (['https://www.data-', 'link.co.jp/ufaqs/rs232c/ , 2026/11/03'], 'https://www.data-link.co.jp/ufaqs/rs232c/'),
+            (['https://example.', 'com/ref'], 'https://example.com/ref'),
+            (['https://example.com/Expe', 'Riment', '/report.pdf'], 'https://example.com/ExpeRiment/report.pdf'),
+            (['https://example.com/', '12345', '/report.pdf'], 'https://example.com/12345/report.pdf'),
+            (['https://example.com/path?', 'id=123&next=', '456'], 'https://example.com/path?id=123&next=456'),
+            (['ht', 'tps://example.com/report.pdf'], 'https://example.com/report.pdf'),
+            (['https:', '//example.com/report.pdf'], 'https://example.com/report.pdf'),
+        ]
+        for lines, expected in cases:
+            with self.subTest(lines=lines):
+                result = self.extract(['References'] + lines)
+                self.assertEqual([row['url'] for row in result['urls']], [expected])
+                self.assertTrue(result['urls'][0]['corrected'])
+
+    def test_word_pdf_parentheses_unicode_and_citation_suffix(self):
+        with fitz.open() as document:
+            page = document.new_page(width=900)
+            for index, line in enumerate(['II-5.9 参考文献',
+                                        '[5] https://akizukidenshi.com/goodsaffix/k-06720_ae-',
+                                        'usbpic44(18f4553).pdf , 2026 年11 月3 日.',
+                                        '[6] https://medium-company.com/ascii', 'コード/ , 2026 年11 月3 日.']):
+                page.insert_text((40 if index in (0, 1, 3) else 61, 60 + index * 22), line, fontname='japan', fontsize=11)
+            result = extract_reference_urls(document.tobytes(), LIMITS)
+        self.assertEqual(result['extraction_scope'], 'references')
+        self.assertEqual([row['url'] for row in result['urls']], [
+            'https://akizukidenshi.com/goodsaffix/k-06720_ae-usbpic44(18f4553).pdf',
+            'https://medium-company.com/asciiコード/',
+        ])
+
+    def test_wrap_with_hanging_indent_and_other_column(self):
+        with fitz.open() as document:
+            page = document.new_page()
+            page.insert_text((40, 40), 'References')
+            page.insert_text((40, 70), '[1] Site https://example.com/experi')
+            page.insert_text((335, 82), 'wrong-column.pdf')
+            page.insert_text((85, 92), 'ment/report.pdf, accessed 2026-11-03')
+            result = extract_reference_urls(document.tobytes(), LIMITS)
+        self.assertEqual([row['url'] for row in result['urls']], ['https://example.com/experiment/report.pdf'])
+
+    def test_wrapped_url_across_pages_ignores_footer_and_repeated_heading(self):
+        with fitz.open() as document:
+            page = document.new_page()
+            page.insert_text((40, 40), 'References')
+            page.insert_text((40, 780), 'https://example.com/experi')
+            page.insert_text((295, 820), '1')
+            page = document.new_page()
+            page.insert_text((40, 40), 'References')
+            page.insert_text((40, 65), 'ment/report.pdf')
+            result = extract_reference_urls(document.tobytes(), LIMITS)
+        self.assertEqual(result['urls'][0]['url'], 'https://example.com/experiment/report.pdf')
+        self.assertEqual({item['page'] for item in result['urls'][0]['occurrences']}, {1, 2})
+
+    def test_does_not_join_access_date_title_or_next_url(self):
+        for next_line in ('2026/11/03', '03.11.2026', '11月3日', 'Author Name', '[2] Other reference', 'https://another.example.com/ref'):
+            with self.subTest(next_line=next_line):
+                result = self.extract(['References', 'https://example.com/reference', next_line])
+                self.assertEqual(result['urls'][0]['url'], 'https://example.com/reference')
+
+    def test_embedded_full_link_replaces_partial_text(self):
+        full = 'https://example.com/experiment/report.pdf'
+        content = pdf_content(['References', 'https://example.com/experi', 'ment/report.pdf'],
+                              [((35, 68, 300, 85), full), ((35, 90, 300, 107), full)])
+        result = extract_reference_urls(content, LIMITS)
+        self.assertEqual([row['url'] for row in result['urls']], [full])
+        self.assertFalse(result['urls'][0]['corrected'])
+
+    def test_different_link_host_keeps_displayed_url_as_unopenable_evidence(self):
+        content = pdf_content(['References', 'https://example.com'],
+                              [((35, 68, 300, 85), 'https://example.com.evil.com/target')])
+        result = extract_reference_urls(content, LIMITS)
+        visible = next(row for row in result['urls'] if row['url'] == 'https://example.com')
+        self.assertTrue(visible['link_mismatch'])
+        self.assertEqual(len(result['urls']), 2)
+
+    def test_link_on_second_url_does_not_hide_first_url_on_same_line(self):
+        with fitz.open() as document:
+            page = document.new_page()
+            page.insert_text((40, 60), 'References')
+            page.insert_text((40, 82), 'https://example.com/a https://example.com/ab')
+            area = page.search_for('https://example.com/ab')[0]
+            page.insert_link({'kind': fitz.LINK_URI, 'from': area, 'uri': 'https://example.com/ab'})
+            result = extract_reference_urls(document.tobytes(), LIMITS)
+        self.assertEqual({row['url'] for row in result['urls']}, {'https://example.com/a', 'https://example.com/ab'})
+        self.assertFalse(next(row for row in result['urls'] if row['url'].endswith('/a'))['link_mismatch'])
+
+    def test_path_input_matches_in_memory_extraction(self):
+        content = pdf_content(['References', 'https://example.com/experi', 'ment/report.pdf'])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'report.pdf'
+            path.write_bytes(content)
+            self.assertEqual(extract_reference_urls(path, LIMITS), extract_reference_urls(content, LIMITS))
+
+    def test_uploaded_pdf_audit_is_read_only_and_rejects_source_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            media = root / 'media'
+            media.mkdir()
+            source = media / 'sample.pdf'
+            source.write_bytes(pdf_content(['References', 'https://example.com/experi', 'ment/report.pdf']))
+            database = root / 'production.sqlite3'
+            with sqlite3.connect(database) as connection:
+                connection.execute('CREATE TABLE submission_submission (id INTEGER, file TEXT, report_type TEXT)')
+                connection.execute("INSERT INTO submission_submission VALUES (1, 'sample.pdf', 'main')")
+            original_database = database.read_bytes()
+            original_pdf = source.read_bytes()
+            config = SimpleNamespace(DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': str(database)}}, MEDIA_ROOT=str(media))
+            output = root / 'audit.json'
+            with patch('submission.management.commands.audit_reference_url_pdfs.settings', config):
+                call_command('audit_reference_url_pdfs', submission_id=[1], output=str(output), stdout=StringIO())
+                with self.assertRaises(CommandError):
+                    call_command('audit_reference_url_pdfs', submission_id=[1], output=str(source), stdout=StringIO())
+            result = json.loads(output.read_text())
+            self.assertEqual(result['summary']['done'], 1)
+            self.assertEqual(result['summary']['wrapped'], 1)
+            self.assertNotIn('example.com', output.read_text())
+            self.assertEqual(database.read_bytes(), original_database)
+            self.assertEqual(source.read_bytes(), original_pdf)
 
     def test_link_target_and_displayed_label_are_both_preserved(self):
         content = pdf_content(['References', 'https://example.com/visible'],
@@ -406,6 +531,80 @@ class ReferenceURLIntegrationTests(TestCase):
         call_command('process_reference_urls', submission_id=second.pk)
         self.assertEqual(SubmissionReferenceUrls.objects.filter(submission__in=[first, second], status='done').count(), 2)
         self.assertEqual(reference_payload(second)['comparison'], 'ready')
+
+    def test_successful_old_result_can_be_reextracted_without_losing_original(self):
+        report = self.report()
+        snapshot = self.done(report, 'https://example.com/incomplete')
+        snapshot.extractor_version = 'v1'
+        snapshot.save()
+        queue_extraction(report, retry=True)
+        revision = SubmissionReferenceUrlRevision.objects.get(submission=report)
+        self.assertEqual(revision.data['urls'][0]['url'], 'https://example.com/incomplete')
+        self.assertEqual(revision.data['extractor_version'], 'v1')
+        process_snapshot(report.pk)
+        snapshot.refresh_from_db()
+        self.assertEqual(snapshot.status, 'done')
+        self.assertEqual(snapshot.extractor_version, 'v2')
+        self.assertEqual(snapshot.urls[0]['url'], 'https://example.com/a')
+        payload = reference_payload(report)
+        self.assertEqual(payload['current']['revisions'][0]['urls'][0]['url'], 'https://example.com/incomplete')
+        self.assertFalse(payload['current']['revisions'][0]['urls'][0]['can_open'])
+        self.assertNotIn('source_name', json.dumps(payload))
+
+    def test_retry_upgrades_old_baselines_and_recomputes_diff(self):
+        first, second = self.report(), self.report()
+        for report in (first, second):
+            snapshot = self.done(report, 'https://example.com/incorrect')
+            snapshot.extractor_version = 'v1'
+            snapshot.save()
+        queue_extraction(second, retry=True)
+        call_command('process_reference_urls', submission_id=second.pk)
+        payload = reference_payload(second)
+        self.assertEqual(payload['comparison'], 'ready')
+        self.assertEqual(payload['added'], [])
+        self.assertEqual(SubmissionReferenceUrlRevision.objects.count(), 2)
+
+    def test_versions_do_not_produce_false_diff(self):
+        first, second = self.report(), self.report()
+        for report, version in ((first, 'v1'), (second, 'v2')):
+            snapshot = self.done(report, 'https://example.com/a')
+            snapshot.extractor_version = version
+            snapshot.save()
+        payload = reference_payload(second)
+        self.assertEqual(payload['comparison'], 'version_mismatch')
+        self.assertEqual(payload['added'], [])
+        self.assertFalse(payload['history'][0]['urls'][0]['can_open'])
+
+    def test_failed_reextraction_keeps_revision_available(self):
+        report = self.report()
+        self.done(report, 'https://example.com/a')
+        queue_extraction(report, retry=True)
+        with patch('submission.reference_urls.run_pdf_reader', return_value={
+            'status': 'failed', 'urls': [], 'extraction_scope': '', 'error_code': 'invalid_pdf',
+        }):
+            process_snapshot(report.pk)
+        payload = reference_payload(report)
+        self.assertEqual(payload['status'], 'failed')
+        self.assertEqual(payload['current']['revisions'][0]['urls'][0]['url'], 'https://example.com/a')
+
+    def test_identical_reextraction_does_not_duplicate_archives(self):
+        report = self.report()
+        process_snapshot(report.pk)
+        for _ in range(2):
+            queue_extraction(report, retry=True)
+            process_snapshot(report.pk)
+        self.assertEqual(SubmissionReferenceUrlRevision.objects.filter(submission=report).count(), 1)
+
+    def test_uncertain_and_link_mismatch_rows_are_never_clickable(self):
+        report = self.report()
+        snapshot = self.done(report, 'https://example.com/a', 'https://example.com/b')
+        snapshot.extractor_version = 'v2'
+        snapshot.urls[0]['uncertain'] = True
+        snapshot.urls[1]['link_mismatch'] = True
+        snapshot.save()
+        rows = reference_payload(report)['current']['urls']
+        self.assertEqual([row['can_open'] for row in rows], [False, False])
+        self.assertEqual([row['reason'] for row in rows], ['uncertain_url', 'link_mismatch'])
 
     def test_manual_acceptance_endpoint_queues_extraction(self):
         report = self.report()

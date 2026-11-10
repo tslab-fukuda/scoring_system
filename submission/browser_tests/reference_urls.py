@@ -23,7 +23,7 @@ class ReferenceURLBrowserTests(unittest.TestCase):
                 dict(url='https://example.com/ref', key='safe', pages=[2], first_seen=1, host='example.com',
                      occurrences=[], can_open=True, open_url='https://example.com/ref', corrected=False, reason='syntax_only'),
                 dict(url='<img src=x onerror="window.injected=true">', key='html', pages=[2], first_seen=1, host='',
-                     occurrences=[], can_open=False, open_url='', corrected=False, reason='invalid_url'),
+                     occurrences=[], can_open=False, open_url='', corrected=True, reason='invalid_url', original_text='<img src=x>\n/continuation'),
                 dict(url='javascript:alert(1)', key='script', pages=[2], first_seen=1, host='',
                      occurrences=[], can_open=True, open_url='javascript:alert(1)', corrected=False, reason='unsupported_scheme'),
             ]
@@ -32,6 +32,9 @@ class ReferenceURLBrowserTests(unittest.TestCase):
             def payload():
                 status = 'done' if state['started'] else 'pending'
                 current = dict(submission_id=1, ordinal=1, status=status, scope='references', source_kind='submitted', error_code='', urls=rows if state['started'] else [])
+                current['extractor_version'] = 'v2'
+                current['revisions'] = [dict(extractor_version='v1', extracted_at='2026-11-10T00:00:00Z',
+                                             urls=[dict(rows[0], can_open=False, open_url='', reason='archived_result')])]
                 return dict(status=status, comparison='first' if state['started'] else 'pending', current=current,
                             added=current['urls'], removed=[], history=[current], busy=not state['started'])
 
@@ -73,6 +76,7 @@ class ReferenceURLBrowserTests(unittest.TestCase):
             self.assertEqual(link.get_attribute('rel'), 'noopener noreferrer')
             self.assertEqual(link.get_attribute('target'), '_blank')
             self.assertEqual(page.locator('.reference-url-list img').count(), 0)
+            self.assertEqual(page.locator('.reference-url-original').first.evaluate('element => getComputedStyle(element).whiteSpace'), 'pre-wrap')
             self.assertIsNone(page.evaluate('window.injected'))
             page.evaluate('''Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText: async value => {window.copied = value;}}})''')
             page.locator('.reference-url-row button').first.click()
@@ -88,12 +92,18 @@ class ReferenceURLBrowserTests(unittest.TestCase):
             self.assertEqual(page.locator('.reference-url-row').count(), 3)
             page.get_by_role('button', name='過去の履歴', exact=True).click()
             self.assertIn('1回目', page.locator('.reference-url-history').inner_text())
+            page.locator('.reference-url-history details > summary').click()
+            self.assertEqual(page.locator('.reference-url-history details a').count(), 0)
+            self.assertEqual(page.locator('.reference-url-history details .reference-url-text').inner_text(), 'https://example.com/ref')
             page.locator('.reference-url-panel > summary').click()
             self.assertFalse(page.locator('.reference-url-panel').evaluate('element => element.open'))
             page.locator('#controls').click()
             page.locator('#controls').click()
             page.wait_for_selector('.reference-url-row')
             self.assertEqual(sum(method == 'POST' for method, path in requests), 1)
+            page.get_by_role('button', name='URLを再抽出', exact=True).click()
+            page.wait_for_function("!window.app.$children[0].loading")
+            self.assertEqual(sum(method == 'POST' for method, path in requests), 2)
             self.assertEqual(page.locator('#annotation').input_value(), '添削内容')
             self.assertEqual(errors, [])
             self.assertTrue(all(path in ('/', '/vue.js', '/reference.js', '/grading.css', '/data', '/extract') for method, path in requests))
