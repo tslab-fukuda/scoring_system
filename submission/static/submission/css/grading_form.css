@@ -468,3 +468,19 @@
 .stamp-choice:hover {
     background: rgba(255, 0, 0, 0.08);
 }
+.reference-url-panel {
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: #f8fafc;
+    color: #212529;
+}
+.reference-url-panel > summary { cursor: pointer; font-weight: 600; }
+.reference-url-panel-body { padding-top: 8px; }
+.reference-url-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.reference-url-list { max-height: 220px; overflow-y: auto; }
+.reference-url-row { padding: 8px 0; border-bottom: 1px solid #94a3b8; }
+.reference-url-text { display: block; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+.reference-url-row .btn { margin: 4px 6px 0 0; }
+.reference-url-history { margin-top: 12px; }
+body.dark-mode .reference-url-panel { background: #242424; color: #f1f5f9; }

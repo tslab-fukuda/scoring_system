@@ -410,6 +410,22 @@ class Enrollment(models.Model):
         return f"{self.user.username} - {self.course_offering} ({self.role})"
 
 
+class SubmissionReferenceUrls(models.Model):
+    submission = models.OneToOneField(Submission, on_delete=models.CASCADE, related_name='reference_urls')
+    status = models.CharField(max_length=16, default='pending', db_index=True)
+    urls = models.JSONField(default=list, blank=True)
+    extraction_scope = models.CharField(max_length=24, blank=True)
+    source_kind = models.CharField(max_length=24, default='submitted')
+    source_name = models.TextField(blank=True)
+    source_fingerprint = models.CharField(max_length=64, blank=True)
+    extractor_version = models.CharField(max_length=16, blank=True)
+    error_code = models.CharField(max_length=40, blank=True)
+    claim_token = models.CharField(max_length=32, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    extracted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
 class SubmissionTextIndex(models.Model):
     submission = models.OneToOneField(
         Submission,

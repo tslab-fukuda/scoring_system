@@ -1,0 +1,6 @@
+{% if submission.report_type == 'main' %}
+<reference-url-panel
+  data-url="{% url 'reference_urls_api' submission.id %}"
+  extract-url="{% url 'extract_reference_urls_api' submission.id %}"
+></reference-url-panel>
+{% endif %}

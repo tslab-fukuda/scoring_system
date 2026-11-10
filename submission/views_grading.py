@@ -524,6 +524,8 @@ def grading_form(request, submission_id):
             raise PermissionDenied('閲覧専用ロールでは添削を更新できません')
         data = json.loads(request.body)
         draw_data = data.get('drawData')
+        from .reference_urls import capture_before_grading
+        capture_before_grading(submission)
         old_file_name = submission.file.name
         pdf_path = submission.file.path
 
@@ -549,6 +551,7 @@ def grading_form(request, submission_id):
                 saved_name = default_storage.save(desired_name, File(graded_fp))
 
             submission.file.name = saved_name
+            submission._reference_preserve_snapshot = True
             submission.graded = True
             submission.score_details = _merge_score_details_preserving_system(
                 submission.score_details,

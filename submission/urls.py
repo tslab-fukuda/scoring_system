@@ -5,10 +5,13 @@ from . import views_student
 from . import views_teacher
 from . import views_submission
 from . import views_grading
+from . import views_reference_urls
 from .views_login import redirect_after_login
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [    
+    path('reference_urls/<int:submission_id>/', views_reference_urls.reference_urls_api, name='reference_urls_api'),
+    path('reference_urls/<int:submission_id>/extract/', views_reference_urls.extract_reference_urls_api, name='extract_reference_urls_api'),
     path('signup/', views.signup_view, name='signup'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('', views.index_redirect, name='index_redirect'),
